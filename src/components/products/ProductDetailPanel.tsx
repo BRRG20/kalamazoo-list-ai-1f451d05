@@ -132,7 +132,7 @@ export function ProductDetailPanel({
 
   const startVoiceInput = () => {
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      toast.error('Voice input not supported in this browser. Please type in the notes box instead.');
+      toast.error('Voice input not supported in this browser. Please type in the Raw Input Text box instead.');
       return;
     }
 
@@ -142,43 +142,57 @@ export function ProductDetailPanel({
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
-    recognition.interimResults = true;
+    recognition.interimResults = false; // Only use final results for accuracy
     recognition.lang = 'en-GB';
+    recognition.maxAlternatives = 1;
+
+    let finalTranscript = '';
 
     recognition.onstart = () => {
       console.log('Voice recognition started');
       setIsListening(true);
+      finalTranscript = '';
     };
     
     recognition.onend = () => {
-      console.log('Voice recognition ended');
+      console.log('Voice recognition ended, final transcript:', finalTranscript);
       setIsListening(false);
+      if (finalTranscript.trim()) {
+        setVoiceTranscript(finalTranscript.trim());
+      }
     };
     
     recognition.onerror = (event: any) => {
       console.error('Voice recognition error:', event.error);
       setIsListening(false);
       if (event.error === 'not-allowed') {
-        toast.error('Microphone access denied. Please allow microphone access and try again.');
+        toast.error('Microphone access denied. Please allow microphone access in your browser settings.');
+      } else if (event.error === 'no-speech') {
+        toast.info('No speech detected. Please speak clearly and try again.');
+      } else if (event.error === 'audio-capture') {
+        toast.error('No microphone found. Please connect a microphone.');
       } else if (event.error !== 'aborted') {
         toast.error('Voice recognition error. Please try again.');
       }
     };
 
     recognition.onresult = (event: any) => {
-      let transcript = '';
-      for (let i = 0; i < event.results.length; i++) {
-        transcript += event.results[i][0].transcript;
+      // Only use final results for better accuracy
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) {
+          const text = event.results[i][0].transcript;
+          console.log('Final result:', text, 'confidence:', event.results[i][0].confidence);
+          finalTranscript += text + ' ';
+          setVoiceTranscript(finalTranscript.trim());
+        }
       }
-      console.log('Transcript:', transcript);
-      setVoiceTranscript(transcript);
     };
 
     recognitionRef.current = recognition;
     
     try {
       recognition.start();
-      toast.info('Listening... Speak now');
+      toast.info('Listening... Speak clearly, e.g. "Price 25 pounds, condition very good, women\'s"');
     } catch (error) {
       console.error('Failed to start recognition:', error);
       toast.error('Failed to start voice input. Please try again.');
