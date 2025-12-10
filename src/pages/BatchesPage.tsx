@@ -6,6 +6,7 @@ import { BatchList } from '@/components/batches/BatchList';
 import { BatchDetail } from '@/components/batches/BatchDetail';
 import { EmptyState } from '@/components/batches/EmptyState';
 import { ProductDetailPanel } from '@/components/products/ProductDetailPanel';
+import { ShopifySuccessDialog } from '@/components/batches/ShopifySuccessDialog';
 import { 
   useBatches, 
   useProducts, 
@@ -34,6 +35,7 @@ export default function BatchesPage() {
   const [isCreatingShopify, setIsCreatingShopify] = useState(false);
   const [pendingImageUrls, setPendingImageUrls] = useState<string[]>([]);
   const [productCounts, setProductCounts] = useState<Record<string, number>>({});
+  const [shopifySuccessData, setShopifySuccessData] = useState<{ successCount: number; errorCount: number } | null>(null);
 
   // Fetch product counts for batches - only when batches change
   useEffect(() => {
@@ -301,11 +303,8 @@ export default function BatchesPage() {
       
       setSelectedProductIds(new Set());
       
-      if (data.errorCount > 0) {
-        toast.warning(`Created ${data.successCount} product(s) in Shopify. ${data.errorCount} failed.`);
-      } else {
-        toast.success(`Created ${data.successCount} product(s) in Shopify`);
-      }
+      // Show success dialog
+      setShopifySuccessData({ successCount: data.successCount, errorCount: data.errorCount });
       
     } catch (error) {
       console.error('Shopify creation error:', error);
@@ -539,6 +538,15 @@ export default function BatchesPage() {
           isShopifyConfigured={!!isShopifyConfigured}
         />
       )}
+
+      {/* Shopify Success Dialog */}
+      <ShopifySuccessDialog
+        open={shopifySuccessData !== null}
+        onClose={() => setShopifySuccessData(null)}
+        successCount={shopifySuccessData?.successCount || 0}
+        errorCount={shopifySuccessData?.errorCount || 0}
+        storeUrl={settings?.shopify_store_url || undefined}
+      />
     </AppLayout>
   );
 }
