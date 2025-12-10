@@ -1,5 +1,55 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
+// Input validation constants
+const MAX_PRODUCTS = 100;
+const MAX_STRING_LENGTH = 1000;
+
+function sanitizeString(value: unknown, maxLength = MAX_STRING_LENGTH): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value !== 'string') return String(value).slice(0, maxLength);
+  return value.slice(0, maxLength).trim();
+}
+
+function validateProducts(products: unknown): { valid: boolean; error?: string } {
+  if (!Array.isArray(products)) {
+    return { valid: false, error: 'Products must be an array' };
+  }
+  if (products.length === 0) {
+    return { valid: false, error: 'At least one product is required' };
+  }
+  if (products.length > MAX_PRODUCTS) {
+    return { valid: false, error: `Maximum ${MAX_PRODUCTS} products allowed per request` };
+  }
+  return { valid: true };
+}
+
+function validateStoreUrl(url: unknown): { valid: boolean; error?: string; sanitized?: string } {
+  if (!url || typeof url !== 'string') {
+    return { valid: false, error: 'Shopify store URL is required' };
+  }
+  let storeUrl = url.trim();
+  
+  // Convert admin.shopify.com/store/STORE_NAME format to STORE_NAME.myshopify.com
+  const adminMatch = storeUrl.match(/admin\.shopify\.com\/store\/([^\/]+)/);
+  if (adminMatch) {
+    storeUrl = `https://${adminMatch[1]}.myshopify.com`;
+  }
+  
+  // Remove protocol and trailing slash for validation
+  const cleaned = storeUrl
+    .replace(/^https?:\/\//, '')
+    .replace(/\/$/, '');
+  
+  // Validate it's in the correct format
+  if (!cleaned.includes('.myshopify.com')) {
+    return { valid: false, error: 'Invalid Shopify store URL. Should be like: https://yourstore.myshopify.com' };
+  }
+  
+  // Ensure https:// prefix
+  const finalUrl = `https://${cleaned}`;
+  return { valid: true, sanitized: finalUrl.replace(/\/$/, '') };
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -32,6 +82,25 @@ serve(async (req) => {
   try {
     const { products, images, shopifyStoreUrl } = await req.json();
 
+    // Validate products array
+    const productsValidation = validateProducts(products);
+    if (!productsValidation.valid) {
+      return new Response(
+        JSON.stringify({ error: productsValidation.error }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Validate store URL
+    const urlValidation = validateStoreUrl(shopifyStoreUrl);
+    if (!urlValidation.valid) {
+      return new Response(
+        JSON.stringify({ error: urlValidation.error }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    const storeUrl = urlValidation.sanitized!;
+
     // Get Shopify access token from server-side secrets
     const shopifyAccessToken = Deno.env.get('SHOPIFY_ACCESS_TOKEN');
     
@@ -43,42 +112,7 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Creating ${products.length} products in Shopify`);
-
-    if (!shopifyStoreUrl) {
-      return new Response(
-        JSON.stringify({ error: 'Shopify store URL not provided' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Clean store URL - handle both admin.shopify.com and myshopify.com formats
-    let storeUrl = shopifyStoreUrl.trim();
-    
-    // Convert admin.shopify.com/store/STORE_NAME format to STORE_NAME.myshopify.com
-    const adminMatch = storeUrl.match(/admin\.shopify\.com\/store\/([^\/]+)/);
-    if (adminMatch) {
-      storeUrl = `https://${adminMatch[1]}.myshopify.com`;
-      console.log(`Converted admin URL to: ${storeUrl}`);
-    }
-    
-    // Validate it's now in the correct format
-    if (!storeUrl.includes('.myshopify.com')) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid Shopify store URL. Should be like: https://yourstore.myshopify.com or https://admin.shopify.com/store/yourstore' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-    
-    // Ensure https:// prefix exists
-    if (!storeUrl.startsWith('https://') && !storeUrl.startsWith('http://')) {
-      storeUrl = `https://${storeUrl}`;
-    }
-    
-    // Remove trailing slash
-    storeUrl = storeUrl.replace(/\/$/, '');
-    
-    console.log(`Using Shopify store URL: ${storeUrl}`);
+    console.log(`Creating ${products.length} products in Shopify using store: ${storeUrl}`);
 
     const results: { 
       productId: string; 
@@ -92,7 +126,13 @@ serve(async (req) => {
       try {
         const productImages = (images[product.id] || []) as ImagePayload[];
         
-        console.log(`Processing product ${product.sku}: ${product.title}`);
+        // Sanitize product data
+        const sanitizedTitle = sanitizeString(product.title, 200);
+        const sanitizedSku = sanitizeString(product.sku, 100);
+        const sanitizedBrand = sanitizeString(product.brand, 100);
+        const sanitizedGarmentType = sanitizeString(product.garment_type, 100);
+        
+        console.log(`Processing product ${sanitizedSku}: ${sanitizedTitle}`);
         console.log(`  - ${productImages.length} images`);
 
         // Build tags array from shopify_tags and collections_tags
@@ -121,15 +161,15 @@ serve(async (req) => {
         // Build Shopify product payload
         const shopifyProduct = {
           product: {
-            title: product.title || product.sku || 'Untitled Product',
-            body_html: formatDescriptionHtml(product.description),
-            vendor: product.brand || 'Kalamazoo Vintage',
-            product_type: product.garment_type || '',
+            title: sanitizedTitle || sanitizedSku || 'Untitled Product',
+            body_html: formatDescriptionHtml(product.description || ''),
+            vendor: sanitizedBrand || 'Kalamazoo Vintage',
+            product_type: sanitizedGarmentType || '',
             tags: tags.join(', '),
             variants: [
               {
                 price: product.price?.toString() || '0',
-                sku: product.sku || '',
+                sku: sanitizedSku || '',
                 inventory_quantity: 1,
                 inventory_management: 'shopify',
               }

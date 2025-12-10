@@ -1,5 +1,60 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
+// Input validation
+const MAX_STRING_LENGTH = 1000;
+const MAX_DESCRIPTION_LENGTH = 2000;
+const MAX_IMAGE_URLS = 4;
+const MAX_URL_LENGTH = 2048;
+const URL_PATTERN = /^https?:\/\/.+/i;
+
+function sanitizeString(value: unknown, maxLength = MAX_STRING_LENGTH): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== 'string') return null;
+  return value.slice(0, maxLength).trim() || null;
+}
+
+function sanitizeNumber(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  const num = typeof value === 'number' ? value : parseFloat(String(value));
+  if (isNaN(num) || num < 0 || num > 1000000) return null;
+  return num;
+}
+
+function validateProduct(product: unknown): { valid: boolean; error?: string; sanitized?: Record<string, unknown> } {
+  if (!product || typeof product !== 'object') {
+    return { valid: false, error: 'Product object is required' };
+  }
+  const p = product as Record<string, unknown>;
+  const sanitized: Record<string, unknown> = {
+    garment_type: sanitizeString(p.garment_type),
+    brand: sanitizeString(p.brand),
+    colour_main: sanitizeString(p.colour_main),
+    colour_secondary: sanitizeString(p.colour_secondary),
+    pattern: sanitizeString(p.pattern),
+    size_label: sanitizeString(p.size_label),
+    size_recommended: sanitizeString(p.size_recommended),
+    fit: sanitizeString(p.fit),
+    material: sanitizeString(p.material),
+    made_in: sanitizeString(p.made_in),
+    era: sanitizeString(p.era, 50),
+    condition: sanitizeString(p.condition, 100),
+    flaws: sanitizeString(p.flaws),
+    department: sanitizeString(p.department, 50),
+    raw_input_text: sanitizeString(p.raw_input_text, MAX_DESCRIPTION_LENGTH),
+    price: sanitizeNumber(p.price),
+  };
+  return { valid: true, sanitized };
+}
+
+function validateImageUrls(urls: unknown): string[] {
+  if (!Array.isArray(urls)) return [];
+  return urls
+    .filter((url): url is string => 
+      typeof url === 'string' && URL_PATTERN.test(url) && url.length <= MAX_URL_LENGTH
+    )
+    .slice(0, MAX_IMAGE_URLS);
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -89,9 +144,17 @@ serve(async (req) => {
   try {
     const { product, imageUrls, regenerateOnly } = await req.json();
     
-    if (!product) {
-      throw new Error("No product data provided");
+    // Validate product input
+    const validation = validateProduct(product);
+    if (!validation.valid) {
+      return new Response(JSON.stringify({ error: validation.error }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
+    
+    const sanitizedProduct = validation.sanitized!;
+    const validImageUrls = validateImageUrls(imageUrls);
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
