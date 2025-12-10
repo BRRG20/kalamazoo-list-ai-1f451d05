@@ -37,6 +37,9 @@ interface BatchDetailProps {
   pendingImageCount: number;
   isUploading: boolean;
   uploadProgress: number;
+  uploadStartTime: number | null;
+  uploadTotal: number;
+  uploadCompleted: number;
   onBack?: () => void;
 }
 
@@ -58,6 +61,9 @@ export function BatchDetail({
   pendingImageCount,
   isUploading,
   uploadProgress,
+  uploadStartTime,
+  uploadTotal,
+  uploadCompleted,
   onBack,
 }: BatchDetailProps) {
   const { settings, isShopifyConfigured } = useSettings();
@@ -143,9 +149,26 @@ export function BatchDetail({
         {/* Upload progress */}
         {isUploading && (
           <div className="mb-4 p-3 bg-muted/50 rounded-lg">
-            <div className="flex items-center gap-2 mb-2">
-              <Loader2 className="w-4 h-4 animate-spin text-primary" />
-              <span className="text-sm text-muted-foreground">Uploading images...</span>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                <span className="text-sm text-muted-foreground">
+                  Uploading {uploadCompleted} of {uploadTotal} images...
+                </span>
+              </div>
+              {uploadStartTime && uploadCompleted > 0 && (
+                <span className="text-sm text-muted-foreground">
+                  {(() => {
+                    const elapsed = (Date.now() - uploadStartTime) / 1000;
+                    const rate = uploadCompleted / elapsed;
+                    const remaining = (uploadTotal - uploadCompleted) / rate;
+                    if (remaining < 60) {
+                      return `~${Math.ceil(remaining)}s remaining`;
+                    }
+                    return `~${Math.ceil(remaining / 60)}m remaining`;
+                  })()}
+                </span>
+              )}
             </div>
             <Progress value={uploadProgress} className="h-2" />
           </div>
