@@ -55,29 +55,27 @@ function TagEditor({ tag, onSave, onCancel }: TagEditorProps) {
 
   return (
     <Card className="border-primary/20">
-      <CardContent className="p-4 space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="tag-name">Tag Name</Label>
+      <CardContent className="p-3 space-y-3">
+        <div className="space-y-1">
+          <Label htmlFor="tag-name" className="text-xs">Tag Name</Label>
           <Input
             id="tag-name"
             value={tagName}
             onChange={(e) => setTagName(e.target.value)}
-            placeholder="e.g., Vintage Knitwear, Summer Collection"
+            placeholder="e.g., Vintage Knitwear"
+            className="h-8 text-sm"
           />
         </div>
 
-        <div className="space-y-2">
-          <Label>Assign to Garment Types</Label>
-          <p className="text-xs text-muted-foreground">
-            This tag will be automatically added to products with these garment types
-          </p>
+        <div className="space-y-1">
+          <Label className="text-xs">Assign to Garment Types</Label>
           
-          <div className="flex flex-wrap gap-2 mt-2">
+          <div className="flex flex-wrap gap-1">
             {COMMON_GARMENT_TYPES.map(type => (
               <Badge
                 key={type}
                 variant={selectedTypes.includes(type) ? 'default' : 'outline'}
-                className="cursor-pointer transition-colors"
+                className="cursor-pointer transition-colors text-xs py-0 px-2"
                 onClick={() => handleToggleType(type)}
               >
                 {type}
@@ -85,14 +83,13 @@ function TagEditor({ tag, onSave, onCancel }: TagEditorProps) {
             ))}
           </div>
 
-          {/* Show custom types that aren't in the common list */}
           {selectedTypes.filter(t => !COMMON_GARMENT_TYPES.includes(t)).length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t">
+            <div className="flex flex-wrap gap-1 pt-1 border-t">
               {selectedTypes.filter(t => !COMMON_GARMENT_TYPES.includes(t)).map(type => (
                 <Badge
                   key={type}
                   variant="default"
-                  className="cursor-pointer"
+                  className="cursor-pointer text-xs py-0 px-2"
                   onClick={() => handleToggleType(type)}
                 >
                   {type} ×
@@ -101,27 +98,27 @@ function TagEditor({ tag, onSave, onCancel }: TagEditorProps) {
             </div>
           )}
 
-          <div className="flex gap-2 mt-2">
+          <div className="flex gap-1">
             <Input
               value={customType}
               onChange={(e) => setCustomType(e.target.value)}
-              placeholder="Add custom type..."
+              placeholder="Custom type..."
               onKeyDown={(e) => e.key === 'Enter' && handleAddCustomType()}
-              className="flex-1"
+              className="flex-1 h-7 text-xs"
             />
-            <Button variant="outline" size="sm" onClick={handleAddCustomType}>
+            <Button variant="outline" size="sm" onClick={handleAddCustomType} className="h-7 text-xs px-2">
               Add
             </Button>
           </div>
         </div>
 
-        <div className="flex gap-2 justify-end pt-2">
-          <Button variant="ghost" size="sm" onClick={onCancel} disabled={saving}>
-            <X className="w-4 h-4 mr-1" />
+        <div className="flex gap-1 justify-end">
+          <Button variant="ghost" size="sm" onClick={onCancel} disabled={saving} className="h-7 text-xs px-2">
+            <X className="w-3 h-3 mr-1" />
             Cancel
           </Button>
-          <Button size="sm" onClick={handleSave} disabled={saving}>
-            <Check className="w-4 h-4 mr-1" />
+          <Button size="sm" onClick={handleSave} disabled={saving} className="h-7 text-xs px-2">
+            <Check className="w-3 h-3 mr-1" />
             {saving ? 'Saving...' : 'Save'}
           </Button>
         </div>
@@ -173,23 +170,20 @@ export default function DefaultTagsManager() {
 
   return (
     <Card>
-      <CardHeader className="p-4 md:p-6">
-        <CardTitle className="flex items-center gap-2 text-base md:text-lg">
-          <Tag className="w-5 h-5" />
+      <CardHeader className="p-3 pb-2">
+        <CardTitle className="flex items-center gap-2 text-sm">
+          <Tag className="w-4 h-4" />
           Default Tags
         </CardTitle>
-        <CardDescription className="text-sm">
-          Define reusable tags that are automatically assigned to products based on garment type.
-          These tags become Shopify collections when products are created.
+        <CardDescription className="text-xs">
+          Auto-assign tags to products based on garment type. Tags become Shopify collections.
         </CardDescription>
       </CardHeader>
-      <CardContent className="p-4 md:p-6 pt-0 md:pt-0 space-y-4">
-        {/* Existing Tags */}
+      <CardContent className="p-3 pt-0 space-y-2">
         {tags.length === 0 && !isAdding && (
-          <div className="text-center py-6 text-muted-foreground">
-            <Tag className="w-8 h-8 mx-auto mb-2 opacity-50" />
-            <p>No default tags yet</p>
-            <p className="text-xs mt-1">Add tags to automatically categorize your products</p>
+          <div className="text-center py-4 text-muted-foreground">
+            <Tag className="w-6 h-6 mx-auto mb-1 opacity-50" />
+            <p className="text-xs">No default tags yet</p>
           </div>
         )}
 
@@ -202,37 +196,37 @@ export default function DefaultTagsManager() {
                 onCancel={() => setEditingId(null)}
               />
             ) : (
-              <div className="flex items-start justify-between p-3 border rounded-lg bg-card hover:bg-accent/5 transition-colors">
+              <div className="flex items-center justify-between p-2 border rounded bg-card hover:bg-accent/5 transition-colors">
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium">{tag.tag_name}</div>
-                  <div className="flex flex-wrap gap-1 mt-1">
+                  <div className="font-medium text-sm">{tag.tag_name}</div>
+                  <div className="flex flex-wrap gap-1 mt-0.5">
                     {tag.assigned_garment_types.length > 0 ? (
                       tag.assigned_garment_types.map(type => (
-                        <Badge key={type} variant="secondary" className="text-xs">
+                        <Badge key={type} variant="secondary" className="text-[10px] py-0 px-1.5">
                           {type}
                         </Badge>
                       ))
                     ) : (
-                      <span className="text-xs text-muted-foreground">No garment types assigned</span>
+                      <span className="text-[10px] text-muted-foreground">No types assigned</span>
                     )}
                   </div>
                 </div>
-                <div className="flex gap-1 ml-2">
+                <div className="flex gap-0.5 ml-2">
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8"
+                    className="h-6 w-6"
                     onClick={() => setEditingId(tag.id)}
                   >
-                    <Edit2 className="w-4 h-4" />
+                    <Edit2 className="w-3 h-3" />
                   </Button>
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 text-destructive hover:text-destructive"
+                    className="h-6 w-6 text-destructive hover:text-destructive"
                     onClick={() => handleDelete(tag.id)}
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="w-3 h-3" />
                   </Button>
                 </div>
               </div>
@@ -240,7 +234,6 @@ export default function DefaultTagsManager() {
           </div>
         ))}
 
-        {/* Add New Tag */}
         {isAdding ? (
           <TagEditor
             onSave={handleCreate}
@@ -249,10 +242,10 @@ export default function DefaultTagsManager() {
         ) : (
           <Button
             variant="outline"
-            className="w-full"
+            className="w-full h-8 text-xs"
             onClick={() => setIsAdding(true)}
           >
-            <Plus className="w-4 h-4 mr-2" />
+            <Plus className="w-3 h-3 mr-1" />
             Add Default Tag
           </Button>
         )}
