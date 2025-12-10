@@ -442,6 +442,13 @@ export default function BatchesPage() {
     return await fetchImagesForProduct(productId);
   }, [fetchImagesForProduct]);
 
+  const handleCreateSingleProductInShopify = useCallback(async () => {
+    if (!editingProductId) return;
+    await handleCreateInShopify([editingProductId]);
+  }, [editingProductId, handleCreateInShopify]);
+
+  const isShopifyConfigured = settings?.shopify_store_url && settings?.shopify_access_token;
+
   const editingProduct = editingProductId ? products.find(p => p.id === editingProductId) : null;
   
   const productIndex = editingProductId ? products.findIndex(p => p.id === editingProductId) : -1;
@@ -519,12 +526,15 @@ export default function BatchesPage() {
           onUpdateImage={handleUpdateImage}
           onReorderImages={handleReorderImages}
           onGenerateAI={handleGenerateProductAI}
+          onCreateInShopify={handleCreateSingleProductInShopify}
           onPrevious={() => navigateProduct('prev')}
           onNext={() => navigateProduct('next')}
           hasPrevious={hasPrevious}
           hasNext={hasNext}
           isGenerating={isGenerating}
           regeneratingField={regeneratingField}
+          isCreatingShopify={isCreatingShopify}
+          isShopifyConfigured={!!isShopifyConfigured}
         />
       )}
     </AppLayout>
