@@ -12,6 +12,7 @@ import {
   ArrowRightFromLine,
   ImagePlus,
   MoreHorizontal,
+  Eye,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -39,15 +40,17 @@ import {
 } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import type { ImageGroup } from './ImageGroupManager';
+import { ImagePreviewModal } from './ImagePreviewModal';
 
 interface SortableImageProps {
   url: string;
   isSelected: boolean;
   onToggleSelect: () => void;
   index: number;
+  onPreview: () => void;
 }
 
-function SortableImage({ url, isSelected, onToggleSelect, index }: SortableImageProps) {
+function SortableImage({ url, isSelected, onToggleSelect, index, onPreview }: SortableImageProps) {
   const {
     attributes,
     listeners,
@@ -62,15 +65,23 @@ function SortableImage({ url, isSelected, onToggleSelect, index }: SortableImage
     transition,
   };
 
+  const handleImageClick = (e: React.MouseEvent) => {
+    // Don't open preview if clicking on checkbox or drag handle area
+    const target = e.target as HTMLElement;
+    if (target.closest('[data-no-preview]')) return;
+    onPreview();
+  };
+
   return (
     <div
       ref={setNodeRef}
       style={style}
       className={cn(
-        "relative group aspect-square rounded-lg overflow-hidden border-2 transition-all",
+        "relative group aspect-square rounded-lg overflow-hidden border-2 transition-all cursor-pointer",
         isDragging && "opacity-50 scale-95",
         isSelected ? "border-primary ring-2 ring-primary/30" : "border-border hover:border-primary/50"
       )}
+      onClick={handleImageClick}
     >
       <img
         src={url}
@@ -78,17 +89,23 @@ function SortableImage({ url, isSelected, onToggleSelect, index }: SortableImage
         className="w-full h-full object-cover"
       />
       
+      {/* Quick view overlay */}
+      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+        <Eye className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
+      </div>
+      
       {/* Drag handle */}
       <div
         {...attributes}
         {...listeners}
+        data-no-preview
         className="absolute top-1 right-1 p-1 bg-background/80 rounded cursor-grab opacity-0 group-hover:opacity-100 transition-opacity"
       >
         <GripVertical className="w-3 h-3 text-muted-foreground" />
       </div>
 
       {/* Selection checkbox */}
-      <div className="absolute top-1 left-1">
+      <div className="absolute top-1 left-1" data-no-preview onClick={(e) => e.stopPropagation()}>
         <Checkbox
           checked={isSelected}
           onCheckedChange={onToggleSelect}
@@ -139,6 +156,7 @@ export function ImageGroupCard({
 }: ImageGroupCardProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showAddPopover, setShowAddPopover] = useState(false);
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
 
   const hasSelectedImages = group.selectedImages.size > 0;
   const isFirstGroup = groupIndex === 0;
@@ -272,6 +290,7 @@ export function ImageGroupCard({
                 index={index}
                 isSelected={group.selectedImages.has(url)}
                 onToggleSelect={() => onToggleImageSelection(url)}
+                onPreview={() => setPreviewIndex(index)}
               />
             ))}
           </div>
@@ -305,6 +324,14 @@ export function ImageGroupCard({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Image preview modal */}
+      <ImagePreviewModal
+        images={group.images}
+        initialIndex={previewIndex ?? 0}
+        open={previewIndex !== null}
+        onClose={() => setPreviewIndex(null)}
+      />
     </>
   );
 }
