@@ -23,7 +23,7 @@ export default function BatchesPage() {
   const { batches, createBatch, updateBatch, deleteBatch, getProductCount } = useBatches();
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const { products, createProduct, updateProduct, deleteProduct, refetch: refetchProducts } = useProducts(selectedBatchId);
-  const { fetchImagesForProduct, addImage, updateImage, excludeLastNImages, clearCache, deleteImage, updateImageProductId } = useImages();
+  const { fetchImagesForProduct, addImageToBatch, updateImage, excludeLastNImages, clearCache, deleteImage, updateImageProductIdByUrl } = useImages();
   const { settings } = useSettings();
   const { uploadImages, uploading, progress, uploadStartTime, uploadTotal, uploadCompleted } = useImageUpload();
   
@@ -112,12 +112,17 @@ export default function BatchesPage() {
     const urls = await uploadImages(files, selectedBatchId);
     
     if (urls.length > 0) {
+      // Save images to database immediately (not assigned to any product yet)
+      for (let i = 0; i < urls.length; i++) {
+        await addImageToBatch(selectedBatchId, urls[i], i);
+      }
+      
       setPendingImageUrls(prev => [...prev, ...urls]);
-      toast.success(`${urls.length} image(s) uploaded. Click "Auto-group" to create products.`);
+      toast.success(`${urls.length} image(s) uploaded and saved. Click "Auto-group" to create products.`);
     } else {
       toast.error('Failed to upload images');
     }
-  }, [selectedBatchId, uploadImages]);
+  }, [selectedBatchId, uploadImages, addImageToBatch]);
 
   const handleAutoGroup = useCallback(async (imagesPerProduct: number) => {
     if (!selectedBatchId) return;
@@ -537,10 +542,42 @@ export default function BatchesPage() {
                 }
               }}
               onSaveGroups={async () => {
+                if (!selectedBatchId) return;
+                
                 // Save groups to database - create products and assign images
                 toast.info('Saving groups...');
+                
+                let savedCount = 0;
+                for (const group of imageGroups) {
+                  if (group.images.length === 0) continue;
+                  
+                  // Create product with just SKU
+                  const sku = `SKU-${Date.now()}-${savedCount + 1}`;
+                  const product = await createProduct(sku);
+                  
+                  if (product) {
+                    // Update images to link to this product by URL
+                    for (let i = 0; i < group.images.length; i++) {
+                      const imageUrl = group.images[i];
+                      await updateImageProductIdByUrl(imageUrl, product.id, i);
+                    }
+                    savedCount++;
+                  }
+                }
+                
+                // Handle unassigned images - keep them in database but not linked to products
+                // They're already saved, just not assigned
+                
+                // Clear group management state
+                setImageGroups([]);
+                setUnassignedImages([]);
+                setPendingImageUrls([]);
                 setShowGroupManager(false);
-                toast.success('Groups saved successfully');
+                
+                // Refresh products
+                await refetchProducts();
+                
+                toast.success(`Saved ${savedCount} product(s) successfully`);
               }}
               showGroupManager={showGroupManager}
               onToggleGroupManager={() => setShowGroupManager(prev => !prev)}

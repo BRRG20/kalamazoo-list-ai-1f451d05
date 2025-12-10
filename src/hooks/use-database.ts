@@ -481,6 +481,20 @@ export function useImages() {
     return true;
   };
 
+  const updateImageProductIdByUrl = async (imageUrl: string, newProductId: string | null, position: number) => {
+    const { error } = await supabase
+      .from('images')
+      .update({ product_id: newProductId, position })
+      .eq('url', imageUrl);
+    
+    if (error) {
+      console.error('Error updating image product by URL:', error);
+      return false;
+    }
+    
+    return true;
+  };
+
   const deleteImage = async (id: string) => {
     const { error } = await supabase
       .from('images')
@@ -526,6 +540,7 @@ export function useImages() {
     addImageToBatch,
     updateImage, 
     updateImageProductId,
+    updateImageProductIdByUrl,
     deleteImage,
     excludeLastNImages, 
     clearCache, 
