@@ -30,13 +30,24 @@ serve(async (req) => {
   }
 
   try {
-    const { products, images, shopifyStoreUrl, shopifyAccessToken } = await req.json();
+    const { products, images, shopifyStoreUrl } = await req.json();
+
+    // Get Shopify access token from server-side secrets
+    const shopifyAccessToken = Deno.env.get('SHOPIFY_ACCESS_TOKEN');
+    
+    if (!shopifyAccessToken) {
+      console.error('SHOPIFY_ACCESS_TOKEN secret not configured');
+      return new Response(
+        JSON.stringify({ error: 'Shopify access token not configured. Please contact your administrator.' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     console.log(`Creating ${products.length} products in Shopify`);
 
-    if (!shopifyStoreUrl || !shopifyAccessToken) {
+    if (!shopifyStoreUrl) {
       return new Response(
-        JSON.stringify({ error: 'Shopify credentials not configured' }),
+        JSON.stringify({ error: 'Shopify store URL not provided' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

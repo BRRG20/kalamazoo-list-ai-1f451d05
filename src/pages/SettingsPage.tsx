@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Save, Check, AlertCircle, Loader2 } from 'lucide-react';
+import { Save, Check, AlertCircle, Loader2, LogOut, Shield } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
@@ -8,12 +9,14 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useSettings } from '@/hooks/use-database';
+import { useAuth } from '@/hooks/use-auth';
 
 export default function SettingsPage() {
+  const navigate = useNavigate();
   const { settings, loading, updateSettings, isShopifyConfigured } = useSettings();
+  const { user, signOut } = useAuth();
   const [formData, setFormData] = useState({
     shopify_store_url: '',
-    shopify_access_token: '',
     default_images_per_product: 9,
     default_currency: 'GBP',
   });
@@ -23,7 +26,6 @@ export default function SettingsPage() {
     if (settings) {
       setFormData({
         shopify_store_url: settings.shopify_store_url,
-        shopify_access_token: settings.shopify_access_token,
         default_images_per_product: settings.default_images_per_product,
         default_currency: settings.default_currency,
       });
@@ -48,7 +50,6 @@ export default function SettingsPage() {
 
     const success = await updateSettings({
       shopify_store_url: formData.shopify_store_url.trim(),
-      shopify_access_token: formData.shopify_access_token.trim(),
       default_images_per_product: formData.default_images_per_product,
       default_currency: formData.default_currency.trim() || 'GBP',
     });
@@ -58,6 +59,11 @@ export default function SettingsPage() {
     if (success) {
       toast.success('Settings saved');
     }
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/auth', { replace: true });
   };
 
   if (loading) {
@@ -81,6 +87,28 @@ export default function SettingsPage() {
             </p>
           </div>
 
+          {/* Account Section */}
+          <Card>
+            <CardHeader className="p-4 md:p-6">
+              <CardTitle className="text-base md:text-lg">Account</CardTitle>
+              <CardDescription className="text-sm">
+                Manage your account and session.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-4 md:p-6 pt-0 md:pt-0">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">{user?.email}</p>
+                  <p className="text-xs text-muted-foreground">Signed in</p>
+                </div>
+                <Button variant="outline" size="sm" onClick={handleSignOut}>
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Sign Out
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Shopify Configuration */}
           <Card>
             <CardHeader className="p-4 md:p-6">
@@ -98,7 +126,7 @@ export default function SettingsPage() {
                 )}
               </CardTitle>
               <CardDescription className="text-sm">
-                Enter your Shopify store URL and Admin API Access Token to enable product creation.
+                Enter your Shopify store URL. Your access token is stored securely server-side.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 p-4 md:p-6 pt-0 md:pt-0">
@@ -116,25 +144,18 @@ export default function SettingsPage() {
                 </p>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="shopify_access_token">Admin API Access Token</Label>
-                <Input
-                  id="shopify_access_token"
-                  type="password"
-                  value={formData.shopify_access_token}
-                  onChange={(e) => handleChange('shopify_access_token', e.target.value)}
-                  placeholder="shpat_xxxxxxxxxxxxxxxx"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Create a private app in Shopify Admin → Apps → Develop apps
-                </p>
-              </div>
+              <Alert className="border-primary/20 bg-primary/5">
+                <Shield className="h-4 w-4 text-primary" />
+                <AlertDescription className="text-sm">
+                  <strong>Shopify Access Token:</strong> Your access token is stored securely as a server-side secret. Contact your administrator to update it.
+                </AlertDescription>
+              </Alert>
 
               {!shopifyConnected && (
                 <Alert>
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription className="text-sm">
-                    Shopify is not configured. Add your store URL and access token to enable product creation.
+                    Shopify is not configured. Add your store URL above. The access token must be configured as a server secret.
                   </AlertDescription>
                 </Alert>
               )}

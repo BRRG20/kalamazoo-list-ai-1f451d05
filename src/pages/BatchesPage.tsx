@@ -230,8 +230,8 @@ export default function BatchesPage() {
   }, [selectedBatchId, products, excludeLastNImages, clearCache]);
 
   const handleCreateInShopify = useCallback(async (productIds: string[]) => {
-    if (!settings?.shopify_store_url || !settings?.shopify_access_token) {
-      toast.error('Shopify is not configured. Go to Settings to add your credentials.');
+    if (!settings?.shopify_store_url) {
+      toast.error('Shopify store URL is not configured. Go to Settings to add it.');
       return;
     }
 
@@ -277,7 +277,6 @@ export default function BatchesPage() {
           products: productPayloads,
           images: imagesMap,
           shopifyStoreUrl: settings.shopify_store_url,
-          shopifyAccessToken: settings.shopify_access_token,
         }),
       });
       
@@ -448,7 +447,7 @@ export default function BatchesPage() {
     await handleCreateInShopify([editingProductId]);
   }, [editingProductId, handleCreateInShopify]);
 
-  const isShopifyConfigured = settings?.shopify_store_url && settings?.shopify_access_token;
+  const isShopifyConfigured = !!settings?.shopify_store_url;
 
   const editingProduct = editingProductId ? products.find(p => p.id === editingProductId) : null;
   

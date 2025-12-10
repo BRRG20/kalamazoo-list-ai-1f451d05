@@ -69,7 +69,6 @@ export interface ProductImage {
 export interface Settings {
   id: string;
   shopify_store_url: string;
-  shopify_access_token: string;
   default_images_per_product: number;
   default_currency: string;
 }
