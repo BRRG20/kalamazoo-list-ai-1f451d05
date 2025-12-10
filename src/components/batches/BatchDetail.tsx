@@ -8,7 +8,9 @@ import {
   Loader2,
   AlertCircle,
   Image as ImageIcon,
-  ArrowLeft
+  ArrowLeft,
+  X,
+  Trash2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,7 +36,9 @@ interface BatchDetailProps {
   isGenerating: boolean;
   generationProgress: { current: number; total: number };
   isCreatingShopify: boolean;
-  pendingImageCount: number;
+  pendingImageUrls: string[];
+  onRemovePendingImage: (index: number) => void;
+  onClearAllPendingImages: () => void;
   isUploading: boolean;
   uploadProgress: number;
   uploadStartTime: number | null;
@@ -58,7 +62,9 @@ export function BatchDetail({
   isGenerating,
   generationProgress,
   isCreatingShopify,
-  pendingImageCount,
+  pendingImageUrls,
+  onRemovePendingImage,
+  onClearAllPendingImages,
   isUploading,
   uploadProgress,
   uploadStartTime,
@@ -187,13 +193,46 @@ export function BatchDetail({
           </div>
         )}
 
-        {/* Pending images indicator */}
-        {pendingImageCount > 0 && !isUploading && (
-          <div className="mb-4 p-3 bg-primary/10 rounded-lg flex items-center gap-2">
-            <ImageIcon className="w-4 h-4 text-primary" />
-            <span className="text-sm text-foreground">
-              {pendingImageCount} image(s) ready. Set images per product and click "Auto-group".
-            </span>
+        {/* Pending images preview */}
+        {pendingImageUrls.length > 0 && !isUploading && (
+          <div className="mb-4 p-3 bg-primary/10 rounded-lg">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <ImageIcon className="w-4 h-4 text-primary" />
+                <span className="text-sm text-foreground font-medium">
+                  {pendingImageUrls.length} image(s) ready to group
+                </span>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onClearAllPendingImages}
+                className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8 px-2"
+              >
+                <Trash2 className="w-4 h-4 mr-1" />
+                Clear all
+              </Button>
+            </div>
+            <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+              {pendingImageUrls.map((url, index) => (
+                <div key={index} className="relative group">
+                  <img
+                    src={url}
+                    alt={`Pending ${index + 1}`}
+                    className="w-14 h-14 object-cover rounded border border-border"
+                  />
+                  <button
+                    onClick={() => onRemovePendingImage(index)}
+                    className="absolute -top-1 -right-1 w-5 h-5 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              Set images per product above and click "Auto-group" to create products.
+            </p>
           </div>
         )}
 
@@ -241,7 +280,7 @@ export function BatchDetail({
             variant="outline"
             size="sm"
             onClick={() => onAutoGroup(imagesPerProduct)}
-            disabled={pendingImageCount === 0}
+            disabled={pendingImageUrls.length === 0}
             className="text-xs md:text-sm"
           >
             <Grid3X3 className="w-4 h-4 mr-1 md:mr-2" />
