@@ -35,7 +35,7 @@ export default function BatchesPage() {
   const [pendingImageUrls, setPendingImageUrls] = useState<string[]>([]);
   const [productCounts, setProductCounts] = useState<Record<string, number>>({});
 
-  // Fetch product counts for batches
+  // Fetch product counts for batches - only when batches change
   useEffect(() => {
     const fetchCounts = async () => {
       const counts: Record<string, number> = {};
@@ -44,8 +44,10 @@ export default function BatchesPage() {
       }
       setProductCounts(counts);
     };
-    fetchCounts();
-  }, [batches, getProductCount, products]);
+    if (batches.length > 0) {
+      fetchCounts();
+    }
+  }, [batches]);
 
   // Load images when editing a product
   useEffect(() => {

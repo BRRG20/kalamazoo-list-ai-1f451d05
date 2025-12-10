@@ -441,10 +441,10 @@ export function ProductDetailPanel({
   );
 
   return (
-    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-2 md:p-4">
-      <div className="bg-card border border-border rounded-lg shadow-lg w-full max-w-6xl h-[95vh] md:h-[90vh] flex flex-col overflow-hidden animate-fade-in">
-        {/* Header */}
-        <div className="flex items-center justify-between p-2 md:p-4 border-b border-border gap-2">
+    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-start justify-center p-0 md:p-4 overflow-y-auto">
+      <div className="bg-card border border-border rounded-none md:rounded-lg shadow-lg w-full max-w-6xl min-h-screen md:min-h-0 md:h-[90vh] flex flex-col md:overflow-hidden animate-fade-in">
+        {/* Header - sticky on mobile */}
+        <div className="sticky top-0 z-10 bg-card flex items-center justify-between p-2 md:p-4 border-b border-border gap-2">
           <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
             <Button
               variant="ghost"
@@ -535,9 +535,9 @@ export function ProductDetailPanel({
         </div>
 
         {/* Content */}
-        <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+        <div className="flex-1 flex flex-col md:flex-row md:overflow-hidden">
           {/* Left: Images */}
-          <div className="h-48 md:h-auto md:w-1/3 border-b md:border-b-0 md:border-r border-border p-2 md:p-4 overflow-y-auto scrollbar-thin flex-shrink-0">
+          <div className="md:h-auto md:w-1/3 border-b md:border-b-0 md:border-r border-border p-2 md:p-4 md:overflow-y-auto scrollbar-thin flex-shrink-0">
             <ImageGallery
               images={images}
               onUpdateImage={onUpdateImage}
