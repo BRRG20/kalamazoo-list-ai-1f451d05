@@ -37,6 +37,7 @@ interface ImageGroupManagerProps {
   onUpdateUnassigned: (images: string[]) => void;
   onCreateNewGroup: (images: string[]) => void;
   onDeleteGroup: (productId: string) => void;
+  onDeleteImage: (url: string) => void;
   onSaveGroups: () => void;
   imagesPerProduct: number;
 }
@@ -48,6 +49,7 @@ export function ImageGroupManager({
   onUpdateUnassigned,
   onCreateNewGroup,
   onDeleteGroup,
+  onDeleteImage,
   onSaveGroups,
   imagesPerProduct,
 }: ImageGroupManagerProps) {
@@ -348,6 +350,26 @@ export function ImageGroupManager({
     onCreateNewGroup(selectedUrls);
   };
 
+  const handleDeleteImageFromGroup = (groupId: string, imageUrl: string) => {
+    const newGroups = groups.map(g => {
+      if (g.productId === groupId) {
+        return {
+          ...g,
+          images: g.images.filter(url => url !== imageUrl),
+          selectedImages: new Set([...g.selectedImages].filter(url => url !== imageUrl)),
+        };
+      }
+      return g;
+    });
+    onUpdateGroups(newGroups);
+    onDeleteImage(imageUrl);
+  };
+
+  const handleDeleteImageFromUnassigned = (imageUrl: string) => {
+    onUpdateUnassigned(unassignedImages.filter(url => url !== imageUrl));
+    onDeleteImage(imageUrl);
+  };
+
   const activeImageUrl = activeId;
 
   // Drop zone component for creating new groups
@@ -408,6 +430,7 @@ export function ImageGroupManager({
             images={unassignedImages}
             onCreateGroup={handleCreateGroupFromUnassigned}
             onAddToGroup={(url, groupId) => handleAddFromUnassigned(groupId, url)}
+            onDeleteImage={handleDeleteImageFromUnassigned}
             groups={groups}
           />
         )}
@@ -428,6 +451,7 @@ export function ImageGroupManager({
               onMoveSelectedToPrevious={() => handleMoveSelectedToPrevious(group.productId)}
               onMoveSelectedToNewGroup={() => handleMoveSelectedToNewGroup(group.productId)}
               onDeleteGroup={() => onDeleteGroup(group.productId)}
+              onDeleteImage={(url) => handleDeleteImageFromGroup(group.productId, url)}
               onReorder={(oldIndex, newIndex) => handleReorderWithinGroup(group.productId, oldIndex, newIndex)}
               unassignedImages={unassignedImages}
               onAddFromUnassigned={(url) => handleAddFromUnassigned(group.productId, url)}
