@@ -5,13 +5,13 @@ import {
   ChevronRight, 
   Sparkles, 
   Mic, 
-  MicOff,
   Square,
   Copy, 
   Check,
   Save,
   Loader2,
-  Camera
+  Camera,
+  ShoppingBag
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,12 +31,15 @@ interface ProductDetailPanelProps {
   onUpdateImage: (imageId: string, updates: Partial<ProductImage>) => void;
   onReorderImages: (imageId: string, newPosition: number) => void;
   onGenerateAI: (regenerateOnly?: 'title' | 'style_a' | 'style_b' | 'all') => void;
+  onCreateInShopify?: () => void;
   onPrevious?: () => void;
   onNext?: () => void;
   hasPrevious: boolean;
   hasNext: boolean;
   isGenerating: boolean;
   regeneratingField?: string | null;
+  isCreatingShopify?: boolean;
+  isShopifyConfigured?: boolean;
 }
 
 const departments: Department[] = ['Women', 'Men', 'Unisex', 'Kids'];
@@ -54,12 +57,15 @@ export function ProductDetailPanel({
   onUpdateImage,
   onReorderImages,
   onGenerateAI,
+  onCreateInShopify,
   onPrevious,
   onNext,
   hasPrevious,
   hasNext,
   isGenerating,
   regeneratingField,
+  isCreatingShopify,
+  isShopifyConfigured,
 }: ProductDetailPanelProps) {
   const [formData, setFormData] = useState<Partial<Product>>({});
   const [isListening, setIsListening] = useState(false);
@@ -500,6 +506,28 @@ export function ProductDetailPanel({
               )}
               <span className="hidden md:inline">Save</span>
             </Button>
+            {isShopifyConfigured && onCreateInShopify && product.status !== 'created_in_shopify' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onCreateInShopify}
+                disabled={isCreatingShopify}
+                className="text-xs md:text-sm"
+              >
+                {isCreatingShopify ? (
+                  <Loader2 className="w-4 h-4 md:mr-1 animate-spin" />
+                ) : (
+                  <ShoppingBag className="w-4 h-4 md:mr-1" />
+                )}
+                <span className="hidden md:inline">Shopify</span>
+              </Button>
+            )}
+            {product.status === 'created_in_shopify' && (
+              <span className="text-xs text-success flex items-center gap-1">
+                <Check className="w-3 h-3" />
+                <span className="hidden md:inline">In Shopify</span>
+              </span>
+            )}
             <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8">
               <X className="w-4 h-4" />
             </Button>
