@@ -25,6 +25,15 @@ FIELD MAPPINGS (be flexible with phrasing):
 - "fit" / "oversized" / "slim" / "boxy" / "relaxed" → fit
 - "garment" / "type" / clothing items (shirt, jumper, jacket, etc.) → garment_type
 
+DESCRIPTION CONTENT:
+- If user says "description" / "add to description" / "for the description" followed by text → description_text
+- Any narrative/story content about the item (not just field values) → description_text
+- Example: "for the description this is a lovely vintage piece perfect for autumn" → description_text: "This is a lovely vintage piece perfect for autumn."
+
+STYLE SELECTION:
+- "style A" / "use style A" / "style 1" / "minimal" → preferred_style: "A"
+- "style B" / "use style B" / "style 2" / "SEO" → preferred_style: "B"
+
 CONDITION FORMAT:
 - If flaws mentioned with condition: "Very good (minor bobbling on sleeves)"
 - If only flaws mentioned: "(some fading on the hem)"
@@ -36,11 +45,14 @@ Output: {"price": 25}
 Input: "Women's, 90s era, condition very good with minor bobbling"
 Output: {"department": "Women", "era": "90s", "condition": "Very good (minor bobbling)"}
 
-Input: "Fits like a medium to large"
-Output: {"size_recommended": "M-L"}
+Input: "For the description this is a beautiful authentic vintage piece from the nineties"
+Output: {"description_text": "This is a beautiful authentic vintage piece from the nineties."}
 
-Input: "Blue wool jumper"
-Output: {"colour_main": "Blue", "material": "Wool", "garment_type": "Jumper"}
+Input: "Use style B for descriptions"
+Output: {"preferred_style": "B"}
+
+Input: "Add to description great for layering in winter, also brand is Gap"
+Output: {"description_text": "Great for layering in winter.", "brand": "Gap"}
 
 If no product fields are detected, return an empty object: {}
 

@@ -74,6 +74,7 @@ export function ProductDetailPanel({
   const [voiceTranscript, setVoiceTranscript] = useState('');
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [descriptionStyle, setDescriptionStyle] = useState<'A' | 'B'>('A');
   const recognitionRef = useRef<any>(null);
 
   useEffect(() => {
@@ -383,6 +384,29 @@ export function ProductDetailPanel({
       if (parsed.notes) {
         fieldUpdates.notes = (formData.notes || '') + '\n' + parsed.notes;
         updatedFields.push('notes');
+      }
+      
+      // Handle style preference change
+      if (parsed.preferred_style) {
+        const newStyle = parsed.preferred_style === 'B' ? 'B' : 'A';
+        setDescriptionStyle(newStyle);
+        updatedFields.push(`style ${newStyle}`);
+      }
+      
+      // Handle description text - append to currently selected style
+      if (parsed.description_text) {
+        const activeStyle = parsed.preferred_style === 'B' ? 'B' : (parsed.preferred_style === 'A' ? 'A' : descriptionStyle);
+        if (activeStyle === 'A') {
+          const existingDesc = formData.description_style_a || '';
+          const separator = existingDesc.trim() ? ' ' : '';
+          fieldUpdates.description_style_a = existingDesc.trim() + separator + parsed.description_text;
+          updatedFields.push('description (Style A)');
+        } else {
+          const existingDesc = formData.description_style_b || '';
+          const separator = existingDesc.trim() ? ' ' : '';
+          fieldUpdates.description_style_b = existingDesc.trim() + separator + parsed.description_text;
+          updatedFields.push('description (Style B)');
+        }
       }
       
       // Update form data
@@ -996,6 +1020,28 @@ export function ProductDetailPanel({
                 <h3 className="font-semibold text-foreground mb-3">Voice Input & Notes</h3>
                 <div className="space-y-4">
                   <div className="flex flex-wrap items-center gap-2">
+                    {/* Description Style Toggle */}
+                    <div className="flex items-center gap-1 mr-2 border border-border rounded-md p-1">
+                      <Button
+                        variant={descriptionStyle === 'A' ? 'default' : 'ghost'}
+                        size="sm"
+                        onClick={() => setDescriptionStyle('A')}
+                        className="h-7 px-2 text-xs"
+                        type="button"
+                      >
+                        Style A
+                      </Button>
+                      <Button
+                        variant={descriptionStyle === 'B' ? 'default' : 'ghost'}
+                        size="sm"
+                        onClick={() => setDescriptionStyle('B')}
+                        className="h-7 px-2 text-xs"
+                        type="button"
+                      >
+                        Style B
+                      </Button>
+                    </div>
+                    
                     {!isListening ? (
                       <Button
                         variant="outline"
@@ -1062,7 +1108,7 @@ export function ProductDetailPanel({
                   
                   {!voiceTranscript && !isListening && (
                     <p className="text-xs text-muted-foreground">
-                      Speak product details like "Price 25 pounds, women's department, 90s era, condition very good with minor bobbling on sleeves"
+                      Speak product details or description. Say "for the description..." to add text to Style {descriptionStyle}. Say "use style B" to switch styles.
                     </p>
                   )}
 
