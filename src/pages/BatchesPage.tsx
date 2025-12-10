@@ -1,128 +1,157 @@
-import { useState, useCallback } from 'react';
-import { v4 as uuidv4 } from 'uuid';
+import { useState, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { BatchList } from '@/components/batches/BatchList';
 import { BatchDetail } from '@/components/batches/BatchDetail';
 import { EmptyState } from '@/components/batches/EmptyState';
 import { ProductDetailPanel } from '@/components/products/ProductDetailPanel';
-import {
-  getBatches,
-  getBatch,
-  createBatch,
-  updateBatch,
-  deleteBatch,
-  getProductsByBatch,
-  getProduct,
-  createProduct,
-  updateProduct,
-  getImagesByProduct,
-  addImage,
-  updateImage,
-  excludeLastNImagesFromShopify,
-  getSettings,
-} from '@/lib/store';
-import type { Batch, Product, ProductImage } from '@/types';
+import { 
+  useBatches, 
+  useProducts, 
+  useImages, 
+  useSettings, 
+  useImageUpload,
+  generateListingBlock,
+  UPLOAD_LIMITS,
+} from '@/hooks/use-database';
+import type { Product, ProductImage } from '@/types';
 
 export default function BatchesPage() {
-  const [batches, setBatches] = useState<Batch[]>(getBatches());
+  const { batches, createBatch, updateBatch, deleteBatch, getProductCount } = useBatches();
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
-  const [products, setProducts] = useState<Product[]>([]);
+  const { products, createProduct, updateProduct, refetch: refetchProducts } = useProducts(selectedBatchId);
+  const { fetchImagesForProduct, addImage, updateImage, excludeLastNImages, clearCache } = useImages();
+  const { settings } = useSettings();
+  const { uploadImages, uploading, progress } = useImageUpload();
+  
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
+  const [editingProductImages, setEditingProductImages] = useState<ProductImage[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isCreatingShopify, setIsCreatingShopify] = useState(false);
-  const [pendingImages, setPendingImages] = useState<{ file: File; url: string }[]>([]);
+  const [pendingImageUrls, setPendingImageUrls] = useState<string[]>([]);
+  const [productCounts, setProductCounts] = useState<Record<string, number>>({});
 
-  const refreshBatches = useCallback(() => {
-    setBatches(getBatches());
-  }, []);
+  // Fetch product counts for batches
+  useEffect(() => {
+    const fetchCounts = async () => {
+      const counts: Record<string, number> = {};
+      for (const batch of batches) {
+        counts[batch.id] = await getProductCount(batch.id);
+      }
+      setProductCounts(counts);
+    };
+    fetchCounts();
+  }, [batches, getProductCount, products]);
 
-  const refreshProducts = useCallback((batchId: string) => {
-    setProducts(getProductsByBatch(batchId));
-  }, []);
+  // Load images when editing a product
+  useEffect(() => {
+    const loadImages = async () => {
+      if (editingProductId) {
+        const images = await fetchImagesForProduct(editingProductId);
+        setEditingProductImages(images);
+      }
+    };
+    loadImages();
+  }, [editingProductId, fetchImagesForProduct]);
 
   const handleSelectBatch = useCallback((id: string) => {
     setSelectedBatchId(id);
     setSelectedProductIds(new Set());
-    refreshProducts(id);
-  }, [refreshProducts]);
-
-  const handleCreateBatch = useCallback((name: string, notes: string) => {
-    const batch = createBatch(name, notes);
-    refreshBatches();
-    handleSelectBatch(batch.id);
-    toast.success('Batch created');
-  }, [refreshBatches, handleSelectBatch]);
-
-  const handleUpdateBatch = useCallback((id: string, name: string, notes: string) => {
-    updateBatch(id, { name, notes });
-    refreshBatches();
-    toast.success('Batch updated');
-  }, [refreshBatches]);
-
-  const handleDeleteBatch = useCallback((id: string) => {
-    deleteBatch(id);
-    if (selectedBatchId === id) {
-      setSelectedBatchId(null);
-      setProducts([]);
-    }
-    refreshBatches();
-    toast.success('Batch deleted');
-  }, [selectedBatchId, refreshBatches]);
-
-  const handleUploadImages = useCallback((files: File[]) => {
-    const newImages = files.map(file => ({
-      file,
-      url: URL.createObjectURL(file),
-    }));
-    setPendingImages(prev => [...prev, ...newImages]);
-    toast.success(`${files.length} image(s) uploaded. Click "Auto-group" to create products.`);
+    setPendingImageUrls([]);
   }, []);
 
-  const handleAutoGroup = useCallback((imagesPerProduct: number) => {
+  const handleCreateBatch = useCallback(async (name: string, notes: string) => {
+    const batch = await createBatch(name, notes);
+    if (batch) {
+      handleSelectBatch(batch.id);
+      toast.success('Batch created');
+    }
+  }, [createBatch, handleSelectBatch]);
+
+  const handleUpdateBatch = useCallback(async (id: string, name: string, notes: string) => {
+    const success = await updateBatch(id, { name, notes });
+    if (success) {
+      toast.success('Batch updated');
+    }
+  }, [updateBatch]);
+
+  const handleDeleteBatch = useCallback(async (id: string) => {
+    const success = await deleteBatch(id);
+    if (success) {
+      if (selectedBatchId === id) {
+        setSelectedBatchId(null);
+      }
+      toast.success('Batch deleted');
+    }
+  }, [selectedBatchId, deleteBatch]);
+
+  const handleUploadImages = useCallback(async (files: File[]) => {
     if (!selectedBatchId) return;
-    if (pendingImages.length === 0) {
+    
+    // Show warning for large batches
+    if (files.length > UPLOAD_LIMITS.WARNING_THRESHOLD) {
+      toast.warning(`Large batches may slow down processing. For best results, upload in batches of ${UPLOAD_LIMITS.RECOMMENDED_IMAGES_PER_BATCH} images.`);
+    }
+    
+    toast.info(`Uploading ${files.length} image(s)...`);
+    
+    const urls = await uploadImages(files, selectedBatchId);
+    
+    if (urls.length > 0) {
+      setPendingImageUrls(prev => [...prev, ...urls]);
+      toast.success(`${urls.length} image(s) uploaded. Click "Auto-group" to create products.`);
+    } else {
+      toast.error('Failed to upload images');
+    }
+  }, [selectedBatchId, uploadImages]);
+
+  const handleAutoGroup = useCallback(async (imagesPerProduct: number) => {
+    if (!selectedBatchId) return;
+    if (pendingImageUrls.length === 0) {
       toast.error('No images to group. Upload images first.');
       return;
     }
 
-    const settings = getSettings();
-    const chunks: { file: File; url: string }[][] = [];
-    
-    for (let i = 0; i < pendingImages.length; i += imagesPerProduct) {
-      chunks.push(pendingImages.slice(i, i + imagesPerProduct));
+    const chunks: string[][] = [];
+    for (let i = 0; i < pendingImageUrls.length; i += imagesPerProduct) {
+      chunks.push(pendingImageUrls.slice(i, i + imagesPerProduct));
     }
 
     let productNumber = products.length + 1;
     
-    chunks.forEach((chunk) => {
+    for (const chunk of chunks) {
       const sku = `BATCH-${selectedBatchId.slice(0, 6)}-${String(productNumber).padStart(3, '0')}`;
-      const product = createProduct(selectedBatchId, sku);
+      const product = await createProduct(sku);
       
-      chunk.forEach((img, index) => {
-        addImage(product.id, img.url, index + 1);
-      });
-      
+      if (product) {
+        for (let i = 0; i < chunk.length; i++) {
+          await addImage(product.id, selectedBatchId, chunk[i], i + 1);
+        }
+      }
       productNumber++;
-    });
+    }
 
-    setPendingImages([]);
-    refreshProducts(selectedBatchId);
-    toast.success(`Created ${chunks.length} product(s) from ${pendingImages.length} images`);
-  }, [selectedBatchId, pendingImages, products.length, refreshProducts]);
+    setPendingImageUrls([]);
+    clearCache();
+    toast.success(`Created ${chunks.length} product(s) from ${pendingImageUrls.length} images`);
+  }, [selectedBatchId, pendingImageUrls, products.length, createProduct, addImage, clearCache]);
 
   const handleGenerateAll = useCallback(async () => {
     if (!selectedBatchId || products.length === 0) return;
     
+    // Show warning for large product counts
+    if (products.length > UPLOAD_LIMITS.RECOMMENDED_PRODUCTS_FOR_AI) {
+      toast.warning(`For stability, consider generating AI in groups of ${UPLOAD_LIMITS.RECOMMENDED_PRODUCTS_FOR_AI} products or fewer.`);
+    }
+    
     setIsGenerating(true);
+    
     // Simulate AI generation - in production this would call the AI service
     await new Promise(resolve => setTimeout(resolve, 1500));
     
-    products.forEach(product => {
-      const images = getImagesByProduct(product.id);
-      // Mock AI generation
-      updateProduct(product.id, {
+    for (const product of products) {
+      await updateProduct(product.id, {
         status: 'generated',
         title: `Vintage ${product.sku} Item`,
         description: 'A beautiful vintage piece in excellent condition. Perfect for adding a unique touch to your wardrobe.',
@@ -132,22 +161,22 @@ export default function BatchesPage() {
         shopify_tags: 'vintage, retro, knitwear',
         etsy_tags: 'vintage sweater, retro knitwear, 90s fashion, thrift find, sustainable fashion',
       });
-    });
+    }
     
-    refreshProducts(selectedBatchId);
     setIsGenerating(false);
     toast.success(`AI generated details for ${products.length} product(s)`);
-  }, [selectedBatchId, products, refreshProducts]);
+  }, [selectedBatchId, products, updateProduct]);
 
-  const handleExcludeLast2All = useCallback(() => {
+  const handleExcludeLast2All = useCallback(async () => {
     if (!selectedBatchId) return;
     
-    products.forEach(product => {
-      excludeLastNImagesFromShopify(product.id, 2);
-    });
+    for (const product of products) {
+      await excludeLastNImages(product.id, 2);
+    }
     
+    clearCache();
     toast.success('Excluded last 2 images from Shopify for all products');
-  }, [selectedBatchId, products]);
+  }, [selectedBatchId, products, excludeLastNImages, clearCache]);
 
   const handleCreateInShopify = useCallback(async (productIds: string[]) => {
     setIsCreatingShopify(true);
@@ -158,27 +187,24 @@ export default function BatchesPage() {
     let successCount = 0;
     let errorCount = 0;
     
-    productIds.forEach(id => {
-      const product = getProduct(id);
+    for (const id of productIds) {
+      const product = products.find(p => p.id === id);
       if (product) {
         // Simulate success/failure
         if (Math.random() > 0.1) {
-          updateProduct(id, {
+          await updateProduct(id, {
             status: 'created_in_shopify',
             shopify_product_id: `gid://shopify/Product/${Date.now()}`,
             shopify_handle: product.title?.toLowerCase().replace(/\s+/g, '-') || product.sku,
           });
           successCount++;
         } else {
-          updateProduct(id, { status: 'error' });
+          await updateProduct(id, { status: 'error' });
           errorCount++;
         }
       }
-    });
-    
-    if (selectedBatchId) {
-      refreshProducts(selectedBatchId);
     }
+    
     setSelectedProductIds(new Set());
     setIsCreatingShopify(false);
     
@@ -187,7 +213,7 @@ export default function BatchesPage() {
     } else {
       toast.success(`Created ${successCount} product(s) in Shopify`);
     }
-  }, [selectedBatchId, refreshProducts]);
+  }, [products, updateProduct]);
 
   const handleToggleProductSelection = useCallback((productId: string) => {
     setSelectedProductIds(prev => {
@@ -201,41 +227,50 @@ export default function BatchesPage() {
     });
   }, []);
 
-  const handleSaveProduct = useCallback((updates: Partial<Product>) => {
+  const handleSaveProduct = useCallback(async (updates: Partial<Product>) => {
     if (!editingProductId) return;
-    updateProduct(editingProductId, updates);
-    if (selectedBatchId) {
-      refreshProducts(selectedBatchId);
+    
+    // Generate listing block
+    const currentProduct = products.find(p => p.id === editingProductId);
+    if (currentProduct) {
+      const updatedProduct = { ...currentProduct, ...updates };
+      const listingBlock = generateListingBlock(updatedProduct as Product);
+      await updateProduct(editingProductId, { ...updates, listing_block: listingBlock });
     }
-  }, [editingProductId, selectedBatchId, refreshProducts]);
+  }, [editingProductId, products, updateProduct]);
 
-  const handleUpdateImage = useCallback((imageId: string, updates: Partial<ProductImage>) => {
-    updateImage(imageId, updates);
-  }, []);
+  const handleUpdateImage = useCallback(async (imageId: string, updates: Partial<ProductImage>) => {
+    if (!editingProductId) return;
+    await updateImage(imageId, editingProductId, updates);
+    // Refresh images
+    const images = await fetchImagesForProduct(editingProductId);
+    setEditingProductImages(images);
+  }, [editingProductId, updateImage, fetchImagesForProduct]);
 
-  const handleReorderImages = useCallback((imageId: string, newPosition: number) => {
+  const handleReorderImages = useCallback(async (imageId: string, newPosition: number) => {
     if (!editingProductId) return;
     
-    const images = getImagesByProduct(editingProductId);
-    const movingImage = images.find(i => i.id === imageId);
-    if (!movingImage) return;
+    const oldPosition = editingProductImages.find(i => i.id === imageId)?.position || 0;
     
-    const oldPosition = movingImage.position;
-    
-    images.forEach(img => {
+    for (const img of editingProductImages) {
       if (img.id === imageId) {
-        updateImage(img.id, { position: newPosition });
+        await updateImage(img.id, editingProductId, { position: newPosition });
       } else if (oldPosition < newPosition) {
         if (img.position > oldPosition && img.position <= newPosition) {
-          updateImage(img.id, { position: img.position - 1 });
+          await updateImage(img.id, editingProductId, { position: img.position - 1 });
         }
       } else {
         if (img.position >= newPosition && img.position < oldPosition) {
-          updateImage(img.id, { position: img.position + 1 });
+          await updateImage(img.id, editingProductId, { position: img.position + 1 });
         }
       }
-    });
-  }, [editingProductId]);
+    }
+    
+    // Refresh images
+    clearCache(editingProductId);
+    const images = await fetchImagesForProduct(editingProductId);
+    setEditingProductImages(images);
+  }, [editingProductId, editingProductImages, updateImage, clearCache, fetchImagesForProduct]);
 
   const handleGenerateProductAI = useCallback(async () => {
     if (!editingProductId) return;
@@ -243,9 +278,9 @@ export default function BatchesPage() {
     setIsGenerating(true);
     await new Promise(resolve => setTimeout(resolve, 1000));
     
-    const product = getProduct(editingProductId);
+    const product = products.find(p => p.id === editingProductId);
     if (product) {
-      updateProduct(editingProductId, {
+      await updateProduct(editingProductId, {
         status: 'generated',
         title: product.title || `Vintage ${product.garment_type || 'Item'} – ${product.department || 'Unisex'}`,
         description: product.description || 'A beautiful vintage piece in excellent condition.',
@@ -254,15 +289,15 @@ export default function BatchesPage() {
       });
     }
     
-    if (selectedBatchId) {
-      refreshProducts(selectedBatchId);
-    }
     setIsGenerating(false);
     toast.success('AI generation complete');
-  }, [editingProductId, selectedBatchId, refreshProducts]);
+  }, [editingProductId, products, updateProduct]);
 
-  const editingProduct = editingProductId ? getProduct(editingProductId) : null;
-  const editingProductImages = editingProductId ? getImagesByProduct(editingProductId) : [];
+  const getProductImagesCallback = useCallback(async (productId: string) => {
+    return await fetchImagesForProduct(productId);
+  }, [fetchImagesForProduct]);
+
+  const editingProduct = editingProductId ? products.find(p => p.id === editingProductId) : null;
   
   const productIndex = editingProductId ? products.findIndex(p => p.id === editingProductId) : -1;
   const hasPrevious = productIndex > 0;
@@ -276,7 +311,7 @@ export default function BatchesPage() {
     }
   }, [hasPrevious, hasNext, productIndex, products]);
 
-  const selectedBatch = selectedBatchId ? getBatch(selectedBatchId) : null;
+  const selectedBatch = selectedBatchId ? batches.find(b => b.id === selectedBatchId) : null;
 
   return (
     <AppLayout>
@@ -290,6 +325,7 @@ export default function BatchesPage() {
             onCreateBatch={handleCreateBatch}
             onDeleteBatch={handleDeleteBatch}
             onUpdateBatch={handleUpdateBatch}
+            productCounts={productCounts}
           />
         </div>
 
@@ -299,7 +335,7 @@ export default function BatchesPage() {
             <BatchDetail
               batch={selectedBatch}
               products={products}
-              getProductImages={getImagesByProduct}
+              getProductImages={getProductImagesCallback}
               onUploadImages={handleUploadImages}
               onAutoGroup={handleAutoGroup}
               onGenerateAll={handleGenerateAll}
@@ -310,6 +346,9 @@ export default function BatchesPage() {
               selectedProductIds={selectedProductIds}
               isGenerating={isGenerating}
               isCreatingShopify={isCreatingShopify}
+              pendingImageCount={pendingImageUrls.length}
+              isUploading={uploading}
+              uploadProgress={progress}
             />
           ) : (
             <EmptyState />
