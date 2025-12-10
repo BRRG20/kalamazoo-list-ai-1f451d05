@@ -1,13 +1,13 @@
 project_id = "bembvdjhyrlgkdiqkfqr"
 
 [functions.analyze-images]
-verify_jwt = false
+verify_jwt = true
 
 [functions.generate-listing]
-verify_jwt = false
+verify_jwt = true
 
 [functions.parse-voice]
-verify_jwt = false
+verify_jwt = true
 
 [functions.create-shopify-product]
-verify_jwt = false
+verify_jwt = true

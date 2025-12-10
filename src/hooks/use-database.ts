@@ -10,6 +10,12 @@ export const UPLOAD_LIMITS = {
   RECOMMENDED_PRODUCTS_FOR_AI: 20,
 };
 
+// Helper to get current user ID
+async function getCurrentUserId(): Promise<string | null> {
+  const { data: { user } } = await supabase.auth.getUser();
+  return user?.id ?? null;
+}
+
 // Helper to map DB rows to typed objects
 function mapBatch(row: any): Batch {
   return {
@@ -71,7 +77,6 @@ function mapSettings(row: any): Settings {
   return {
     id: row.id,
     shopify_store_url: row.shopify_store_url || '',
-    shopify_access_token: row.shopify_access_token || '',
     default_images_per_product: row.default_images_per_product || 9,
     default_currency: row.default_currency || 'GBP',
   };
@@ -135,9 +140,15 @@ export function useBatches() {
   }, [fetchBatches]);
 
   const createBatch = async (name: string, notes: string = '') => {
+    const userId = await getCurrentUserId();
+    if (!userId) {
+      toast.error('You must be logged in');
+      return null;
+    }
+
     const { data, error } = await supabase
       .from('batches')
-      .insert({ name, notes })
+      .insert({ name, notes, user_id: userId })
       .select()
       .single();
     
@@ -235,6 +246,12 @@ export function useProducts(batchId: string | null) {
   const createProduct = async (sku: string) => {
     if (!batchId) return null;
     
+    const userId = await getCurrentUserId();
+    if (!userId) {
+      toast.error('You must be logged in');
+      return null;
+    }
+
     const { data, error } = await supabase
       .from('products')
       .insert({ 
@@ -243,6 +260,7 @@ export function useProducts(batchId: string | null) {
         status: 'new',
         currency: 'GBP',
         department: 'Women',
+        user_id: userId,
       })
       .select()
       .single();
@@ -350,6 +368,12 @@ export function useImages() {
   };
 
   const addImage = async (productId: string, batchId: string, url: string, position: number) => {
+    const userId = await getCurrentUserId();
+    if (!userId) {
+      console.error('No user ID for image upload');
+      return null;
+    }
+
     const { data, error } = await supabase
       .from('images')
       .insert({ 
@@ -358,6 +382,7 @@ export function useImages() {
         url, 
         position,
         include_in_shopify: true,
+        user_id: userId,
       })
       .select()
       .single();
@@ -430,11 +455,17 @@ export function useSettings() {
   const [loading, setLoading] = useState(true);
 
   const fetchSettings = useCallback(async () => {
+    const userId = await getCurrentUserId();
+    if (!userId) {
+      setLoading(false);
+      return;
+    }
+
     const { data, error } = await supabase
       .from('settings')
       .select('*')
-      .limit(1)
-      .single();
+      .eq('user_id', userId)
+      .maybeSingle();
     
     if (error) {
       console.error('Error fetching settings:', error);
@@ -442,7 +473,29 @@ export function useSettings() {
       return;
     }
     
-    setSettings(mapSettings(data));
+    // If no settings exist, create default settings for this user
+    if (!data) {
+      const { data: newData, error: createError } = await supabase
+        .from('settings')
+        .insert({ 
+          user_id: userId,
+          default_images_per_product: 9,
+          default_currency: 'GBP',
+        })
+        .select()
+        .single();
+      
+      if (createError) {
+        console.error('Error creating settings:', createError);
+        setLoading(false);
+        return;
+      }
+      
+      setSettings(mapSettings(newData));
+    } else {
+      setSettings(mapSettings(data));
+    }
+    
     setLoading(false);
   }, []);
 
@@ -455,7 +508,6 @@ export function useSettings() {
 
     const dbUpdates: Record<string, any> = {};
     if (updates.shopify_store_url !== undefined) dbUpdates.shopify_store_url = updates.shopify_store_url;
-    if (updates.shopify_access_token !== undefined) dbUpdates.shopify_access_token = updates.shopify_access_token;
     if (updates.default_images_per_product !== undefined) dbUpdates.default_images_per_product = updates.default_images_per_product;
     if (updates.default_currency !== undefined) dbUpdates.default_currency = updates.default_currency;
 
@@ -475,7 +527,7 @@ export function useSettings() {
   };
 
   const isShopifyConfigured = () => {
-    return !!(settings?.shopify_store_url && settings?.shopify_access_token);
+    return !!settings?.shopify_store_url;
   };
 
   return { settings, loading, updateSettings, isShopifyConfigured, refetch: fetchSettings };
@@ -509,7 +561,7 @@ export function useImageUpload() {
   const uploadImages = async (files: File[], batchId: string): Promise<string[]> => {
     setUploading(true);
     setProgress(0);
-    
+
     const urls: string[] = [];
     
     for (let i = 0; i < files.length; i++) {
@@ -519,7 +571,7 @@ export function useImageUpload() {
       }
       setProgress(Math.round(((i + 1) / files.length) * 100));
     }
-    
+
     setUploading(false);
     setProgress(0);
     return urls;
