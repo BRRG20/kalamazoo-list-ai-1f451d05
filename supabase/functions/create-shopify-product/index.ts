@@ -104,11 +104,25 @@ serve(async (req) => {
           tags.push(...product.collections_tags.split(',').map(t => t.trim()).filter(Boolean));
         }
 
+        // Format description for Shopify - preserve line breaks properly
+        const formatDescriptionHtml = (desc: string): string => {
+          if (!desc) return '';
+          
+          // Split into paragraphs on double newlines, then use <br> for single newlines within
+          const paragraphs = desc.split(/\n\n+/).filter(Boolean);
+          
+          return paragraphs.map(para => {
+            // Convert single newlines to <br> within each paragraph
+            const formatted = para.trim().replace(/\n/g, '<br>');
+            return `<p>${formatted}</p>`;
+          }).join('');
+        };
+
         // Build Shopify product payload
         const shopifyProduct = {
           product: {
             title: product.title || product.sku || 'Untitled Product',
-            body_html: product.description ? `<p>${product.description.replace(/\n/g, '</p><p>')}</p>` : '',
+            body_html: formatDescriptionHtml(product.description),
             vendor: product.brand || 'Kalamazoo Vintage',
             product_type: product.garment_type || '',
             tags: tags.join(', '),

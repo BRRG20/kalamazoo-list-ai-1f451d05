@@ -59,6 +59,33 @@ export type Database = {
         }
         Relationships: []
       }
+      default_tags: {
+        Row: {
+          assigned_garment_types: string[]
+          created_at: string
+          id: string
+          tag_name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          assigned_garment_types?: string[]
+          created_at?: string
+          id?: string
+          tag_name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          assigned_garment_types?: string[]
+          created_at?: string
+          id?: string
+          tag_name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       images: {
         Row: {
           batch_id: string | null
