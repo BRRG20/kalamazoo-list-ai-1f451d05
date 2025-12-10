@@ -10,13 +10,23 @@ import { toast } from 'sonner';
 import { useAuth } from '@/hooks/use-auth';
 import { supabase } from '@/integrations/supabase/client';
 
-// Authorized emails - only these can sign in
-const AUTHORIZED_EMAILS = [
-  'santanagonsalves7@gmail.com',
-  'ebonygonsalves01@gmail.com',
-];
-
 const ACCESS_DENIED_MESSAGE = 'Access restricted. This app is currently limited to authorised users only.';
+
+// Server-side email authorization check
+async function checkEmailAuthorized(email: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('authorized_emails')
+    .select('email')
+    .ilike('email', email)
+    .maybeSingle();
+  
+  if (error) {
+    console.error('Error checking authorization:', error);
+    return false;
+  }
+  
+  return !!data;
+}
 
 export default function AuthPage() {
   const navigate = useNavigate();
@@ -48,11 +58,15 @@ export default function AuthPage() {
   useEffect(() => {
     const checkAuthorization = async () => {
       if (isAuthenticated && user && !authLoading) {
-        const userEmail = user.email?.toLowerCase();
+        const userEmail = user.email;
         
-        const isAuthorized = AUTHORIZED_EMAILS.some(
-          email => email.toLowerCase() === userEmail
-        );
+        if (!userEmail) {
+          toast.error(ACCESS_DENIED_MESSAGE);
+          await supabase.auth.signOut();
+          return;
+        }
+        
+        const isAuthorized = await checkEmailAuthorized(userEmail);
         
         if (!isAuthorized) {
           toast.error(ACCESS_DENIED_MESSAGE);
@@ -69,12 +83,6 @@ export default function AuthPage() {
 
   const handleChange = (field: keyof typeof formData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const isEmailAuthorized = (email: string): boolean => {
-    return AUTHORIZED_EMAILS.some(
-      authorizedEmail => authorizedEmail.toLowerCase() === email.toLowerCase()
-    );
   };
 
   const handleGoogleSignIn = async () => {
@@ -101,13 +109,16 @@ export default function AuthPage() {
       return;
     }
     
-    // Check authorization BEFORE attempting sign in
-    if (!isEmailAuthorized(formData.email)) {
+    setIsLoading(true);
+    
+    // Check authorization from database BEFORE attempting sign in
+    const isAuthorized = await checkEmailAuthorized(formData.email);
+    if (!isAuthorized) {
+      setIsLoading(false);
       toast.error(ACCESS_DENIED_MESSAGE);
       return;
     }
     
-    setIsLoading(true);
     const { error } = await signIn(formData.email, formData.password);
     setIsLoading(false);
     
@@ -131,13 +142,15 @@ export default function AuthPage() {
       return;
     }
     
-    // Only allow password reset for authorized emails
-    if (!isEmailAuthorized(formData.email)) {
+    setIsLoading(true);
+    
+    // Only allow password reset for authorized emails (server-side check)
+    const isAuthorized = await checkEmailAuthorized(formData.email);
+    if (!isAuthorized) {
+      setIsLoading(false);
       toast.error(ACCESS_DENIED_MESSAGE);
       return;
     }
-    
-    setIsLoading(true);
     
     const { error } = await supabase.auth.resetPasswordForEmail(formData.email, {
       redirectTo: `${window.location.origin}/auth?reset=true`,
@@ -335,28 +348,4 @@ export default function AuthPage() {
       </Card>
     </div>
   );
-}
-
-// Admin-only function to create authorized user accounts
-// Call this from browser console: window.createAuthorizedUser('email@example.com', 'password')
-if (typeof window !== 'undefined') {
-  (window as any).createAuthorizedUser = async (email: string, password: string) => {
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-    
-    if (!AUTHORIZED_EMAILS.some(e => e.toLowerCase() === email.toLowerCase())) {
-      console.error('Email not in authorized list. Add it to AUTHORIZED_EMAILS first.');
-      return;
-    }
-    
-    const client = createClient(supabaseUrl, supabaseKey);
-    const { data, error } = await client.auth.signUp({ email, password });
-    
-    if (error) {
-      console.error('Error creating user:', error.message);
-    } else {
-      console.log('User created successfully:', data);
-    }
-  };
 }

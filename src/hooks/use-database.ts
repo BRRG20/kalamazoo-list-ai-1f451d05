@@ -539,8 +539,14 @@ export function useImageUpload() {
   const [progress, setProgress] = useState(0);
 
   const uploadImage = async (file: File, batchId: string): Promise<string | null> => {
+    const userId = await getCurrentUserId();
+    if (!userId) {
+      console.error('User not authenticated');
+      return null;
+    }
+    
     const fileExt = file.name.split('.').pop();
-    const fileName = `${batchId}/${crypto.randomUUID()}.${fileExt}`;
+    const fileName = `${userId}/${batchId}/${crypto.randomUUID()}.${fileExt}`;
 
     const { error } = await supabase.storage
       .from('product-images')
