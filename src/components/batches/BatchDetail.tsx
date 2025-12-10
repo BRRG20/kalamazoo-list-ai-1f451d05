@@ -12,7 +12,8 @@ import {
   X,
   Trash2,
   Settings2,
-  Plus
+  Plus,
+  RefreshCw
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,6 +31,7 @@ interface BatchDetailProps {
   getProductImages: (productId: string) => Promise<ProductImage[]>;
   onUploadImages: (files: File[], addToUnassigned?: boolean) => void;
   onAutoGroup: (imagesPerProduct: number) => void;
+  onReAutoGroupAll: (imagesPerProduct: number) => void;
   onGenerateAll: () => void;
   onExcludeLast2All: () => void;
   onCreateInShopify: (productIds: string[]) => void;
@@ -71,6 +73,7 @@ export function BatchDetail({
   getProductImages,
   onUploadImages,
   onAutoGroup,
+  onReAutoGroupAll,
   onGenerateAll,
   onExcludeLast2All,
   onCreateInShopify,
@@ -337,6 +340,20 @@ export function BatchDetail({
             <Grid3X3 className="w-4 h-4 mr-1 md:mr-2" />
             <span className="hidden sm:inline">Auto-</span>group
           </Button>
+
+          {/* Re-group All - available when there are existing groups */}
+          {(imageGroups.length > 0 || unassignedImages.length > 0) && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onReAutoGroupAll(imagesPerProduct)}
+              className="text-xs md:text-sm text-amber-600 hover:text-amber-700 border-amber-300 hover:border-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950"
+              title="Re-group all images based on current images-per-product setting"
+            >
+              <RefreshCw className="w-4 h-4 mr-1 md:mr-2" />
+              <span className="hidden sm:inline">Re-</span>group All
+            </Button>
+          )}
 
           {/* Toggle Group Manager */}
           {(imageGroups.length > 0 || unassignedImages.length > 0) && (

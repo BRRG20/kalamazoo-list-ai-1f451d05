@@ -162,6 +162,40 @@ export default function BatchesPage() {
     toast.success(`Created ${chunks.length} group(s). Review and adjust, then confirm.`);
   }, [selectedBatchId, pendingImageUrls, products.length]);
 
+  // Re-auto-group all images (from existing groups + unassigned + pending)
+  const handleReAutoGroupAll = useCallback((imagesPerProduct: number) => {
+    // Collect all images from all sources
+    const allImages: string[] = [
+      ...imageGroups.flatMap(g => g.images),
+      ...unassignedImages,
+      ...pendingImageUrls,
+    ];
+
+    if (allImages.length === 0) {
+      toast.error('No images to group.');
+      return;
+    }
+
+    // Create new groups from all collected images
+    const chunks: string[][] = [];
+    for (let i = 0; i < allImages.length; i += imagesPerProduct) {
+      chunks.push(allImages.slice(i, i + imagesPerProduct));
+    }
+
+    const newGroups: ImageGroup[] = chunks.map((chunk, index) => ({
+      productId: `temp-${Date.now()}-${index}`,
+      productNumber: index + 1,
+      images: chunk,
+      selectedImages: new Set<string>(),
+    }));
+
+    setImageGroups(newGroups);
+    setUnassignedImages([]);
+    setPendingImageUrls([]);
+    setShowGroupManager(true);
+    toast.success(`Re-grouped into ${chunks.length} product(s). Review and adjust, then confirm.`);
+  }, [imageGroups, unassignedImages, pendingImageUrls]);
+
   const handleGenerateAll = useCallback(async () => {
     if (!selectedBatchId || products.length === 0) return;
     
@@ -533,6 +567,7 @@ export default function BatchesPage() {
               getProductImages={getProductImagesCallback}
               onUploadImages={handleUploadImages}
               onAutoGroup={handleAutoGroup}
+              onReAutoGroupAll={handleReAutoGroupAll}
               onGenerateAll={handleGenerateAll}
               onExcludeLast2All={handleExcludeLast2All}
               onCreateInShopify={handleCreateInShopify}
