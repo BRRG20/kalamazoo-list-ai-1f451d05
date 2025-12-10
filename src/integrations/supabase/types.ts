@@ -21,6 +21,7 @@ export type Database = {
           name: string
           notes: string | null
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           created_at?: string
@@ -28,6 +29,7 @@ export type Database = {
           name: string
           notes?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           created_at?: string
@@ -35,6 +37,7 @@ export type Database = {
           name?: string
           notes?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -47,6 +50,7 @@ export type Database = {
           position: number
           product_id: string | null
           url: string
+          user_id: string | null
         }
         Insert: {
           batch_id?: string | null
@@ -56,6 +60,7 @@ export type Database = {
           position?: number
           product_id?: string | null
           url: string
+          user_id?: string | null
         }
         Update: {
           batch_id?: string | null
@@ -65,6 +70,7 @@ export type Database = {
           position?: number
           product_id?: string | null
           url?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -119,6 +125,7 @@ export type Database = {
           status: Database["public"]["Enums"]["product_status"]
           title: string | null
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           batch_id: string
@@ -155,6 +162,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["product_status"]
           title?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           batch_id?: string
@@ -191,6 +199,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["product_status"]
           title?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -208,27 +217,27 @@ export type Database = {
           default_currency: string
           default_images_per_product: number
           id: string
-          shopify_access_token: string | null
           shopify_store_url: string | null
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           created_at?: string
           default_currency?: string
           default_images_per_product?: number
           id?: string
-          shopify_access_token?: string | null
           shopify_store_url?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           created_at?: string
           default_currency?: string
           default_images_per_product?: number
           id?: string
-          shopify_access_token?: string | null
           shopify_store_url?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: []
       }
