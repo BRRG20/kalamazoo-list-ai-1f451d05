@@ -118,7 +118,7 @@ export function BatchDetail({
   };
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="min-h-full flex flex-col">
       {/* Header */}
       <div className="p-3 md:p-4 border-b border-border bg-card">
         <div className="flex items-center gap-3 mb-3 md:mb-4">
@@ -293,7 +293,7 @@ export function BatchDetail({
       </div>
 
       {/* Products grid */}
-      <div className="flex-1 overflow-y-auto scrollbar-thin p-4">
+      <div className="flex-1 p-4">
         {products.length === 0 ? (
           <div className="text-center py-16">
             <Upload className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
