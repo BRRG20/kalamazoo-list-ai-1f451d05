@@ -41,11 +41,20 @@ serve(async (req) => {
       );
     }
 
-    // Clean store URL - ensure it's the admin API URL
+    // Clean store URL - handle both admin.shopify.com and myshopify.com formats
     let storeUrl = shopifyStoreUrl.trim();
+    
+    // Convert admin.shopify.com/store/STORE_NAME format to STORE_NAME.myshopify.com
+    const adminMatch = storeUrl.match(/admin\.shopify\.com\/store\/([^\/]+)/);
+    if (adminMatch) {
+      storeUrl = `https://${adminMatch[1]}.myshopify.com`;
+      console.log(`Converted admin URL to: ${storeUrl}`);
+    }
+    
+    // Validate it's now in the correct format
     if (!storeUrl.includes('.myshopify.com')) {
       return new Response(
-        JSON.stringify({ error: 'Invalid Shopify store URL. Should be like: https://yourstore.myshopify.com' }),
+        JSON.stringify({ error: 'Invalid Shopify store URL. Should be like: https://yourstore.myshopify.com or https://admin.shopify.com/store/yourstore' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
