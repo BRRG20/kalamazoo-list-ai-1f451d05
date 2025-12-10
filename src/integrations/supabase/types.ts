@@ -14,6 +14,24 @@ export type Database = {
   }
   public: {
     Tables: {
+      authorized_emails: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+        }
+        Relationships: []
+      }
       batches: {
         Row: {
           created_at: string
@@ -246,7 +264,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      is_email_authorized: { Args: { check_email: string }; Returns: boolean }
     }
     Enums: {
       condition_type: "Excellent" | "Very good" | "Good" | "Fair"
