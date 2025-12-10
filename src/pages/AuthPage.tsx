@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Mail, Lock, Loader2, Eye, EyeOff } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Mail, Lock, Loader2, Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,17 +8,32 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/use-auth';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function AuthPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { signIn, signUp, isAuthenticated, loading: authLoading } = useAuth();
   
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showResetForm, setShowResetForm] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
   });
+
+  // Check for password reset redirect
+  useEffect(() => {
+    const isReset = searchParams.get('reset') === 'true';
+    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+    const type = hashParams.get('type');
+    
+    if (isReset || type === 'recovery') {
+      navigate('/reset-password' + window.location.hash, { replace: true });
+      return;
+    }
+  }, [searchParams, navigate]);
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -85,10 +100,92 @@ export default function AuthPage() {
     navigate('/', { replace: true });
   };
 
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!formData.email) {
+      toast.error('Please enter your email address');
+      return;
+    }
+    
+    setIsLoading(true);
+    
+    const { error } = await supabase.auth.resetPasswordForEmail(formData.email, {
+      redirectTo: `${window.location.origin}/auth?reset=true`,
+    });
+    
+    setIsLoading(false);
+    
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    
+    toast.success('Password reset email sent! Check your inbox.');
+    setShowResetForm(false);
+  };
+
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  // Password reset form
+  if (showResetForm) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl font-bold">Reset Password</CardTitle>
+            <CardDescription>
+              Enter your email to receive a password reset link
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleResetPassword} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="reset-email">Email</Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    id="reset-email"
+                    type="email"
+                    placeholder="you@example.com"
+                    value={formData.email}
+                    onChange={(e) => handleChange('email', e.target.value)}
+                    className="pl-10"
+                    autoComplete="email"
+                    autoFocus
+                  />
+                </div>
+              </div>
+              
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  'Send Reset Link'
+                )}
+              </Button>
+              
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full"
+                onClick={() => setShowResetForm(false)}
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back to Sign In
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -160,6 +257,14 @@ export default function AuthPage() {
                     'Sign In'
                   )}
                 </Button>
+                
+                <button
+                  type="button"
+                  onClick={() => setShowResetForm(true)}
+                  className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Forgot your password?
+                </button>
               </form>
             </TabsContent>
             
