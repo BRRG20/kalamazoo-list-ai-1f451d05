@@ -278,17 +278,17 @@ export function ImageGroupCard({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="bg-popover">
-                <DropdownMenuItem onClick={onSelectAll}>
+                <DropdownMenuItem onSelect={onSelectAll}>
                   <Check className="w-4 h-4 mr-2" />
                   Select all images
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={onDeselectAll} disabled={!hasSelectedImages}>
+                <DropdownMenuItem onSelect={onDeselectAll} disabled={!hasSelectedImages}>
                   <X className="w-4 h-4 mr-2" />
                   Deselect all
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem 
-                  onClick={onMoveSelectedToNewGroup}
+                  onSelect={onMoveSelectedToNewGroup}
                   disabled={!hasSelectedImages}
                 >
                   <Plus className="w-4 h-4 mr-2" />
@@ -296,7 +296,7 @@ export function ImageGroupCard({
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  onClick={() => setShowDeleteDialog(true)}
+                  onSelect={() => setShowDeleteDialog(true)}
                   className="text-destructive focus:text-destructive"
                 >
                   <Trash2 className="w-4 h-4 mr-2" />
