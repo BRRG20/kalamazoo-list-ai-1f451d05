@@ -28,7 +28,7 @@ export default function BatchesPage() {
   const { fetchImagesForProduct, addImageToBatch, updateImage, excludeLastNImages, clearCache, deleteImage, updateImageProductIdByUrl } = useImages();
   const { settings } = useSettings();
   const { uploadImages, uploading, progress, uploadStartTime, uploadTotal, uploadCompleted } = useImageUpload();
-  const { getTagsForGarmentType } = useDefaultTags();
+  const { getMatchingTags } = useDefaultTags();
   
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
@@ -206,9 +206,16 @@ export default function BatchesPage() {
         const data = await response.json();
         const generated = data.generated;
         
-        // Get default tags based on garment type
+        // Get default tags based on garment type, gender, and keywords
         const garmentType = product.garment_type || generated.garment_type || '';
-        const defaultTags = getTagsForGarmentType(garmentType);
+        const department = product.department || '';
+        const defaultTags = getMatchingTags({
+          garmentType,
+          department,
+          title: generated.title || product.title || '',
+          description: generated.description_style_a || '',
+          notes: product.notes || ''
+        });
         
         // Merge default tags with AI-generated tags
         let finalShopifyTags = generated.shopify_tags || product.shopify_tags || '';
@@ -246,7 +253,7 @@ export default function BatchesPage() {
     } else {
       toast.success(`AI generated details for ${successCount} product(s)`);
     }
-  }, [selectedBatchId, products, updateProduct, fetchImagesForProduct, getTagsForGarmentType]);
+  }, [selectedBatchId, products, updateProduct, fetchImagesForProduct, getMatchingTags]);
 
   const handleExcludeLast2All = useCallback(async () => {
     if (!selectedBatchId) return;
