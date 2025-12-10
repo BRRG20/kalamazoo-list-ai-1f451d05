@@ -130,9 +130,20 @@ export function ProductDetailPanel({
     setTimeout(() => setCopiedField(null), 2000);
   };
 
-  const startVoiceInput = () => {
+  const startVoiceInput = async () => {
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
       toast.error('Voice input not supported in this browser. Please type in the Raw Input Text box instead.');
+      return;
+    }
+
+    // Request microphone permission first
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Stop the stream immediately - we just needed to request permission
+      stream.getTracks().forEach(track => track.stop());
+    } catch (err) {
+      console.error('Microphone permission error:', err);
+      toast.error('Microphone access denied. Please allow microphone access and try again.');
       return;
     }
 
@@ -142,16 +153,19 @@ export function ProductDetailPanel({
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
-    recognition.interimResults = false; // Only use final results for accuracy
+    recognition.interimResults = true; // Show interim results so user sees it's working
     recognition.lang = 'en-GB';
-    recognition.maxAlternatives = 1;
+    recognition.maxAlternatives = 3;
 
     let finalTranscript = '';
+    let interimTranscript = '';
 
     recognition.onstart = () => {
       console.log('Voice recognition started');
       setIsListening(true);
       finalTranscript = '';
+      interimTranscript = '';
+      toast.success('Listening... Speak now');
     };
     
     recognition.onend = () => {
@@ -168,34 +182,54 @@ export function ProductDetailPanel({
       if (event.error === 'not-allowed') {
         toast.error('Microphone access denied. Please allow microphone access in your browser settings.');
       } else if (event.error === 'no-speech') {
-        toast.info('No speech detected. Please speak clearly and try again.');
+        toast.info('No speech detected. Speak closer to the microphone.');
       } else if (event.error === 'audio-capture') {
         toast.error('No microphone found. Please connect a microphone.');
+      } else if (event.error === 'network') {
+        toast.error('Network error. Check your internet connection.');
       } else if (event.error !== 'aborted') {
-        toast.error('Voice recognition error. Please try again.');
+        toast.error(`Voice error: ${event.error}. Please try again.`);
       }
     };
 
     recognition.onresult = (event: any) => {
-      // Only use final results for better accuracy
+      interimTranscript = '';
+      
       for (let i = event.resultIndex; i < event.results.length; i++) {
-        if (event.results[i].isFinal) {
-          const text = event.results[i][0].transcript;
-          console.log('Final result:', text, 'confidence:', event.results[i][0].confidence);
-          finalTranscript += text + ' ';
-          setVoiceTranscript(finalTranscript.trim());
+        const result = event.results[i];
+        const transcript = result[0].transcript;
+        
+        if (result.isFinal) {
+          console.log('Final result:', transcript, 'confidence:', result[0].confidence);
+          finalTranscript += transcript + ' ';
+        } else {
+          interimTranscript += transcript;
         }
       }
+      
+      // Show both final and interim results so user sees real-time feedback
+      const displayText = (finalTranscript + interimTranscript).trim();
+      if (displayText) {
+        setVoiceTranscript(displayText);
+      }
+    };
+
+    recognition.onsoundstart = () => {
+      console.log('Sound detected');
+    };
+
+    recognition.onsoundend = () => {
+      console.log('Sound ended');
     };
 
     recognitionRef.current = recognition;
     
     try {
       recognition.start();
-      toast.info('Listening... Speak clearly, e.g. "Price 25 pounds, condition very good, women\'s"');
     } catch (error) {
       console.error('Failed to start recognition:', error);
       toast.error('Failed to start voice input. Please try again.');
+      setIsListening(false);
     }
   };
 
