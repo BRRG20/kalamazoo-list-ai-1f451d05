@@ -28,6 +28,7 @@ export default function BatchesPage() {
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [editingProductImages, setEditingProductImages] = useState<ProductImage[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [regeneratingField, setRegeneratingField] = useState<string | null>(null);
   const [isCreatingShopify, setIsCreatingShopify] = useState(false);
   const [pendingImageUrls, setPendingImageUrls] = useState<string[]>([]);
   const [productCounts, setProductCounts] = useState<Record<string, number>>({});
@@ -272,26 +273,73 @@ export default function BatchesPage() {
     setEditingProductImages(images);
   }, [editingProductId, editingProductImages, updateImage, clearCache, fetchImagesForProduct]);
 
-  const handleGenerateProductAI = useCallback(async () => {
+  const handleGenerateProductAI = useCallback(async (regenerateOnly?: 'title' | 'style_a' | 'style_b' | 'all') => {
     if (!editingProductId) return;
     
-    setIsGenerating(true);
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
     const product = products.find(p => p.id === editingProductId);
-    if (product) {
-      await updateProduct(editingProductId, {
-        status: 'generated',
-        title: product.title || `Vintage ${product.garment_type || 'Item'} – ${product.department || 'Unisex'}`,
-        description: product.description || 'A beautiful vintage piece in excellent condition.',
-        shopify_tags: product.shopify_tags || 'vintage, retro',
-        etsy_tags: product.etsy_tags || 'vintage, retro fashion, thrift find',
-      });
+    if (!product) return;
+    
+    setIsGenerating(true);
+    if (regenerateOnly && regenerateOnly !== 'all') {
+      setRegeneratingField(regenerateOnly);
     }
     
-    setIsGenerating(false);
-    toast.success('AI generation complete');
-  }, [editingProductId, products, updateProduct]);
+    try {
+      // Get product images for AI context
+      const images = await fetchImagesForProduct(editingProductId);
+      const imageUrls = images.slice(0, 2).map(img => img.url);
+      
+      // Call the edge function
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-listing`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({ 
+          product, 
+          imageUrls,
+          regenerateOnly: regenerateOnly === 'all' ? undefined : regenerateOnly
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Generation failed');
+      }
+      
+      const data = await response.json();
+      const generated = data.generated;
+      
+      // Update product with generated content
+      const updates: Partial<Product> = { status: 'generated' };
+      
+      if (!regenerateOnly || regenerateOnly === 'all' || regenerateOnly === 'title') {
+        if (generated.title) updates.title = generated.title;
+      }
+      if (!regenerateOnly || regenerateOnly === 'all' || regenerateOnly === 'style_a') {
+        if (generated.description_style_a) updates.description_style_a = generated.description_style_a;
+      }
+      if (!regenerateOnly || regenerateOnly === 'all' || regenerateOnly === 'style_b') {
+        if (generated.description_style_b) updates.description_style_b = generated.description_style_b;
+      }
+      if (!regenerateOnly || regenerateOnly === 'all') {
+        if (generated.shopify_tags) updates.shopify_tags = generated.shopify_tags;
+        if (generated.etsy_tags) updates.etsy_tags = generated.etsy_tags;
+        if (generated.collections_tags) updates.collections_tags = generated.collections_tags;
+      }
+      
+      await updateProduct(editingProductId, updates);
+      toast.success(regenerateOnly && regenerateOnly !== 'all' ? `${regenerateOnly.replace('_', ' ')} regenerated` : 'AI generation complete');
+      
+    } catch (error) {
+      console.error('Generation error:', error);
+      toast.error(error instanceof Error ? error.message : 'Generation failed');
+    } finally {
+      setIsGenerating(false);
+      setRegeneratingField(null);
+    }
+  }, [editingProductId, products, updateProduct, fetchImagesForProduct]);
 
   const getProductImagesCallback = useCallback(async (productId: string) => {
     return await fetchImagesForProduct(productId);
@@ -371,6 +419,7 @@ export default function BatchesPage() {
           hasPrevious={hasPrevious}
           hasNext={hasNext}
           isGenerating={isGenerating}
+          regeneratingField={regeneratingField}
         />
       )}
     </AppLayout>

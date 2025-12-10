@@ -29,6 +29,8 @@ function mapProduct(row: any): Product {
     raw_input_text: row.raw_input_text || '',
     title: row.title || '',
     description: row.description || '',
+    description_style_a: row.description_style_a || row.description || '',
+    description_style_b: row.description_style_b || row.listing_block || '',
     price: parseFloat(row.price) || 0,
     currency: row.currency || 'GBP',
     era: (row.era || '') as Era,

@@ -5,46 +5,77 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const SYSTEM_PROMPT = `You are a vintage clothing listing expert. Generate product titles, descriptions, and tags for resale platforms.
+const SYSTEM_PROMPT = `You are a vintage clothing listing expert. Generate product titles and descriptions for resale platforms.
 
-TITLE RULES (CRITICAL):
-- Maximum 80 characters
-- Include: garment type, main colour, fabric (if relevant), era (ONLY if 80s/90s/Y2K), size label
-- No emojis, no hype words ("beautiful", "gorgeous", "must-have")
-- Clean, factual, minimal
-- Examples: "90s Red Acrylic Chunky Jumper – Women's L", "Vintage Navy Wool Zip Fleece – XL"
+==========================================
+TITLE RULES (CRITICAL)
+==========================================
 
-DESCRIPTION STRUCTURE (EXACT ORDER):
-First write 2-3 sentences:
-- Sentence 1: Garment type, colour, fabric/material
-- Sentence 2: Fit, vibe, how it can be worn
-- Sentence 3: Optional era context ONLY if era is confirmed
+Generate titles in this exact order:
+**Vintage + Era (ONLY if clearly 80s, 90s, or Y2K) + Brand + Gender + Colour + Garment Type + Key Feature + Size**
 
-Then add this structured block:
+Example: Vintage 90s Eddie Bauer Womens Grey Hoodie Pink Logo Size L
+
+RULES:
+- Max length: 80 characters
+- NO punctuation (no commas, no hyphens, no dashes)
+- Multiple colours allowed (e.g. Grey Pink Logo)
+- Gender must appear as: Mens / Womens / Unisex
+- Key feature = graphic, logo, button neck, V-neck, long sleeve, fleece, etc.
+- Size ALWAYS appears at the end exactly as: "Size L" or "W32 L30"
+- If era is not certain, omit it. DO NOT write "Modern."
+- Keep the title factual, minimal, and searchable.
+- NEVER include "excellent", "beautiful", "rare", or hype.
+- If brand is missing, leave brand out and continue the pattern.
+
+==========================================
+DESCRIPTION RULES
+==========================================
+
+Generate TWO descriptions:
+
+STYLE A — ULTRA MINIMAL (~55–65 words):
+A short, clean, factual description stating garment type, colour, key features, construction details, and fit descriptor. Tone: minimal, calm, premium, direct. No fluff.
+
+STYLE B — NATURAL MINIMAL SEO (~70–80 words):
+Slightly smoother flow while staying minimal. Still factual and clean but with a more natural rhythm. Include garment type, colour, material, features, and fit.
+
+BOTH descriptions MUST end with this structured block:
 
 Brand: {brand}
-Label Size: {size_label}
-Recommended Size: {size_recommended or blank}
-Materials: {material}
-Era: {era or blank if unknown}
+Label Size: {label_size}
+Recommended Size: {recommended_size or blank}
+Materials: {materials}
+Era: {era or blank}
 Condition: {condition}
 Style: {style}
 Made in: {made_in}
 
-TONE: Minimal, confident, stylish. NOT corny, NOT influencer-like, NOT hype.
+==========================================
+ERA RULES
+==========================================
 
-ERA RULES:
-- Only include era if it's confirmed as 80s, 90s, or Y2K
-- If era is empty/unknown, do NOT mention it anywhere
+Era can ONLY be: 80s, 90s, or Y2K.
+Only include if clearly visible from label, cut, colours, graphics, or tag shape.
+If unsure → ERA MUST BE BLANK.
 
-SHOPIFY TAGS: 6-15 tags, comma-separated, relevant to garment type, style, era, material
-ETSY TAGS: Up to 13 tags, comma-separated, optimized for search
-COLLECTIONS TAGS: For Shopify auto-collections (e.g. "Knitwear", "Outerwear", "Denim")
+==========================================
+CONDITION RULES
+==========================================
+
+Use Condition as main field. Options: Excellent, Very good, Good – light wear, Good – some fading, Fair – worn.
+If flaws mentioned, add in parentheses: "Very good (small mark on sleeve)"
+Never invent flaws.
+
+==========================================
+OUTPUT FORMAT
+==========================================
 
 Respond ONLY with valid JSON:
 {
-  "title": "max 80 chars",
-  "description": "full structured description",
+  "title": "max 80 chars, no punctuation",
+  "description_style_a": "ultra minimal ~55-65 words + structured block",
+  "description_style_b": "natural minimal SEO ~70-80 words + structured block",
   "shopify_tags": "tag1, tag2, tag3",
   "etsy_tags": "tag1, tag2, tag3",
   "collections_tags": "collection1, collection2"
@@ -56,7 +87,7 @@ serve(async (req) => {
   }
 
   try {
-    const { product, imageUrls } = await req.json();
+    const { product, imageUrls, regenerateOnly } = await req.json();
     
     if (!product) {
       throw new Error("No product data provided");
@@ -72,23 +103,34 @@ serve(async (req) => {
 Product Details:
 - Brand: ${product.brand || "Unknown"}
 - Garment Type: ${product.garment_type || "Unknown"}
-- Department: ${product.department || "Unknown"}
+- Department: ${product.department || "Unknown"} (use Mens/Womens/Unisex in title)
 - Colour Main: ${product.colour_main || "Unknown"}
 - Colour Secondary: ${product.colour_secondary || ""}
-- Pattern: ${product.pattern || ""}
+- Pattern/Style: ${product.pattern || ""}
 - Size Label: ${product.size_label || "Unknown"}
 - Size Recommended: ${product.size_recommended || ""}
 - Material: ${product.material || "Unknown"}
-- Era: ${product.era || ""} (ONLY include in listing if 80s, 90s, or Y2K)
+- Era: ${product.era || ""} (ONLY include if 80s, 90s, or Y2K - otherwise leave blank)
 - Condition: ${product.condition || "Good"}
+- Flaws: ${product.flaws || ""}
 - Fit: ${product.fit || ""}
 - Made In: ${product.made_in || ""}
-- Style: ${product.style || product.pattern || ""}
 - Additional Notes: ${product.raw_input_text || ""}
 `;
 
+    // Adjust prompt based on what to regenerate
+    let userPrompt = `Generate a vintage clothing listing for this product:\n${productContext}`;
+    
+    if (regenerateOnly === 'title') {
+      userPrompt = `Generate ONLY the title for this product (respond with just the title field in JSON):\n${productContext}`;
+    } else if (regenerateOnly === 'style_a') {
+      userPrompt = `Generate ONLY Description Style A (ultra minimal) for this product:\n${productContext}`;
+    } else if (regenerateOnly === 'style_b') {
+      userPrompt = `Generate ONLY Description Style B (natural minimal SEO) for this product:\n${productContext}`;
+    }
+
     const content: any[] = [
-      { type: "text", text: `Generate a vintage clothing listing for this product:\n${productContext}` }
+      { type: "text", text: userPrompt }
     ];
 
     // Add images if provided (up to 2 for context)
@@ -151,9 +193,13 @@ Product Details:
       }
     }
 
-    // Ensure title is max 80 chars
-    if (generated.title && generated.title.length > 80) {
-      generated.title = generated.title.substring(0, 77) + "...";
+    // Ensure title is max 80 chars and has no punctuation
+    if (generated.title) {
+      // Remove punctuation
+      generated.title = generated.title.replace(/[,\-–—:;]/g, ' ').replace(/\s+/g, ' ').trim();
+      if (generated.title.length > 80) {
+        generated.title = generated.title.substring(0, 80).trim();
+      }
     }
 
     return new Response(JSON.stringify({ generated }), {
