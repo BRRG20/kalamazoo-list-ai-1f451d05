@@ -63,7 +63,9 @@ export type Database = {
         Row: {
           assigned_garment_types: string[]
           created_at: string
+          gender: string | null
           id: string
+          keywords: string[] | null
           tag_name: string
           updated_at: string
           user_id: string
@@ -71,7 +73,9 @@ export type Database = {
         Insert: {
           assigned_garment_types?: string[]
           created_at?: string
+          gender?: string | null
           id?: string
+          keywords?: string[] | null
           tag_name: string
           updated_at?: string
           user_id: string
@@ -79,7 +83,9 @@ export type Database = {
         Update: {
           assigned_garment_types?: string[]
           created_at?: string
+          gender?: string | null
           id?: string
+          keywords?: string[] | null
           tag_name?: string
           updated_at?: string
           user_id?: string
