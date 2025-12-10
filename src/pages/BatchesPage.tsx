@@ -24,7 +24,7 @@ export default function BatchesPage() {
   const { products, createProduct, updateProduct, refetch: refetchProducts } = useProducts(selectedBatchId);
   const { fetchImagesForProduct, addImage, updateImage, excludeLastNImages, clearCache } = useImages();
   const { settings } = useSettings();
-  const { uploadImages, uploading, progress } = useImageUpload();
+  const { uploadImages, uploading, progress, uploadStartTime, uploadTotal, uploadCompleted } = useImageUpload();
   
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
@@ -508,6 +508,9 @@ export default function BatchesPage() {
               pendingImageCount={pendingImageUrls.length}
               isUploading={uploading}
               uploadProgress={progress}
+              uploadStartTime={uploadStartTime}
+              uploadTotal={uploadTotal}
+              uploadCompleted={uploadCompleted}
               onBack={() => setSelectedBatchId(null)}
             />
           ) : (

@@ -537,6 +537,9 @@ export function useSettings() {
 export function useImageUpload() {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [uploadStartTime, setUploadStartTime] = useState<number | null>(null);
+  const [uploadTotal, setUploadTotal] = useState(0);
+  const [uploadCompleted, setUploadCompleted] = useState(0);
 
   const uploadImage = async (file: File, batchId: string): Promise<string | null> => {
     const userId = await getCurrentUserId();
@@ -567,8 +570,11 @@ export function useImageUpload() {
   const uploadImages = async (files: File[], batchId: string): Promise<string[]> => {
     setUploading(true);
     setProgress(0);
+    setUploadStartTime(Date.now());
+    setUploadTotal(files.length);
+    setUploadCompleted(0);
 
-    const BATCH_SIZE = 5; // Upload 5 images in parallel
+    const BATCH_SIZE = 10; // Upload 10 images in parallel for bulk uploads
     const urls: string[] = [];
     let completed = 0;
     
@@ -583,13 +589,15 @@ export function useImageUpload() {
       });
       
       completed += batch.length;
+      setUploadCompleted(completed);
       setProgress(Math.round((completed / files.length) * 100));
     }
 
     setUploading(false);
+    setUploadStartTime(null);
     setProgress(0);
     return urls;
   };
 
-  return { uploadImage, uploadImages, uploading, progress };
+  return { uploadImage, uploadImages, uploading, progress, uploadStartTime, uploadTotal, uploadCompleted };
 }
