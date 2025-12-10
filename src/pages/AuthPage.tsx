@@ -5,22 +5,23 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/use-auth';
 import { supabase } from '@/integrations/supabase/client';
 
-// Authorized emails for Google OAuth
+// Authorized emails - only these can sign in
 const AUTHORIZED_EMAILS = [
   'santanagonsalves7@gmail.com',
   'ebonygonsalves01@gmail.com',
 ];
 
+const ACCESS_DENIED_MESSAGE = 'Access restricted. This app is currently limited to authorised users only.';
+
 export default function AuthPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { signIn, signUp, isAuthenticated, loading: authLoading, user } = useAuth();
+  const { signIn, isAuthenticated, loading: authLoading, user } = useAuth();
   
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
@@ -43,24 +44,20 @@ export default function AuthPage() {
     }
   }, [searchParams, navigate]);
 
-  // Check if authenticated user is authorized (for Google OAuth)
+  // Check if authenticated user is authorized
   useEffect(() => {
     const checkAuthorization = async () => {
       if (isAuthenticated && user && !authLoading) {
         const userEmail = user.email?.toLowerCase();
-        const provider = user.app_metadata?.provider;
         
-        // Only check authorization for Google OAuth users
-        if (provider === 'google') {
-          const isAuthorized = AUTHORIZED_EMAILS.some(
-            email => email.toLowerCase() === userEmail
-          );
-          
-          if (!isAuthorized) {
-            toast.error('Access denied. Your email is not authorized.');
-            await supabase.auth.signOut();
-            return;
-          }
+        const isAuthorized = AUTHORIZED_EMAILS.some(
+          email => email.toLowerCase() === userEmail
+        );
+        
+        if (!isAuthorized) {
+          toast.error(ACCESS_DENIED_MESSAGE);
+          await supabase.auth.signOut();
+          return;
         }
         
         navigate('/', { replace: true });
@@ -72,6 +69,12 @@ export default function AuthPage() {
 
   const handleChange = (field: keyof typeof formData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const isEmailAuthorized = (email: string): boolean => {
+    return AUTHORIZED_EMAILS.some(
+      authorizedEmail => authorizedEmail.toLowerCase() === email.toLowerCase()
+    );
   };
 
   const handleGoogleSignIn = async () => {
@@ -88,7 +91,6 @@ export default function AuthPage() {
       toast.error(error.message);
       setIsGoogleLoading(false);
     }
-    // Note: User will be redirected, so no need to set loading to false
   };
 
   const handleSignIn = async (e: React.FormEvent) => {
@@ -96,6 +98,12 @@ export default function AuthPage() {
     
     if (!formData.email || !formData.password) {
       toast.error('Please enter your email and password');
+      return;
+    }
+    
+    // Check authorization BEFORE attempting sign in
+    if (!isEmailAuthorized(formData.email)) {
+      toast.error(ACCESS_DENIED_MESSAGE);
       return;
     }
     
@@ -115,51 +123,17 @@ export default function AuthPage() {
     navigate('/', { replace: true });
   };
 
-  const handleSignUp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!formData.email || !formData.password) {
-      toast.error('Please enter your email and password');
-      return;
-    }
-    
-    // Check if email is authorized
-    const isAuthorized = AUTHORIZED_EMAILS.some(
-      email => email.toLowerCase() === formData.email.toLowerCase()
-    );
-    
-    if (!isAuthorized) {
-      toast.error('This email is not authorized to create an account.');
-      return;
-    }
-    
-    if (formData.password.length < 6) {
-      toast.error('Password must be at least 6 characters');
-      return;
-    }
-    
-    setIsLoading(true);
-    const { error } = await signUp(formData.email, formData.password);
-    setIsLoading(false);
-    
-    if (error) {
-      if (error.message.includes('already registered')) {
-        toast.error('This email is already registered. Try signing in instead.');
-      } else {
-        toast.error(error.message);
-      }
-      return;
-    }
-    
-    toast.success('Account created! You can now sign in.');
-    navigate('/', { replace: true });
-  };
-
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.email) {
       toast.error('Please enter your email address');
+      return;
+    }
+    
+    // Only allow password reset for authorized emails
+    if (!isEmailAuthorized(formData.email)) {
+      toast.error(ACCESS_DENIED_MESSAGE);
       return;
     }
     
@@ -297,133 +271,92 @@ export default function AuthPage() {
             </div>
           </div>
           
-          <Tabs defaultValue="signin" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-4">
-              <TabsTrigger value="signin">Sign In</TabsTrigger>
-              <TabsTrigger value="signup">Sign Up</TabsTrigger>
-            </TabsList>
+          {/* Sign In Form Only - No Sign Up Tab */}
+          <form onSubmit={handleSignIn} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="signin-email">Email</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  id="signin-email"
+                  type="email"
+                  placeholder="you@example.com"
+                  value={formData.email}
+                  onChange={(e) => handleChange('email', e.target.value)}
+                  className="pl-10"
+                  autoComplete="email"
+                />
+              </div>
+            </div>
             
-            <TabsContent value="signin">
-              <form onSubmit={handleSignIn} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="signin-email">Email</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      id="signin-email"
-                      type="email"
-                      placeholder="you@example.com"
-                      value={formData.email}
-                      onChange={(e) => handleChange('email', e.target.value)}
-                      className="pl-10"
-                      autoComplete="email"
-                    />
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="signin-password">Password</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      id="signin-password"
-                      type={showPassword ? 'text' : 'password'}
-                      placeholder="••••••••"
-                      value={formData.password}
-                      onChange={(e) => handleChange('password', e.target.value)}
-                      className="pl-10 pr-10"
-                      autoComplete="current-password"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-                
-                <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Signing in...
-                    </>
-                  ) : (
-                    'Sign In'
-                  )}
-                </Button>
-                
+            <div className="space-y-2">
+              <Label htmlFor="signin-password">Password</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  id="signin-password"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="••••••••"
+                  value={formData.password}
+                  onChange={(e) => handleChange('password', e.target.value)}
+                  className="pl-10 pr-10"
+                  autoComplete="current-password"
+                />
                 <button
                   type="button"
-                  onClick={() => setShowResetForm(true)}
-                  className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 >
-                  Forgot your password?
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
-              </form>
-            </TabsContent>
+              </div>
+            </div>
             
-            <TabsContent value="signup">
-              <form onSubmit={handleSignUp} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="signup-email">Email</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      id="signup-email"
-                      type="email"
-                      placeholder="you@example.com"
-                      value={formData.email}
-                      onChange={(e) => handleChange('email', e.target.value)}
-                      className="pl-10"
-                      autoComplete="email"
-                    />
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="signup-password">Password</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      id="signup-password"
-                      type={showPassword ? 'text' : 'password'}
-                      placeholder="••••••••"
-                      value={formData.password}
-                      onChange={(e) => handleChange('password', e.target.value)}
-                      className="pl-10 pr-10"
-                      autoComplete="new-password"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    At least 6 characters
-                  </p>
-                </div>
-                
-                <Button type="submit" className="w-full" disabled={isLoading}>
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Creating account...
-                    </>
-                  ) : (
-                    'Create Account'
-                  )}
-                </Button>
-              </form>
-            </TabsContent>
-          </Tabs>
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Signing in...
+                </>
+              ) : (
+                'Sign In'
+              )}
+            </Button>
+            
+            <button
+              type="button"
+              onClick={() => setShowResetForm(true)}
+              className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Forgot your password?
+            </button>
+          </form>
         </CardContent>
       </Card>
     </div>
   );
+}
+
+// Admin-only function to create authorized user accounts
+// Call this from browser console: window.createAuthorizedUser('email@example.com', 'password')
+if (typeof window !== 'undefined') {
+  (window as any).createAuthorizedUser = async (email: string, password: string) => {
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+    
+    if (!AUTHORIZED_EMAILS.some(e => e.toLowerCase() === email.toLowerCase())) {
+      console.error('Email not in authorized list. Add it to AUTHORIZED_EMAILS first.');
+      return;
+    }
+    
+    const client = createClient(supabaseUrl, supabaseKey);
+    const { data, error } = await client.auth.signUp({ email, password });
+    
+    if (error) {
+      console.error('Error creating user:', error.message);
+    } else {
+      console.log('User created successfully:', data);
+    }
+  };
 }
