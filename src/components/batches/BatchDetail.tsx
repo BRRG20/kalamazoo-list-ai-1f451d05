@@ -31,6 +31,7 @@ interface BatchDetailProps {
   onToggleProductSelection: (productId: string) => void;
   selectedProductIds: Set<string>;
   isGenerating: boolean;
+  generationProgress: { current: number; total: number };
   isCreatingShopify: boolean;
   pendingImageCount: number;
   isUploading: boolean;
@@ -50,6 +51,7 @@ export function BatchDetail({
   onToggleProductSelection,
   selectedProductIds,
   isGenerating,
+  generationProgress,
   isCreatingShopify,
   pendingImageCount,
   isUploading,
@@ -133,6 +135,19 @@ export function BatchDetail({
               <span className="text-sm text-muted-foreground">Uploading images...</span>
             </div>
             <Progress value={uploadProgress} className="h-2" />
+          </div>
+        )}
+
+        {/* AI generation progress */}
+        {isGenerating && generationProgress.total > 0 && (
+          <div className="mb-4 p-3 bg-primary/10 rounded-lg">
+            <div className="flex items-center gap-2 mb-2">
+              <Loader2 className="w-4 h-4 animate-spin text-primary" />
+              <span className="text-sm text-foreground">
+                Generating AI... {generationProgress.current} of {generationProgress.total} products
+              </span>
+            </div>
+            <Progress value={(generationProgress.current / generationProgress.total) * 100} className="h-2" />
           </div>
         )}
 
