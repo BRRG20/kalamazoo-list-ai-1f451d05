@@ -7,7 +7,8 @@ import {
   Grid3X3,
   Loader2,
   AlertCircle,
-  Image as ImageIcon
+  Image as ImageIcon,
+  ArrowLeft
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -36,6 +37,7 @@ interface BatchDetailProps {
   pendingImageCount: number;
   isUploading: boolean;
   uploadProgress: number;
+  onBack?: () => void;
 }
 
 export function BatchDetail({
@@ -56,6 +58,7 @@ export function BatchDetail({
   pendingImageCount,
   isUploading,
   uploadProgress,
+  onBack,
 }: BatchDetailProps) {
   const { settings, isShopifyConfigured } = useSettings();
   const [imagesPerProduct, setImagesPerProduct] = useState(settings?.default_images_per_product || 9);
@@ -117,12 +120,22 @@ export function BatchDetail({
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="p-4 border-b border-border bg-card">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-xl font-semibold text-foreground">{batch.name}</h2>
+      <div className="p-3 md:p-4 border-b border-border bg-card">
+        <div className="flex items-center gap-3 mb-3 md:mb-4">
+          {onBack && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onBack}
+              className="md:hidden flex-shrink-0"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+          )}
+          <div className="min-w-0 flex-1">
+            <h2 className="text-lg md:text-xl font-semibold text-foreground truncate">{batch.name}</h2>
             {batch.notes && (
-              <p className="text-sm text-muted-foreground mt-1">{batch.notes}</p>
+              <p className="text-sm text-muted-foreground mt-0.5 truncate">{batch.notes}</p>
             )}
           </div>
         </div>
@@ -162,7 +175,7 @@ export function BatchDetail({
         )}
 
         {/* Actions bar */}
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 md:gap-3">
           <input
             ref={fileInputRef}
             type="file"
@@ -173,20 +186,22 @@ export function BatchDetail({
           />
           <Button
             variant="outline"
+            size="sm"
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading}
+            className="text-xs md:text-sm"
           >
             {isUploading ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              <Loader2 className="w-4 h-4 mr-1 md:mr-2 animate-spin" />
             ) : (
-              <Upload className="w-4 h-4 mr-2" />
+              <Upload className="w-4 h-4 mr-1 md:mr-2" />
             )}
-            Upload Images
+            <span className="hidden sm:inline">Upload</span> Images
           </Button>
 
-          <div className="flex items-center gap-2">
-            <Label htmlFor="imagesPerProduct" className="text-sm whitespace-nowrap">
-              Images per product:
+          <div className="flex items-center gap-1 md:gap-2">
+            <Label htmlFor="imagesPerProduct" className="text-xs md:text-sm whitespace-nowrap hidden sm:inline">
+              Per product:
             </Label>
             <Input
               id="imagesPerProduct"
@@ -195,36 +210,42 @@ export function BatchDetail({
               max={20}
               value={imagesPerProduct}
               onChange={(e) => setImagesPerProduct(parseInt(e.target.value) || 1)}
-              className="w-16"
+              className="w-14 md:w-16 h-8 md:h-9 text-sm"
             />
           </div>
 
           <Button
             variant="outline"
+            size="sm"
             onClick={() => onAutoGroup(imagesPerProduct)}
             disabled={pendingImageCount === 0}
+            className="text-xs md:text-sm"
           >
-            <Grid3X3 className="w-4 h-4 mr-2" />
-            Auto-group
+            <Grid3X3 className="w-4 h-4 mr-1 md:mr-2" />
+            <span className="hidden sm:inline">Auto-</span>group
           </Button>
 
           <Button
             variant="default"
+            size="sm"
             onClick={onGenerateAll}
             disabled={isGenerating || products.length === 0}
+            className="text-xs md:text-sm"
           >
             {isGenerating ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              <Loader2 className="w-4 h-4 mr-1 md:mr-2 animate-spin" />
             ) : (
-              <Sparkles className="w-4 h-4 mr-2" />
+              <Sparkles className="w-4 h-4 mr-1 md:mr-2" />
             )}
-            Generate AI for All
+            <span className="hidden sm:inline">Generate</span> AI
           </Button>
 
           <Button
             variant="outline"
+            size="sm"
             onClick={onExcludeLast2All}
             disabled={products.length === 0}
+            className="text-xs md:text-sm hidden md:flex"
           >
             <ImageMinus className="w-4 h-4 mr-2" />
             Exclude Last 2 Images
