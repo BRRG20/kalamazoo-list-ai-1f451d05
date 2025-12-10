@@ -5,44 +5,48 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const SYSTEM_PROMPT = `You are a voice input parser for a vintage clothing listing app. Parse spoken text and extract ONLY the fields that are explicitly mentioned.
+const SYSTEM_PROMPT = `You are a voice input parser for a vintage clothing listing app. Parse spoken text and extract product fields that are mentioned.
 
-CRITICAL RULES:
-1. ONLY extract fields that the user explicitly mentions
-2. NEVER guess or invent values
-3. If a field is not mentioned, do NOT include it in the response
-4. For condition with flaws, format as: "Very good (flaw description)"
-5. For era, ONLY accept "80s", "90s", or "Y2K" - anything else should be null
-6. Recommended size should be formatted as ranges like "UK 12-14" or "M-L"
+IMPORTANT: Speech recognition may have errors. Try to interpret what the user likely meant.
 
-FIELD MAPPINGS:
-- "price" / "pounds" / "£" → price (number)
-- "size" / "label size" → size_label
-- "recommended" / "fits like" / "would fit" → size_recommended
-- "condition" → condition (e.g. "Excellent", "Very good", "Good – light wear")
-- "flaw" / "wear" / "damage" → append to condition in parentheses
-- "women" / "men" / "unisex" / "kids" → department
-- "80s" / "90s" / "Y2K" / "2000s" → era (only these values, 2000s = Y2K)
-- "notes" / "additional" → notes
-- "brand" → brand
-- "material" / "fabric" → material
-- "colour" / "color" → colour_main or colour_secondary
-- "pattern" → pattern
-- "style" → style (e.g. "chunky", "minimal", "oversized")
-- "fit" → fit
-- "garment" / "type" → garment_type
+FIELD MAPPINGS (be flexible with phrasing):
+- "price" / "pounds" / "£" / "quid" / numbers with context → price (number only)
+- "size" / "label size" / "tagged" → size_label (e.g. "M", "L", "UK 12")
+- "recommended" / "fits like" / "would fit" / "true to size" → size_recommended
+- "condition" / "quality" / "state" → condition (Excellent, Very good, Good, Fair)
+- "flaw" / "wear" / "damage" / "hole" / "stain" / "bobbling" / "fading" → append to condition in parentheses
+- "women" / "ladies" / "men" / "unisex" / "kids" → department (Women, Men, Unisex, Kids)
+- "80s" / "eighties" / "90s" / "nineties" / "Y2K" / "2000s" / "millennium" → era (80s, 90s, or Y2K only)
+- "notes" / "additional" / "also" → notes
+- "brand" / company names → brand
+- "material" / "fabric" / "cotton" / "wool" / "polyester" / "silk" → material
+- "colour" / "color" / color words (red, blue, black, etc.) → colour_main
+- "pattern" / "striped" / "checked" / "plain" / "graphic" → pattern
+- "fit" / "oversized" / "slim" / "boxy" / "relaxed" → fit
+- "garment" / "type" / clothing items (shirt, jumper, jacket, etc.) → garment_type
+
+CONDITION FORMAT:
+- If flaws mentioned with condition: "Very good (minor bobbling on sleeves)"
+- If only flaws mentioned: "(some fading on the hem)"
 
 EXAMPLES:
-Input: "Price is 25 pounds. Women's department. True 90s. Condition very good, minor bobbling on sleeves."
-Output: {"price": 25, "department": "Women", "era": "90s", "condition": "Very good (minor bobbling on sleeves)"}
+Input: "Price is 25 pounds"
+Output: {"price": 25}
 
-Input: "Recommended size UK 12 to 14. Some fading on the hem."
-Output: {"size_recommended": "UK 12-14", "condition": "(some fading on the hem)"}
+Input: "Women's, 90s era, condition very good with minor bobbling"
+Output: {"department": "Women", "era": "90s", "condition": "Very good (minor bobbling)"}
 
-Input: "Brand is Adidas. Made of 100% cotton."
-Output: {"brand": "Adidas", "material": "100% Cotton"}
+Input: "Fits like a medium to large"
+Output: {"size_recommended": "M-L"}
 
-Respond ONLY with valid JSON containing only the fields mentioned.`;
+Input: "Blue wool jumper"
+Output: {"colour_main": "Blue", "material": "Wool", "garment_type": "Jumper"}
+
+If no product fields are detected, return an empty object: {}
+
+Respond ONLY with valid JSON.`;
+
+console.log("Parse-voice function initialized");
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -52,8 +56,12 @@ serve(async (req) => {
   try {
     const { transcript, existingCondition } = await req.json();
     
-    if (!transcript) {
-      throw new Error("No transcript provided");
+    console.log("Received transcript:", transcript);
+    
+    if (!transcript || transcript.trim().length < 2) {
+      return new Response(JSON.stringify({ parsed: {}, message: "Transcript too short" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
@@ -62,8 +70,8 @@ serve(async (req) => {
     }
 
     const userPrompt = existingCondition 
-      ? `Parse this voice input. Current condition is: "${existingCondition}". If new flaws are mentioned, append them.\n\nVoice input: "${transcript}"`
-      : `Parse this voice input:\n\n"${transcript}"`;
+      ? `Parse this voice input for product fields. Current condition is: "${existingCondition}". If new flaws are mentioned, append them.\n\nVoice input: "${transcript}"`
+      : `Parse this voice input for product fields:\n\n"${transcript}"`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -101,6 +109,8 @@ serve(async (req) => {
     const data = await response.json();
     const rawContent = data.choices?.[0]?.message?.content || "";
     
+    console.log("AI response:", rawContent);
+    
     // Extract JSON from response
     let parsed;
     try {
@@ -110,7 +120,7 @@ serve(async (req) => {
       if (jsonMatch) {
         parsed = JSON.parse(jsonMatch[0]);
       } else {
-        // If no valid JSON, return empty object
+        console.log("No valid JSON found in response");
         parsed = {};
       }
     }
