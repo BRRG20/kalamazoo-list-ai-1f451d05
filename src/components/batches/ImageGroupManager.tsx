@@ -370,6 +370,26 @@ export function ImageGroupManager({
     onDeleteImage(imageUrl);
   };
 
+  const handleDeleteSelectedFromGroup = (groupId: string) => {
+    const group = groups.find(g => g.productId === groupId);
+    if (!group || group.selectedImages.size === 0) return;
+
+    const selectedUrls = [...group.selectedImages];
+    const newGroups = groups.map(g => {
+      if (g.productId === groupId) {
+        return {
+          ...g,
+          images: g.images.filter(url => !g.selectedImages.has(url)),
+          selectedImages: new Set<string>(),
+        };
+      }
+      return g;
+    });
+    onUpdateGroups(newGroups);
+    // Delete each selected image
+    selectedUrls.forEach(url => onDeleteImage(url));
+  };
+
   const activeImageUrl = activeId;
 
   // Drop zone component for creating new groups
@@ -447,6 +467,7 @@ export function ImageGroupManager({
               onSelectAll={() => handleSelectAll(group.productId)}
               onDeselectAll={() => handleDeselectAll(group.productId)}
               onRemoveSelected={() => handleRemoveSelected(group.productId)}
+              onDeleteSelected={() => handleDeleteSelectedFromGroup(group.productId)}
               onMoveSelectedToNext={() => handleMoveSelectedToNext(group.productId)}
               onMoveSelectedToPrevious={() => handleMoveSelectedToPrevious(group.productId)}
               onMoveSelectedToNewGroup={() => handleMoveSelectedToNewGroup(group.productId)}

@@ -175,6 +175,18 @@ export function UnassignedImagePool({
               Create New Product ({selectedImages.size} images)
             </Button>
 
+            <Button 
+              size="sm" 
+              variant="destructive"
+              onClick={() => {
+                [...selectedImages].forEach(url => onDeleteImage(url));
+                setSelectedImages(new Set());
+              }}
+            >
+              <Trash2 className="w-4 h-4 mr-1" />
+              Delete Selected
+            </Button>
+
             {groups.length > 0 && (
               <div className="flex items-center gap-2">
                 <span className="text-sm text-muted-foreground">or add to:</span>

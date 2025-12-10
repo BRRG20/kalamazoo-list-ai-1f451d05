@@ -143,6 +143,7 @@ interface ImageGroupCardProps {
   onSelectAll: () => void;
   onDeselectAll: () => void;
   onRemoveSelected: () => void;
+  onDeleteSelected: () => void;
   onMoveSelectedToNext: () => void;
   onMoveSelectedToPrevious: () => void;
   onMoveSelectedToNewGroup: () => void;
@@ -161,6 +162,7 @@ export function ImageGroupCard({
   onSelectAll,
   onDeselectAll,
   onRemoveSelected,
+  onDeleteSelected,
   onMoveSelectedToNext,
   onMoveSelectedToPrevious,
   onMoveSelectedToNewGroup,
@@ -227,6 +229,15 @@ export function ImageGroupCard({
                   title="Remove to unassigned"
                 >
                   <ArrowRightFromLine className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onDeleteSelected}
+                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                  title="Delete selected images"
+                >
+                  <Trash2 className="w-4 h-4" />
                 </Button>
               </>
             )}
