@@ -1,5 +1,25 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
+// Input validation
+const MAX_TRANSCRIPT_LENGTH = 5000;
+const MAX_CONDITION_LENGTH = 500;
+
+function validateInput(transcript: unknown, existingCondition: unknown): { valid: boolean; error?: string } {
+  if (typeof transcript !== 'string' || transcript.trim().length < 2) {
+    return { valid: false, error: 'Transcript is required and must be at least 2 characters' };
+  }
+  if (transcript.length > MAX_TRANSCRIPT_LENGTH) {
+    return { valid: false, error: `Transcript exceeds maximum length of ${MAX_TRANSCRIPT_LENGTH} characters` };
+  }
+  if (existingCondition !== undefined && existingCondition !== null && typeof existingCondition !== 'string') {
+    return { valid: false, error: 'existingCondition must be a string if provided' };
+  }
+  if (typeof existingCondition === 'string' && existingCondition.length > MAX_CONDITION_LENGTH) {
+    return { valid: false, error: `existingCondition exceeds maximum length of ${MAX_CONDITION_LENGTH} characters` };
+  }
+  return { valid: true };
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -68,13 +88,17 @@ serve(async (req) => {
   try {
     const { transcript, existingCondition } = await req.json();
     
-    console.log("Received transcript:", transcript);
-    
-    if (!transcript || transcript.trim().length < 2) {
-      return new Response(JSON.stringify({ parsed: {}, message: "Transcript too short" }), {
+    // Validate inputs
+    const validation = validateInput(transcript, existingCondition);
+    if (!validation.valid) {
+      return new Response(JSON.stringify({ error: validation.error }), {
+        status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    
+    const cleanTranscript = transcript.trim();
+    console.log("Received transcript:", cleanTranscript.substring(0, 100) + (cleanTranscript.length > 100 ? '...' : ''));
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
@@ -82,8 +106,8 @@ serve(async (req) => {
     }
 
     const userPrompt = existingCondition 
-      ? `Parse this voice input for product fields. Current condition is: "${existingCondition}". If new flaws are mentioned, append them.\n\nVoice input: "${transcript}"`
-      : `Parse this voice input for product fields:\n\n"${transcript}"`;
+      ? `Parse this voice input for product fields. Current condition is: "${existingCondition}". If new flaws are mentioned, append them.\n\nVoice input: "${cleanTranscript}"`
+      : `Parse this voice input for product fields:\n\n"${cleanTranscript}"`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -138,7 +162,7 @@ serve(async (req) => {
     }
 
     // Clean up the parsed data - remove null/undefined values
-    const cleaned: Record<string, any> = {};
+    const cleaned: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(parsed)) {
       if (value !== null && value !== undefined && value !== "") {
         cleaned[key] = value;

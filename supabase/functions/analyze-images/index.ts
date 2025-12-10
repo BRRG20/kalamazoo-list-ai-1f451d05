@@ -1,5 +1,36 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
+// Input validation
+const MAX_IMAGE_URLS = 4;
+const MAX_URL_LENGTH = 2048;
+const URL_PATTERN = /^https?:\/\/.+/i;
+
+function validateImageUrls(imageUrls: unknown): { valid: boolean; error?: string; urls?: string[] } {
+  if (!Array.isArray(imageUrls)) {
+    return { valid: false, error: 'imageUrls must be an array' };
+  }
+  if (imageUrls.length === 0) {
+    return { valid: false, error: 'At least one image URL is required' };
+  }
+  if (imageUrls.length > MAX_IMAGE_URLS) {
+    return { valid: false, error: `Maximum ${MAX_IMAGE_URLS} image URLs allowed` };
+  }
+  const validUrls: string[] = [];
+  for (const url of imageUrls) {
+    if (typeof url !== 'string') {
+      return { valid: false, error: 'All image URLs must be strings' };
+    }
+    if (!URL_PATTERN.test(url)) {
+      return { valid: false, error: `Invalid URL format` };
+    }
+    if (url.length > MAX_URL_LENGTH) {
+      return { valid: false, error: `URL exceeds maximum length of ${MAX_URL_LENGTH} characters` };
+    }
+    validUrls.push(url);
+  }
+  return { valid: true, urls: validUrls };
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -54,8 +85,13 @@ serve(async (req) => {
   try {
     const { imageUrls } = await req.json();
     
-    if (!imageUrls || !Array.isArray(imageUrls) || imageUrls.length === 0) {
-      throw new Error("No image URLs provided");
+    // Validate inputs
+    const validation = validateImageUrls(imageUrls);
+    if (!validation.valid) {
+      return new Response(JSON.stringify({ error: validation.error }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
