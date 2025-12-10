@@ -18,6 +18,7 @@ import {
   generateListingBlock,
   UPLOAD_LIMITS,
 } from '@/hooks/use-database';
+import { useDefaultTags } from '@/hooks/use-default-tags';
 import type { Product, ProductImage } from '@/types';
 
 export default function BatchesPage() {
@@ -27,6 +28,7 @@ export default function BatchesPage() {
   const { fetchImagesForProduct, addImageToBatch, updateImage, excludeLastNImages, clearCache, deleteImage, updateImageProductIdByUrl } = useImages();
   const { settings } = useSettings();
   const { uploadImages, uploading, progress, uploadStartTime, uploadTotal, uploadCompleted } = useImageUpload();
+  const { getTagsForGarmentType } = useDefaultTags();
   
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
@@ -204,13 +206,25 @@ export default function BatchesPage() {
         const data = await response.json();
         const generated = data.generated;
         
+        // Get default tags based on garment type
+        const garmentType = product.garment_type || generated.garment_type || '';
+        const defaultTags = getTagsForGarmentType(garmentType);
+        
+        // Merge default tags with AI-generated tags
+        let finalShopifyTags = generated.shopify_tags || product.shopify_tags || '';
+        if (defaultTags.length > 0) {
+          const existingTags = finalShopifyTags.split(',').map(t => t.trim()).filter(Boolean);
+          const allTags = [...new Set([...existingTags, ...defaultTags])];
+          finalShopifyTags = allTags.join(', ');
+        }
+        
         // Update product with generated content
         await updateProduct(product.id, {
           status: 'generated',
           title: generated.title || product.title,
           description_style_a: generated.description_style_a,
           description_style_b: generated.description_style_b,
-          shopify_tags: generated.shopify_tags || product.shopify_tags,
+          shopify_tags: finalShopifyTags,
           etsy_tags: generated.etsy_tags || product.etsy_tags,
           collections_tags: generated.collections_tags || product.collections_tags,
         });
@@ -232,7 +246,7 @@ export default function BatchesPage() {
     } else {
       toast.success(`AI generated details for ${successCount} product(s)`);
     }
-  }, [selectedBatchId, products, updateProduct, fetchImagesForProduct]);
+  }, [selectedBatchId, products, updateProduct, fetchImagesForProduct, getTagsForGarmentType]);
 
   const handleExcludeLast2All = useCallback(async () => {
     if (!selectedBatchId) return;
