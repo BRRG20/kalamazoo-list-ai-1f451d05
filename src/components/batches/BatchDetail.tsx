@@ -253,39 +253,43 @@ export function BatchDetail({
         </div>
 
         {/* Shopify row */}
-        <div className="flex items-center gap-3 mt-3 pt-3 border-t border-border">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mt-3 pt-3 border-t border-border">
           {!shopifyConfigured && (
             <Alert variant="default" className="flex-1">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                Shopify is not connected. Go to Settings to add your store URL and API key.
+                Shopify not connected. Go to Settings to add store URL and API key.
               </AlertDescription>
             </Alert>
           )}
           
           {shopifyConfigured && (
             <>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center justify-between sm:justify-start gap-2 flex-wrap">
                 <span className="text-sm text-muted-foreground">
                   {selectedProductIds.size} selected
                 </span>
-                <Button variant="ghost" size="sm" onClick={selectAllProducts}>
-                  Select all
-                </Button>
-                <Button variant="ghost" size="sm" onClick={deselectAllProducts}>
-                  Clear
-                </Button>
+                <div className="flex gap-1">
+                  <Button variant="ghost" size="sm" onClick={selectAllProducts} type="button">
+                    Select all
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={deselectAllProducts} type="button">
+                    Clear
+                  </Button>
+                </div>
               </div>
               <Button
                 onClick={handleCreateInShopify}
                 disabled={isCreatingShopify || selectedProductIds.size === 0}
+                className="w-full sm:w-auto h-11 sm:h-10 text-base sm:text-sm"
+                type="button"
               >
                 {isCreatingShopify ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
                 ) : (
-                  <ShoppingBag className="w-4 h-4 mr-2" />
+                  <ShoppingBag className="w-5 h-5 mr-2" />
                 )}
-                Create in Shopify ({selectedProductIds.size})
+                Upload to Shopify ({selectedProductIds.size})
               </Button>
             </>
           )}
