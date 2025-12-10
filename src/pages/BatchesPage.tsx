@@ -28,6 +28,7 @@ export default function BatchesPage() {
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [editingProductImages, setEditingProductImages] = useState<ProductImage[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState({ current: 0, total: 0 });
   const [regeneratingField, setRegeneratingField] = useState<string | null>(null);
   const [isCreatingShopify, setIsCreatingShopify] = useState(false);
   const [pendingImageUrls, setPendingImageUrls] = useState<string[]>([]);
@@ -143,30 +144,74 @@ export default function BatchesPage() {
     
     // Show warning for large product counts
     if (products.length > UPLOAD_LIMITS.RECOMMENDED_PRODUCTS_FOR_AI) {
-      toast.warning(`For stability, consider generating AI in groups of ${UPLOAD_LIMITS.RECOMMENDED_PRODUCTS_FOR_AI} products or fewer.`);
+      toast.warning(`For stability, consider generating AI in groups of ${UPLOAD_LIMITS.RECOMMENDED_PRODUCTS_FOR_AI} products or fewer. Proceeding anyway...`);
     }
     
     setIsGenerating(true);
+    setGenerationProgress({ current: 0, total: products.length });
     
-    // Simulate AI generation - in production this would call the AI service
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    let successCount = 0;
+    let errorCount = 0;
     
-    for (const product of products) {
-      await updateProduct(product.id, {
-        status: 'generated',
-        title: `Vintage ${product.sku} Item`,
-        description: 'A beautiful vintage piece in excellent condition. Perfect for adding a unique touch to your wardrobe.',
-        garment_type: 'sweater',
-        department: 'Women',
-        condition: 'Good – light wear',
-        shopify_tags: 'vintage, retro, knitwear',
-        etsy_tags: 'vintage sweater, retro knitwear, 90s fashion, thrift find, sustainable fashion',
-      });
+    for (let i = 0; i < products.length; i++) {
+      const product = products[i];
+      setGenerationProgress({ current: i + 1, total: products.length });
+      
+      try {
+        // Get product images for AI context
+        const images = await fetchImagesForProduct(product.id);
+        const imageUrls = images.slice(0, 2).map(img => img.url);
+        
+        // Call the edge function
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-listing`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({ product, imageUrls }),
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error(`Error generating for ${product.sku}:`, errorData.error);
+          await updateProduct(product.id, { status: 'error' });
+          errorCount++;
+          continue;
+        }
+        
+        const data = await response.json();
+        const generated = data.generated;
+        
+        // Update product with generated content
+        await updateProduct(product.id, {
+          status: 'generated',
+          title: generated.title || product.title,
+          description_style_a: generated.description_style_a,
+          description_style_b: generated.description_style_b,
+          shopify_tags: generated.shopify_tags || product.shopify_tags,
+          etsy_tags: generated.etsy_tags || product.etsy_tags,
+          collections_tags: generated.collections_tags || product.collections_tags,
+        });
+        
+        successCount++;
+        
+      } catch (error) {
+        console.error(`Error generating for ${product.sku}:`, error);
+        await updateProduct(product.id, { status: 'error' });
+        errorCount++;
+      }
     }
     
     setIsGenerating(false);
-    toast.success(`AI generated details for ${products.length} product(s)`);
-  }, [selectedBatchId, products, updateProduct]);
+    setGenerationProgress({ current: 0, total: 0 });
+    
+    if (errorCount > 0) {
+      toast.warning(`Generated ${successCount} product(s). ${errorCount} failed.`);
+    } else {
+      toast.success(`AI generated details for ${successCount} product(s)`);
+    }
+  }, [selectedBatchId, products, updateProduct, fetchImagesForProduct]);
 
   const handleExcludeLast2All = useCallback(async () => {
     if (!selectedBatchId) return;
@@ -393,6 +438,7 @@ export default function BatchesPage() {
               onToggleProductSelection={handleToggleProductSelection}
               selectedProductIds={selectedProductIds}
               isGenerating={isGenerating}
+              generationProgress={generationProgress}
               isCreatingShopify={isCreatingShopify}
               pendingImageCount={pendingImageUrls.length}
               isUploading={uploading}
