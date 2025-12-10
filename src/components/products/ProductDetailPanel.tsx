@@ -469,67 +469,72 @@ export function ProductDetailPanel({
             </span>
           </div>
           
-          <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2 flex-shrink-0">
             <Button
               variant="outline"
-              size="sm"
-              onClick={analyzeImages}
+              size="icon"
+              onClick={() => analyzeImages()}
               disabled={isAnalyzingImages || images.length === 0}
-              className="text-xs md:text-sm"
+              className="h-10 w-10 md:h-9 md:w-auto md:px-3"
+              type="button"
             >
               {isAnalyzingImages ? (
-                <Loader2 className="w-4 h-4 md:mr-1 animate-spin" />
+                <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
-                <Camera className="w-4 h-4 md:mr-1" />
+                <Camera className="w-5 h-5 md:mr-1" />
               )}
               <span className="hidden md:inline">Analyze</span>
             </Button>
             <Button
               variant="default"
-              size="sm"
+              size="icon"
               onClick={() => onGenerateAI('all')}
               disabled={isGenerating}
-              className="text-xs md:text-sm"
+              className="h-10 w-10 md:h-9 md:w-auto md:px-3"
+              type="button"
             >
               {isGenerating && !regeneratingField ? (
-                <Loader2 className="w-4 h-4 md:mr-1 animate-spin" />
+                <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
-                <Sparkles className="w-4 h-4 md:mr-1" />
+                <Sparkles className="w-5 h-5 md:mr-1" />
               )}
               <span className="hidden md:inline">Generate</span>
             </Button>
-            <Button onClick={handleSave} disabled={isSaving} size="sm" className="text-xs md:text-sm">
+            <Button 
+              onClick={() => handleSave()} 
+              disabled={isSaving} 
+              size="icon"
+              className="h-10 w-10 md:h-9 md:w-auto md:px-3"
+              type="button"
+            >
               {isSaving ? (
-                <Loader2 className="w-4 h-4 md:mr-1 animate-spin" />
+                <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
-                <Save className="w-4 h-4 md:mr-1" />
+                <Save className="w-5 h-5 md:mr-1" />
               )}
               <span className="hidden md:inline">Save</span>
             </Button>
-            {isShopifyConfigured && onCreateInShopify && product.status !== 'created_in_shopify' && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onCreateInShopify}
-                disabled={isCreatingShopify}
-                className="text-xs md:text-sm"
-              >
-                {isCreatingShopify ? (
-                  <Loader2 className="w-4 h-4 md:mr-1 animate-spin" />
-                ) : (
-                  <ShoppingBag className="w-4 h-4 md:mr-1" />
-                )}
-                <span className="hidden md:inline">Shopify</span>
-              </Button>
-            )}
-            {product.status === 'created_in_shopify' && (
-              <span className="text-xs text-success flex items-center gap-1">
-                <Check className="w-3 h-3" />
-                <span className="hidden md:inline">In Shopify</span>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => onCreateInShopify?.()}
+              disabled={isCreatingShopify || !isShopifyConfigured || product.status === 'created_in_shopify'}
+              className="h-10 w-10 md:h-9 md:w-auto md:px-3"
+              type="button"
+            >
+              {isCreatingShopify ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : product.status === 'created_in_shopify' ? (
+                <Check className="w-5 h-5 text-success" />
+              ) : (
+                <ShoppingBag className="w-5 h-5 md:mr-1" />
+              )}
+              <span className="hidden md:inline">
+                {product.status === 'created_in_shopify' ? 'Done' : 'Shopify'}
               </span>
-            )}
-            <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8">
-              <X className="w-4 h-4" />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={onClose} className="h-10 w-10" type="button">
+              <X className="w-5 h-5" />
             </Button>
           </div>
         </div>
