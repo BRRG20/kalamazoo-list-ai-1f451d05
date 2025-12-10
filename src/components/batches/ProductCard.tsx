@@ -1,4 +1,4 @@
-import { Edit2, ImageIcon } from 'lucide-react';
+import { Edit2, ImageIcon, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -11,6 +11,7 @@ interface ProductCardProps {
   isSelected: boolean;
   onToggleSelect: () => void;
   onEdit: () => void;
+  onDelete: () => void;
 }
 
 export function ProductCard({
@@ -19,6 +20,7 @@ export function ProductCard({
   isSelected,
   onToggleSelect,
   onEdit,
+  onDelete,
 }: ProductCardProps) {
   const thumbnail = images[0]?.url;
 
@@ -30,7 +32,7 @@ export function ProductCard({
       )}
     >
       {/* Thumbnail */}
-      <div className="aspect-square bg-muted relative">
+      <div className="aspect-square bg-muted relative group">
         {thumbnail ? (
           <img
             src={thumbnail}
@@ -51,6 +53,18 @@ export function ProductCard({
             className="bg-card border-2"
           />
         </div>
+
+        {/* Delete button */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          className="absolute top-2 right-2 p-1.5 bg-destructive/90 hover:bg-destructive rounded opacity-0 group-hover:opacity-100 transition-opacity"
+          title="Delete product"
+        >
+          <Trash2 className="w-4 h-4 text-destructive-foreground" />
+        </button>
 
         {/* Image count badge */}
         <div className="absolute bottom-2 right-2 bg-foreground/80 text-background text-xs px-2 py-0.5 rounded">

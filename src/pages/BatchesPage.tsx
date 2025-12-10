@@ -516,7 +516,21 @@ export default function BatchesPage() {
               onExcludeLast2All={handleExcludeLast2All}
               onCreateInShopify={handleCreateInShopify}
               onEditProduct={setEditingProductId}
+              onDeleteProduct={async (productId) => {
+                await deleteProduct(productId);
+                setSelectedProductIds(prev => {
+                  const next = new Set(prev);
+                  next.delete(productId);
+                  return next;
+                });
+              }}
               onToggleProductSelection={handleToggleProductSelection}
+              onSelectAllProducts={() => {
+                setSelectedProductIds(new Set(products.map(p => p.id)));
+              }}
+              onDeselectAllProducts={() => {
+                setSelectedProductIds(new Set());
+              }}
               selectedProductIds={selectedProductIds}
               isGenerating={isGenerating}
               generationProgress={generationProgress}

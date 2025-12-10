@@ -34,7 +34,10 @@ interface BatchDetailProps {
   onExcludeLast2All: () => void;
   onCreateInShopify: (productIds: string[]) => void;
   onEditProduct: (productId: string) => void;
+  onDeleteProduct: (productId: string) => void;
   onToggleProductSelection: (productId: string) => void;
+  onSelectAllProducts: () => void;
+  onDeselectAllProducts: () => void;
   selectedProductIds: Set<string>;
   isGenerating: boolean;
   generationProgress: { current: number; total: number };
@@ -72,7 +75,10 @@ export function BatchDetail({
   onExcludeLast2All,
   onCreateInShopify,
   onEditProduct,
+  onDeleteProduct,
   onToggleProductSelection,
+  onSelectAllProducts,
+  onDeselectAllProducts,
   selectedProductIds,
   isGenerating,
   generationProgress,
@@ -155,19 +161,6 @@ export function BatchDetail({
     }
   };
 
-  const selectAllProducts = () => {
-    products.forEach(p => {
-      if (!selectedProductIds.has(p.id)) {
-        onToggleProductSelection(p.id);
-      }
-    });
-  };
-
-  const deselectAllProducts = () => {
-    selectedProductIds.forEach(id => {
-      onToggleProductSelection(id);
-    });
-  };
 
   return (
     <div className="min-h-full flex flex-col">
@@ -403,10 +396,10 @@ export function BatchDetail({
                   {selectedProductIds.size} selected
                 </span>
                 <div className="flex gap-1">
-                  <Button variant="ghost" size="sm" onClick={selectAllProducts} type="button">
+                  <Button variant="ghost" size="sm" onClick={onSelectAllProducts} type="button">
                     Select all
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={deselectAllProducts} type="button">
+                  <Button variant="ghost" size="sm" onClick={onDeselectAllProducts} type="button">
                     Clear
                   </Button>
                 </div>
@@ -466,6 +459,7 @@ export function BatchDetail({
                 isSelected={selectedProductIds.has(product.id)}
                 onToggleSelect={() => onToggleProductSelection(product.id)}
                 onEdit={() => onEditProduct(product.id)}
+                onDelete={() => onDeleteProduct(product.id)}
               />
             ))}
           </div>
