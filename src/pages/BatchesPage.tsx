@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { BatchList } from '@/components/batches/BatchList';
 import { BatchDetail } from '@/components/batches/BatchDetail';
@@ -408,9 +409,12 @@ export default function BatchesPage() {
 
   return (
     <AppLayout>
-      <div className="h-full flex">
-        {/* Batch list sidebar */}
-        <div className="w-72 flex-shrink-0">
+      <div className="h-full flex flex-col md:flex-row">
+        {/* Batch list sidebar - hidden on mobile when a batch is selected */}
+        <div className={cn(
+          "w-full md:w-72 flex-shrink-0 border-b md:border-b-0",
+          selectedBatch ? "hidden md:block" : "block"
+        )}>
           <BatchList
             batches={batches}
             selectedBatchId={selectedBatchId}
@@ -423,7 +427,10 @@ export default function BatchesPage() {
         </div>
 
         {/* Main content */}
-        <div className="flex-1">
+        <div className={cn(
+          "flex-1 min-w-0",
+          !selectedBatch ? "hidden md:block" : "block"
+        )}>
           {selectedBatch ? (
             <BatchDetail
               batch={selectedBatch}
@@ -443,6 +450,7 @@ export default function BatchesPage() {
               pendingImageCount={pendingImageUrls.length}
               isUploading={uploading}
               uploadProgress={progress}
+              onBack={() => setSelectedBatchId(null)}
             />
           ) : (
             <EmptyState />

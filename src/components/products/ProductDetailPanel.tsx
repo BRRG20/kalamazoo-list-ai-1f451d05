@@ -9,7 +9,8 @@ import {
   Copy, 
   Check,
   Save,
-  Loader2
+  Loader2,
+  Camera
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -62,6 +63,7 @@ export function ProductDetailPanel({
   const [formData, setFormData] = useState<Partial<Product>>({});
   const [isListening, setIsListening] = useState(false);
   const [isParsingVoice, setIsParsingVoice] = useState(false);
+  const [isAnalyzingImages, setIsAnalyzingImages] = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState('');
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -271,6 +273,108 @@ export function ProductDetailPanel({
     }
   };
 
+  const analyzeImages = async () => {
+    if (images.length === 0) {
+      toast.error('No images to analyze');
+      return;
+    }
+    
+    setIsAnalyzingImages(true);
+    
+    try {
+      const imageUrls = images.slice(0, 4).map(img => img.url);
+      
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-images`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({ imageUrls }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Image analysis failed');
+      }
+      
+      const data = await response.json();
+      const extracted = data.extracted;
+      
+      if (!extracted || Object.keys(extracted).length === 0) {
+        toast.info('Could not extract details from images');
+        return;
+      }
+      
+      // Apply extracted fields to form
+      const fieldUpdates: Partial<Product> = {};
+      const updatedFields: string[] = [];
+      
+      if (extracted.brand) {
+        fieldUpdates.brand = extracted.brand;
+        updatedFields.push('brand');
+      }
+      if (extracted.size_label) {
+        fieldUpdates.size_label = extracted.size_label;
+        updatedFields.push('size');
+      }
+      if (extracted.material) {
+        fieldUpdates.material = extracted.material;
+        updatedFields.push('material');
+      }
+      if (extracted.made_in) {
+        fieldUpdates.made_in = extracted.made_in;
+        updatedFields.push('made in');
+      }
+      if (extracted.garment_type) {
+        fieldUpdates.garment_type = extracted.garment_type.toLowerCase();
+        updatedFields.push('garment type');
+      }
+      if (extracted.department) {
+        fieldUpdates.department = extracted.department;
+        updatedFields.push('department');
+      }
+      if (extracted.colour_main) {
+        fieldUpdates.colour_main = extracted.colour_main;
+        updatedFields.push('colour');
+      }
+      if (extracted.colour_secondary) {
+        fieldUpdates.colour_secondary = extracted.colour_secondary;
+        updatedFields.push('secondary colour');
+      }
+      if (extracted.pattern) {
+        fieldUpdates.pattern = extracted.pattern.toLowerCase();
+        updatedFields.push('pattern');
+      }
+      if (extracted.era) {
+        fieldUpdates.era = extracted.era;
+        updatedFields.push('era');
+      }
+      if (extracted.condition) {
+        fieldUpdates.condition = extracted.condition;
+        updatedFields.push('condition');
+      }
+      if (extracted.fit) {
+        fieldUpdates.fit = extracted.fit.toLowerCase();
+        updatedFields.push('fit');
+      }
+      
+      setFormData(prev => ({ ...prev, ...fieldUpdates }));
+      
+      if (updatedFields.length > 0) {
+        toast.success(`Extracted: ${updatedFields.join(', ')}`);
+      } else {
+        toast.info('No new details extracted from images');
+      }
+      
+    } catch (error) {
+      console.error('Image analysis error:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to analyze images');
+    } finally {
+      setIsAnalyzingImages(false);
+    }
+  };
+
   const CopyButton = ({ text, field }: { text: string; field: string }) => (
     <Button
       variant="ghost"
@@ -287,16 +391,17 @@ export function ProductDetailPanel({
   );
 
   return (
-    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-card border border-border rounded-lg shadow-lg w-full max-w-6xl h-[90vh] flex flex-col overflow-hidden animate-fade-in">
+    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-2 md:p-4">
+      <div className="bg-card border border-border rounded-lg shadow-lg w-full max-w-6xl h-[95vh] md:h-[90vh] flex flex-col overflow-hidden animate-fade-in">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-border">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between p-2 md:p-4 border-b border-border gap-2">
+          <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
             <Button
               variant="ghost"
               size="icon"
               onClick={onPrevious}
               disabled={!hasPrevious}
+              className="h-8 w-8"
             >
               <ChevronLeft className="w-4 h-4" />
             </Button>
@@ -305,45 +410,62 @@ export function ProductDetailPanel({
               size="icon"
               onClick={onNext}
               disabled={!hasNext}
+              className="h-8 w-8"
             >
               <ChevronRight className="w-4 h-4" />
             </Button>
-            <span className="text-sm text-muted-foreground ml-2">
+            <span className="text-xs md:text-sm text-muted-foreground ml-1 truncate max-w-[80px] md:max-w-none">
               {product.sku}
             </span>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={analyzeImages}
+              disabled={isAnalyzingImages || images.length === 0}
+              className="text-xs md:text-sm"
+            >
+              {isAnalyzingImages ? (
+                <Loader2 className="w-4 h-4 md:mr-1 animate-spin" />
+              ) : (
+                <Camera className="w-4 h-4 md:mr-1" />
+              )}
+              <span className="hidden md:inline">Analyze</span>
+            </Button>
             <Button
               variant="default"
+              size="sm"
               onClick={() => onGenerateAI('all')}
               disabled={isGenerating}
+              className="text-xs md:text-sm"
             >
               {isGenerating && !regeneratingField ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                <Loader2 className="w-4 h-4 md:mr-1 animate-spin" />
               ) : (
-                <Sparkles className="w-4 h-4 mr-2" />
+                <Sparkles className="w-4 h-4 md:mr-1" />
               )}
-              Generate All
+              <span className="hidden md:inline">Generate</span>
             </Button>
-            <Button onClick={handleSave} disabled={isSaving}>
+            <Button onClick={handleSave} disabled={isSaving} size="sm" className="text-xs md:text-sm">
               {isSaving ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                <Loader2 className="w-4 h-4 md:mr-1 animate-spin" />
               ) : (
-                <Save className="w-4 h-4 mr-2" />
+                <Save className="w-4 h-4 md:mr-1" />
               )}
-              Save
+              <span className="hidden md:inline">Save</span>
             </Button>
-            <Button variant="ghost" size="icon" onClick={onClose}>
+            <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8">
               <X className="w-4 h-4" />
             </Button>
           </div>
         </div>
 
         {/* Content */}
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
           {/* Left: Images */}
-          <div className="w-1/3 border-r border-border p-4 overflow-y-auto scrollbar-thin">
+          <div className="h-48 md:h-auto md:w-1/3 border-b md:border-b-0 md:border-r border-border p-2 md:p-4 overflow-y-auto scrollbar-thin flex-shrink-0">
             <ImageGallery
               images={images}
               onUpdateImage={onUpdateImage}
@@ -352,8 +474,8 @@ export function ProductDetailPanel({
           </div>
 
           {/* Right: Fields */}
-          <div className="flex-1 overflow-y-auto scrollbar-thin p-4">
-            <div className="space-y-6 max-w-2xl">
+          <div className="flex-1 overflow-y-auto scrollbar-thin p-3 md:p-4">
+            <div className="space-y-4 md:space-y-6 max-w-2xl">
               {/* Core Section */}
               <section>
                 <h3 className="font-semibold text-foreground mb-3">Core</h3>

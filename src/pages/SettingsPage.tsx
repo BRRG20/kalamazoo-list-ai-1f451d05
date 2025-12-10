@@ -73,18 +73,18 @@ export default function SettingsPage() {
   return (
     <AppLayout>
       <div className="h-full overflow-y-auto scrollbar-thin">
-        <div className="max-w-2xl mx-auto p-6 space-y-6">
+        <div className="max-w-2xl mx-auto p-4 md:p-6 space-y-6">
           <div>
-            <h1 className="text-2xl font-semibold text-foreground">Settings</h1>
-            <p className="text-muted-foreground mt-1">
+            <h1 className="text-xl md:text-2xl font-semibold text-foreground">Settings</h1>
+            <p className="text-sm text-muted-foreground mt-1">
               Configure your Shopify connection and default preferences.
             </p>
           </div>
 
           {/* Shopify Configuration */}
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+            <CardHeader className="p-4 md:p-6">
+              <CardTitle className="flex flex-wrap items-center gap-2 text-base md:text-lg">
                 Shopify Connection
                 {shopifyConnected ? (
                   <span className="inline-flex items-center gap-1 text-xs font-normal text-success bg-success/10 px-2 py-0.5 rounded-full">
@@ -97,11 +97,11 @@ export default function SettingsPage() {
                   </span>
                 )}
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-sm">
                 Enter your Shopify store URL and Admin API Access Token to enable product creation.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 p-4 md:p-6 pt-0 md:pt-0">
               <div className="space-y-2">
                 <Label htmlFor="shopify_store_url">Store URL</Label>
                 <Input
@@ -112,7 +112,7 @@ export default function SettingsPage() {
                   placeholder="https://yourstore.myshopify.com"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Your Shopify store's admin URL (e.g., https://yourstore.myshopify.com)
+                  Your Shopify store's admin URL
                 </p>
               </div>
 
@@ -126,14 +126,14 @@ export default function SettingsPage() {
                   placeholder="shpat_xxxxxxxxxxxxxxxx"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Create a private app in Shopify Admin → Apps → Develop apps to get this token.
+                  Create a private app in Shopify Admin → Apps → Develop apps
                 </p>
               </div>
 
               {!shopifyConnected && (
                 <Alert>
                   <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>
+                  <AlertDescription className="text-sm">
                     Shopify is not configured. Add your store URL and access token to enable product creation.
                   </AlertDescription>
                 </Alert>
@@ -143,14 +143,14 @@ export default function SettingsPage() {
 
           {/* Default Settings */}
           <Card>
-            <CardHeader>
-              <CardTitle>Default Settings</CardTitle>
-              <CardDescription>
+            <CardHeader className="p-4 md:p-6">
+              <CardTitle className="text-base md:text-lg">Default Settings</CardTitle>
+              <CardDescription className="text-sm">
                 Configure default values for new batches and products.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+            <CardContent className="space-y-4 p-4 md:p-6 pt-0 md:pt-0">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="default_images_per_product">Images per Product</Label>
                   <Input
@@ -162,7 +162,7 @@ export default function SettingsPage() {
                     onChange={(e) => handleChange('default_images_per_product', parseInt(e.target.value) || 9)}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Default number of images per product when auto-grouping.
+                    Default images per product when auto-grouping.
                   </p>
                 </div>
 
