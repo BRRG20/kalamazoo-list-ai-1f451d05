@@ -568,14 +568,22 @@ export function useImageUpload() {
     setUploading(true);
     setProgress(0);
 
+    const BATCH_SIZE = 5; // Upload 5 images in parallel
     const urls: string[] = [];
+    let completed = 0;
     
-    for (let i = 0; i < files.length; i++) {
-      const url = await uploadImage(files[i], batchId);
-      if (url) {
-        urls.push(url);
-      }
-      setProgress(Math.round(((i + 1) / files.length) * 100));
+    for (let i = 0; i < files.length; i += BATCH_SIZE) {
+      const batch = files.slice(i, i + BATCH_SIZE);
+      const results = await Promise.all(
+        batch.map(file => uploadImage(file, batchId))
+      );
+      
+      results.forEach(url => {
+        if (url) urls.push(url);
+      });
+      
+      completed += batch.length;
+      setProgress(Math.round((completed / files.length) * 100));
     }
 
     setUploading(false);
