@@ -55,6 +55,7 @@ interface BatchDetailProps {
   onUpdateUnassignedImages: (images: string[]) => void;
   onCreateNewGroup: (images: string[]) => void;
   onDeleteGroup: (productId: string) => void;
+  onDeleteImage: (url: string) => void;
   onSaveGroups: () => void;
   showGroupManager: boolean;
   onToggleGroupManager: () => void;
@@ -91,6 +92,7 @@ export function BatchDetail({
   onUpdateUnassignedImages,
   onCreateNewGroup,
   onDeleteGroup,
+  onDeleteImage,
   onSaveGroups,
   showGroupManager,
   onToggleGroupManager,
@@ -438,6 +440,7 @@ export function BatchDetail({
             onUpdateUnassigned={onUpdateUnassignedImages}
             onCreateNewGroup={onCreateNewGroup}
             onDeleteGroup={onDeleteGroup}
+            onDeleteImage={onDeleteImage}
             onSaveGroups={onSaveGroups}
             imagesPerProduct={imagesPerProduct}
           />

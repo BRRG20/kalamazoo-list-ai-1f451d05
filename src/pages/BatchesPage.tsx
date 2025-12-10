@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { BatchList } from '@/components/batches/BatchList';
 import { BatchDetail } from '@/components/batches/BatchDetail';
@@ -547,6 +548,17 @@ export default function BatchesPage() {
                 if (group) {
                   setUnassignedImages(prev => [...prev, ...group.images]);
                   setImageGroups(prev => prev.filter(g => g.productId !== productId));
+                }
+              }}
+              onDeleteImage={async (url) => {
+                // Find image in database by URL and delete it
+                const { data } = await supabase
+                  .from('images')
+                  .select('id')
+                  .eq('url', url)
+                  .single();
+                if (data) {
+                  await deleteImage(data.id);
                 }
               }}
               onSaveGroups={async () => {

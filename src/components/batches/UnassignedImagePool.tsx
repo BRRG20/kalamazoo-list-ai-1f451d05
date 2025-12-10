@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useDroppable } from '@dnd-kit/core';
-import { AlertTriangle, Plus, Check, X, Eye } from 'lucide-react';
+import { AlertTriangle, Plus, Check, X, Eye, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -18,6 +18,7 @@ interface UnassignedImagePoolProps {
   images: string[];
   onCreateGroup: (selectedUrls: string[]) => void;
   onAddToGroup: (url: string, groupId: string) => void;
+  onDeleteImage: (url: string) => void;
   groups: ImageGroup[];
 }
 
@@ -25,6 +26,7 @@ export function UnassignedImagePool({
   images,
   onCreateGroup,
   onAddToGroup,
+  onDeleteImage,
   groups,
 }: UnassignedImagePoolProps) {
   const [selectedImages, setSelectedImages] = useState<Set<string>>(new Set());
@@ -140,6 +142,19 @@ export function UnassignedImagePool({
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
                 <Eye className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
               </div>
+
+              {/* Delete button */}
+              <button
+                data-checkbox
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteImage(url);
+                }}
+                className="absolute top-1 right-1 p-1 bg-destructive/90 hover:bg-destructive rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                title="Delete image"
+              >
+                <Trash2 className="w-3 h-3 text-destructive-foreground" />
+              </button>
               
               <div className="absolute top-1 left-1" data-checkbox onClick={(e) => e.stopPropagation()}>
                 <Checkbox

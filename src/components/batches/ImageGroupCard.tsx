@@ -48,9 +48,10 @@ interface SortableImageProps {
   onToggleSelect: () => void;
   index: number;
   onPreview: () => void;
+  onDelete: () => void;
 }
 
-function SortableImage({ url, isSelected, onToggleSelect, index, onPreview }: SortableImageProps) {
+function SortableImage({ url, isSelected, onToggleSelect, index, onPreview, onDelete }: SortableImageProps) {
   const {
     attributes,
     listeners,
@@ -99,10 +100,23 @@ function SortableImage({ url, isSelected, onToggleSelect, index, onPreview }: So
         {...attributes}
         {...listeners}
         data-no-preview
-        className="absolute top-1 right-1 p-1 bg-background/80 rounded cursor-grab opacity-0 group-hover:opacity-100 transition-opacity"
+        className="absolute top-1 right-8 p-1 bg-background/80 rounded cursor-grab opacity-0 group-hover:opacity-100 transition-opacity"
       >
         <GripVertical className="w-3 h-3 text-muted-foreground" />
       </div>
+
+      {/* Delete button */}
+      <button
+        data-no-preview
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete();
+        }}
+        className="absolute top-1 right-1 p-1 bg-destructive/90 hover:bg-destructive rounded opacity-0 group-hover:opacity-100 transition-opacity"
+        title="Delete image"
+      >
+        <Trash2 className="w-3 h-3 text-destructive-foreground" />
+      </button>
 
       {/* Selection checkbox */}
       <div className="absolute top-1 left-1" data-no-preview onClick={(e) => e.stopPropagation()}>
@@ -133,6 +147,7 @@ interface ImageGroupCardProps {
   onMoveSelectedToPrevious: () => void;
   onMoveSelectedToNewGroup: () => void;
   onDeleteGroup: () => void;
+  onDeleteImage: (url: string) => void;
   onReorder: (oldIndex: number, newIndex: number) => void;
   unassignedImages: string[];
   onAddFromUnassigned: (url: string) => void;
@@ -150,6 +165,7 @@ export function ImageGroupCard({
   onMoveSelectedToPrevious,
   onMoveSelectedToNewGroup,
   onDeleteGroup,
+  onDeleteImage,
   onReorder,
   unassignedImages,
   onAddFromUnassigned,
@@ -291,6 +307,7 @@ export function ImageGroupCard({
                 isSelected={group.selectedImages.has(url)}
                 onToggleSelect={() => onToggleImageSelection(url)}
                 onPreview={() => setPreviewIndex(index)}
+                onDelete={() => onDeleteImage(url)}
               />
             ))}
           </div>
