@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.parse-voice]
 verify_jwt = false
+
+[functions.create-shopify-product]
+verify_jwt = false

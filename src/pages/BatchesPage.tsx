@@ -226,41 +226,92 @@ export default function BatchesPage() {
   }, [selectedBatchId, products, excludeLastNImages, clearCache]);
 
   const handleCreateInShopify = useCallback(async (productIds: string[]) => {
+    if (!settings?.shopify_store_url || !settings?.shopify_access_token) {
+      toast.error('Shopify is not configured. Go to Settings to add your credentials.');
+      return;
+    }
+
     setIsCreatingShopify(true);
     
-    // Simulate Shopify creation - in production this would call the Shopify API
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    let successCount = 0;
-    let errorCount = 0;
-    
-    for (const id of productIds) {
-      const product = products.find(p => p.id === id);
-      if (product) {
-        // Simulate success/failure
-        if (Math.random() > 0.1) {
-          await updateProduct(id, {
+    try {
+      // Prepare products and images for the edge function
+      const productsToCreate = productIds
+        .map(id => products.find(p => p.id === id))
+        .filter(Boolean) as Product[];
+      
+      // Fetch images for all products (only those marked for Shopify)
+      const imagesMap: Record<string, { url: string; position: number }[]> = {};
+      for (const product of productsToCreate) {
+        const allImages = await fetchImagesForProduct(product.id);
+        imagesMap[product.id] = allImages
+          .filter(img => img.include_in_shopify)
+          .map(img => ({ url: img.url, position: img.position }));
+      }
+      
+      // Prepare product payloads with description
+      const productPayloads = productsToCreate.map(p => ({
+        id: p.id,
+        title: p.title,
+        description: p.description_style_a || p.description || '',
+        price: p.price,
+        currency: p.currency,
+        sku: p.sku,
+        brand: p.brand,
+        garment_type: p.garment_type,
+        shopify_tags: p.shopify_tags,
+        collections_tags: p.collections_tags,
+      }));
+      
+      // Call the edge function
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-shopify-product`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({
+          products: productPayloads,
+          images: imagesMap,
+          shopifyStoreUrl: settings.shopify_store_url,
+          shopifyAccessToken: settings.shopify_access_token,
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create products in Shopify');
+      }
+      
+      const data = await response.json();
+      
+      // Update products with results
+      for (const result of data.results) {
+        if (result.success) {
+          await updateProduct(result.productId, {
             status: 'created_in_shopify',
-            shopify_product_id: `gid://shopify/Product/${Date.now()}`,
-            shopify_handle: product.title?.toLowerCase().replace(/\s+/g, '-') || product.sku,
+            shopify_product_id: result.shopifyProductId,
+            shopify_handle: result.shopifyHandle,
           });
-          successCount++;
         } else {
-          await updateProduct(id, { status: 'error' });
-          errorCount++;
+          await updateProduct(result.productId, { status: 'error' });
         }
       }
+      
+      setSelectedProductIds(new Set());
+      
+      if (data.errorCount > 0) {
+        toast.warning(`Created ${data.successCount} product(s) in Shopify. ${data.errorCount} failed.`);
+      } else {
+        toast.success(`Created ${data.successCount} product(s) in Shopify`);
+      }
+      
+    } catch (error) {
+      console.error('Shopify creation error:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to create products in Shopify');
+    } finally {
+      setIsCreatingShopify(false);
     }
-    
-    setSelectedProductIds(new Set());
-    setIsCreatingShopify(false);
-    
-    if (errorCount > 0) {
-      toast.warning(`Created ${successCount} product(s) in Shopify. ${errorCount} failed.`);
-    } else {
-      toast.success(`Created ${successCount} product(s) in Shopify`);
-    }
-  }, [products, updateProduct]);
+  }, [products, settings, updateProduct, fetchImagesForProduct]);
 
   const handleToggleProductSelection = useCallback((productId: string) => {
     setSelectedProductIds(prev => {
