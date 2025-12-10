@@ -153,12 +153,31 @@ export function ProductDetailPanel({
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
-    recognition.interimResults = true; // Show interim results so user sees it's working
+    recognition.interimResults = true;
     recognition.lang = 'en-GB';
-    recognition.maxAlternatives = 3;
+    recognition.maxAlternatives = 5; // More alternatives for better number recognition
 
     let finalTranscript = '';
     let interimTranscript = '';
+
+    // Post-process transcript to fix common speech recognition errors with numbers
+    const fixNumberTranscript = (text: string): string => {
+      return text
+        // Fix "five" when user likely said "25" etc
+        .replace(/\bfastest\s*£?(\d+)/gi, '£$1')
+        .replace(/\bthe\s+fastest\s+/gi, '')
+        // Common misheard numbers
+        .replace(/\bfive\b/gi, '5')
+        .replace(/\btwenty five\b/gi, '25')
+        .replace(/\btwenty-five\b/gi, '25')
+        .replace(/\bfifteen\b/gi, '15')
+        .replace(/\bthirty five\b/gi, '35')
+        .replace(/\bforty five\b/gi, '45')
+        .replace(/\bfifty five\b/gi, '55')
+        // Ensure pound symbols are kept
+        .replace(/(\d+)\s*pounds?\b/gi, '£$1')
+        .replace(/(\d+)\s*quid\b/gi, '£$1');
+    };
 
     recognition.onstart = () => {
       console.log('Voice recognition started');
@@ -197,18 +216,30 @@ export function ProductDetailPanel({
       
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
-        const transcript = result[0].transcript;
+        // Check all alternatives for better number recognition
+        let bestTranscript = result[0].transcript;
+        
+        // Look through alternatives for one with clearer numbers
+        for (let j = 0; j < result.length; j++) {
+          const alt = result[j].transcript;
+          // Prefer alternatives that contain pound signs or clear numbers
+          if (/£\d+|\b\d{2,}\b/.test(alt)) {
+            bestTranscript = alt;
+            break;
+          }
+        }
         
         if (result.isFinal) {
-          console.log('Final result:', transcript, 'confidence:', result[0].confidence);
-          finalTranscript += transcript + ' ';
+          const fixedTranscript = fixNumberTranscript(bestTranscript);
+          console.log('Final result:', bestTranscript, '-> fixed:', fixedTranscript, 'confidence:', result[0].confidence);
+          finalTranscript += fixedTranscript + ' ';
         } else {
-          interimTranscript += transcript;
+          interimTranscript += bestTranscript;
         }
       }
       
       // Show both final and interim results so user sees real-time feedback
-      const displayText = (finalTranscript + interimTranscript).trim();
+      const displayText = fixNumberTranscript((finalTranscript + interimTranscript).trim());
       if (displayText) {
         setVoiceTranscript(displayText);
       }
