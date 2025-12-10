@@ -123,6 +123,16 @@ export default function AuthPage() {
       return;
     }
     
+    // Check if email is authorized
+    const isAuthorized = AUTHORIZED_EMAILS.some(
+      email => email.toLowerCase() === formData.email.toLowerCase()
+    );
+    
+    if (!isAuthorized) {
+      toast.error('This email is not authorized to create an account.');
+      return;
+    }
+    
     if (formData.password.length < 6) {
       toast.error('Password must be at least 6 characters');
       return;
