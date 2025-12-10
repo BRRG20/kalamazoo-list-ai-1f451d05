@@ -18,8 +18,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { ImageGallery } from './ImageGallery';
+import { generateListingBlock } from '@/hooks/use-database';
 import type { Product, ProductImage, Department, Era, Condition } from '@/types';
-import { generateListingBlock } from '@/lib/store';
 
 interface ProductDetailPanelProps {
   product: Product;
@@ -465,31 +465,38 @@ export function ProductDetailPanel({
               <section>
                 <h3 className="font-semibold text-foreground mb-3">Tags & Collections</h3>
                 <div className="space-y-4">
-                  <div>
-                    <Label>Shopify Tags (comma-separated)</Label>
-                    <Textarea
-                      value={formData.shopify_tags || ''}
-                      onChange={(e) => updateField('shopify_tags', e.target.value)}
-                      placeholder="vintage, 90s, knitwear, women"
-                      rows={2}
-                    />
-                  </div>
-                  <div>
-                    <Label>Collections Tags (comma-separated)</Label>
-                    <Textarea
-                      value={formData.collections_tags || ''}
-                      onChange={(e) => updateField('collections_tags', e.target.value)}
-                      placeholder="spring-edit, knitwear, 80s90s-graphics"
-                      rows={2}
-                    />
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1">
+                      <Label>Shopify Tags</Label>
+                      <Textarea
+                        value={formData.shopify_tags || ''}
+                        onChange={(e) => updateField('shopify_tags', e.target.value)}
+                        placeholder="vintage, retro, knitwear"
+                        rows={2}
+                      />
+                    </div>
                   </div>
                   <div className="flex items-start gap-2">
                     <div className="flex-1">
-                      <Label>Etsy Tags (up to 13, comma-separated)</Label>
+                      <Label>Collections Tags</Label>
+                      <Textarea
+                        value={formData.collections_tags || ''}
+                        onChange={(e) => updateField('collections_tags', e.target.value)}
+                        placeholder="spring-edit, knitwear, 80s90s-graphics"
+                        rows={2}
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Tags used for Shopify automatic collections
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1">
+                      <Label>Etsy Tags (up to 13)</Label>
                       <Textarea
                         value={formData.etsy_tags || ''}
                         onChange={(e) => updateField('etsy_tags', e.target.value)}
-                        placeholder="vintage sweater, 90s jumper, retro knitwear"
+                        placeholder="vintage sweater, retro knitwear, 90s fashion"
                         rows={2}
                       />
                     </div>
@@ -508,7 +515,7 @@ export function ProductDetailPanel({
                       <Textarea
                         value={formData.description || ''}
                         onChange={(e) => updateField('description', e.target.value)}
-                        placeholder="2-3 sentence description..."
+                        placeholder="A beautiful vintage piece..."
                         rows={4}
                       />
                     </div>
@@ -520,8 +527,8 @@ export function ProductDetailPanel({
                       <Textarea
                         value={formData.listing_block || ''}
                         readOnly
+                        rows={6}
                         className="bg-muted/50"
-                        rows={8}
                       />
                     </div>
                     <CopyButton text={formData.listing_block || ''} field="Listing block" />
@@ -529,13 +536,13 @@ export function ProductDetailPanel({
                 </div>
               </section>
 
-              {/* Voice Input */}
+              {/* Voice Input & Notes */}
               <section>
-                <h3 className="font-semibold text-foreground mb-3">Voice Input</h3>
-                <div className="space-y-3">
-                  <div className="flex gap-2">
+                <h3 className="font-semibold text-foreground mb-3">Voice Input & Notes</h3>
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
                     <Button
-                      variant={isListening ? "destructive" : "outline"}
+                      variant={isListening ? 'destructive' : 'outline'}
                       onClick={isListening ? stopVoiceInput : startVoiceInput}
                     >
                       {isListening ? (
@@ -550,49 +557,40 @@ export function ProductDetailPanel({
                         </>
                       )}
                     </Button>
-                    <Button
-                      variant="outline"
-                      onClick={applyVoiceToFields}
-                      disabled={!voiceTranscript.trim()}
-                    >
-                      Apply Voice to Fields
-                    </Button>
+                    {voiceTranscript && (
+                      <Button variant="outline" onClick={applyVoiceToFields}>
+                        Apply to Fields
+                      </Button>
+                    )}
                   </div>
-                  {isListening && (
-                    <div className="flex items-center gap-2 text-sm text-primary">
-                      <span className="w-2 h-2 bg-destructive rounded-full animate-pulse-soft" />
-                      Listening...
+                  
+                  {voiceTranscript && (
+                    <div className="p-3 bg-muted/50 rounded-lg">
+                      <Label className="text-xs">Voice Transcript:</Label>
+                      <p className="text-sm mt-1">{voiceTranscript}</p>
                     </div>
                   )}
-                  {voiceTranscript && (
-                    <Textarea
-                      value={voiceTranscript}
-                      onChange={(e) => setVoiceTranscript(e.target.value)}
-                      placeholder="Voice transcript will appear here..."
-                      rows={3}
-                    />
-                  )}
+
                   <div>
-                    <Label>Raw Input / Notes</Label>
+                    <Label>Raw Input Text</Label>
                     <Textarea
                       value={formData.raw_input_text || ''}
                       onChange={(e) => updateField('raw_input_text', e.target.value)}
-                      placeholder="Type or paste notes here for AI to process..."
+                      placeholder="Paste or type notes here..."
                       rows={3}
                     />
                   </div>
-                </div>
-              </section>
 
-              {/* Additional Notes */}
-              <section>
-                <h3 className="font-semibold text-foreground mb-3">Additional Notes</h3>
-                <Textarea
-                  value={formData.notes || ''}
-                  onChange={(e) => updateField('notes', e.target.value)}
-                  placeholder="Any other notes about this product..."
-                  rows={3}
-                />
+                  <div>
+                    <Label>Notes</Label>
+                    <Textarea
+                      value={formData.notes || ''}
+                      onChange={(e) => updateField('notes', e.target.value)}
+                      placeholder="Any additional notes..."
+                      rows={2}
+                    />
+                  </div>
+                </div>
               </section>
             </div>
           </div>

@@ -19,7 +19,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import type { Batch } from '@/types';
-import { getProductCount } from '@/lib/store';
 
 interface BatchListProps {
   batches: Batch[];
@@ -28,6 +27,7 @@ interface BatchListProps {
   onCreateBatch: (name: string, notes: string) => void;
   onDeleteBatch: (id: string) => void;
   onUpdateBatch: (id: string, name: string, notes: string) => void;
+  productCounts: Record<string, number>;
 }
 
 export function BatchList({
@@ -37,6 +37,7 @@ export function BatchList({
   onCreateBatch,
   onDeleteBatch,
   onUpdateBatch,
+  productCounts,
 }: BatchListProps) {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -133,7 +134,7 @@ export function BatchList({
         ) : (
           <ul className="space-y-1">
             {batches.map((batch) => {
-              const productCount = getProductCount(batch.id);
+              const productCount = productCounts[batch.id] || 0;
               const isSelected = selectedBatchId === batch.id;
 
               return (

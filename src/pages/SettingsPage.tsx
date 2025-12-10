@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Save, Check, AlertCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Save, Check, AlertCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
@@ -7,39 +7,68 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { getSettings, updateSettings, isShopifyConfigured } from '@/lib/store';
-import type { Settings } from '@/types';
+import { useSettings } from '@/hooks/use-database';
 
 export default function SettingsPage() {
-  const [settings, setSettings] = useState<Settings>(getSettings());
+  const { settings, loading, updateSettings, isShopifyConfigured } = useSettings();
+  const [formData, setFormData] = useState({
+    shopify_store_url: '',
+    shopify_access_token: '',
+    default_images_per_product: 9,
+    default_currency: 'GBP',
+  });
   const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (settings) {
+      setFormData({
+        shopify_store_url: settings.shopify_store_url,
+        shopify_access_token: settings.shopify_access_token,
+        default_images_per_product: settings.default_images_per_product,
+        default_currency: settings.default_currency,
+      });
+    }
+  }, [settings]);
+
   const shopifyConnected = isShopifyConfigured();
 
-  const handleChange = <K extends keyof Settings>(field: K, value: Settings[K]) => {
-    setSettings(prev => ({ ...prev, [field]: value }));
+  const handleChange = <K extends keyof typeof formData>(field: K, value: typeof formData[K]) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
   };
 
   const handleSave = async () => {
     setIsSaving(true);
     
     // Validate
-    if (settings.default_images_per_product < 1) {
+    if (formData.default_images_per_product < 1) {
       toast.error('Images per product must be at least 1');
       setIsSaving(false);
       return;
     }
 
-    updateSettings({
-      shopify_store_url: settings.shopify_store_url.trim(),
-      shopify_access_token: settings.shopify_access_token.trim(),
-      default_images_per_product: settings.default_images_per_product,
-      default_currency: settings.default_currency.trim() || 'GBP',
+    const success = await updateSettings({
+      shopify_store_url: formData.shopify_store_url.trim(),
+      shopify_access_token: formData.shopify_access_token.trim(),
+      default_images_per_product: formData.default_images_per_product,
+      default_currency: formData.default_currency.trim() || 'GBP',
     });
 
-    await new Promise(resolve => setTimeout(resolve, 300));
     setIsSaving(false);
-    toast.success('Settings saved');
+    
+    if (success) {
+      toast.success('Settings saved');
+    }
   };
+
+  if (loading) {
+    return (
+      <AppLayout>
+        <div className="h-full flex items-center justify-center">
+          <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
@@ -78,7 +107,7 @@ export default function SettingsPage() {
                 <Input
                   id="shopify_store_url"
                   type="url"
-                  value={settings.shopify_store_url}
+                  value={formData.shopify_store_url}
                   onChange={(e) => handleChange('shopify_store_url', e.target.value)}
                   placeholder="https://yourstore.myshopify.com"
                 />
@@ -92,7 +121,7 @@ export default function SettingsPage() {
                 <Input
                   id="shopify_access_token"
                   type="password"
-                  value={settings.shopify_access_token}
+                  value={formData.shopify_access_token}
                   onChange={(e) => handleChange('shopify_access_token', e.target.value)}
                   placeholder="shpat_xxxxxxxxxxxxxxxx"
                 />
@@ -129,7 +158,7 @@ export default function SettingsPage() {
                     type="number"
                     min={1}
                     max={20}
-                    value={settings.default_images_per_product}
+                    value={formData.default_images_per_product}
                     onChange={(e) => handleChange('default_images_per_product', parseInt(e.target.value) || 9)}
                   />
                   <p className="text-xs text-muted-foreground">
@@ -141,7 +170,7 @@ export default function SettingsPage() {
                   <Label htmlFor="default_currency">Default Currency</Label>
                   <Input
                     id="default_currency"
-                    value={settings.default_currency}
+                    value={formData.default_currency}
                     onChange={(e) => handleChange('default_currency', e.target.value.toUpperCase())}
                     placeholder="GBP"
                     maxLength={3}
@@ -158,7 +187,10 @@ export default function SettingsPage() {
           <div className="flex justify-end">
             <Button onClick={handleSave} disabled={isSaving}>
               {isSaving ? (
-                <>Saving...</>
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Saving...
+                </>
               ) : (
                 <>
                   <Save className="w-4 h-4 mr-2" />

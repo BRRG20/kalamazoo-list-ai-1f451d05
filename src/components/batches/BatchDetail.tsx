@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { 
   Upload, 
   Sparkles, 
@@ -6,20 +6,22 @@ import {
   ShoppingBag, 
   Grid3X3,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Image as ImageIcon
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Progress } from '@/components/ui/progress';
 import { ProductCard } from './ProductCard';
+import { useSettings } from '@/hooks/use-database';
 import type { Batch, Product, ProductImage } from '@/types';
-import { isShopifyConfigured, getSettings } from '@/lib/store';
 
 interface BatchDetailProps {
   batch: Batch;
   products: Product[];
-  getProductImages: (productId: string) => ProductImage[];
+  getProductImages: (productId: string) => Promise<ProductImage[]>;
   onUploadImages: (files: File[]) => void;
   onAutoGroup: (imagesPerProduct: number) => void;
   onGenerateAll: () => void;
@@ -30,6 +32,9 @@ interface BatchDetailProps {
   selectedProductIds: Set<string>;
   isGenerating: boolean;
   isCreatingShopify: boolean;
+  pendingImageCount: number;
+  isUploading: boolean;
+  uploadProgress: number;
 }
 
 export function BatchDetail({
@@ -46,11 +51,34 @@ export function BatchDetail({
   selectedProductIds,
   isGenerating,
   isCreatingShopify,
+  pendingImageCount,
+  isUploading,
+  uploadProgress,
 }: BatchDetailProps) {
-  const settings = getSettings();
-  const [imagesPerProduct, setImagesPerProduct] = useState(settings.default_images_per_product);
+  const { settings, isShopifyConfigured } = useSettings();
+  const [imagesPerProduct, setImagesPerProduct] = useState(settings?.default_images_per_product || 9);
+  const [productImages, setProductImages] = useState<Record<string, ProductImage[]>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const shopifyConfigured = isShopifyConfigured();
+
+  // Update imagesPerProduct when settings load
+  useEffect(() => {
+    if (settings?.default_images_per_product) {
+      setImagesPerProduct(settings.default_images_per_product);
+    }
+  }, [settings?.default_images_per_product]);
+
+  // Fetch images for all products
+  useEffect(() => {
+    const fetchAllImages = async () => {
+      const imagesMap: Record<string, ProductImage[]> = {};
+      for (const product of products) {
+        imagesMap[product.id] = await getProductImages(product.id);
+      }
+      setProductImages(imagesMap);
+    };
+    fetchAllImages();
+  }, [products, getProductImages]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -97,6 +125,27 @@ export function BatchDetail({
           </div>
         </div>
 
+        {/* Upload progress */}
+        {isUploading && (
+          <div className="mb-4 p-3 bg-muted/50 rounded-lg">
+            <div className="flex items-center gap-2 mb-2">
+              <Loader2 className="w-4 h-4 animate-spin text-primary" />
+              <span className="text-sm text-muted-foreground">Uploading images...</span>
+            </div>
+            <Progress value={uploadProgress} className="h-2" />
+          </div>
+        )}
+
+        {/* Pending images indicator */}
+        {pendingImageCount > 0 && !isUploading && (
+          <div className="mb-4 p-3 bg-primary/10 rounded-lg flex items-center gap-2">
+            <ImageIcon className="w-4 h-4 text-primary" />
+            <span className="text-sm text-foreground">
+              {pendingImageCount} image(s) ready. Set images per product and click "Auto-group".
+            </span>
+          </div>
+        )}
+
         {/* Actions bar */}
         <div className="flex flex-wrap items-center gap-3">
           <input
@@ -110,8 +159,13 @@ export function BatchDetail({
           <Button
             variant="outline"
             onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading}
           >
-            <Upload className="w-4 h-4 mr-2" />
+            {isUploading ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Upload className="w-4 h-4 mr-2" />
+            )}
             Upload Images
           </Button>
 
@@ -133,6 +187,7 @@ export function BatchDetail({
           <Button
             variant="outline"
             onClick={() => onAutoGroup(imagesPerProduct)}
+            disabled={pendingImageCount === 0}
           >
             <Grid3X3 className="w-4 h-4 mr-2" />
             Auto-group
@@ -221,7 +276,7 @@ export function BatchDetail({
               <ProductCard
                 key={product.id}
                 product={product}
-                images={getProductImages(product.id)}
+                images={productImages[product.id] || []}
                 isSelected={selectedProductIds.has(product.id)}
                 onToggleSelect={() => onToggleProductSelection(product.id)}
                 onEdit={() => onEditProduct(product.id)}
