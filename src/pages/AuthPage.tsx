@@ -12,20 +12,16 @@ import { supabase } from '@/integrations/supabase/client';
 
 const ACCESS_DENIED_MESSAGE = 'Access restricted. This app is currently limited to authorised users only.';
 
-// Server-side email authorization check
+// Server-side email authorization check using SECURITY DEFINER function
 async function checkEmailAuthorized(email: string): Promise<boolean> {
-  const { data, error } = await supabase
-    .from('authorized_emails')
-    .select('email')
-    .ilike('email', email)
-    .maybeSingle();
+  const { data, error } = await supabase.rpc('is_email_authorized', { check_email: email });
   
   if (error) {
     console.error('Error checking authorization:', error);
     return false;
   }
   
-  return !!data;
+  return data === true;
 }
 
 export default function AuthPage() {
