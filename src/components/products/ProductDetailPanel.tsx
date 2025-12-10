@@ -61,9 +61,11 @@ export function ProductDetailPanel({
 }: ProductDetailPanelProps) {
   const [formData, setFormData] = useState<Partial<Product>>({});
   const [isListening, setIsListening] = useState(false);
+  const [isParsingVoice, setIsParsingVoice] = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState('');
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [recognitionRef, setRecognitionRef] = useState<any>(null);
 
   useEffect(() => {
     setFormData({
@@ -145,23 +147,128 @@ export function ProductDetailPanel({
       setVoiceTranscript(transcript);
     };
 
+    setRecognitionRef(recognition);
     recognition.start();
   };
 
   const stopVoiceInput = () => {
+    if (recognitionRef) {
+      recognitionRef.stop();
+    }
     setIsListening(false);
-    // Recognition will stop via onend
   };
 
-  const applyVoiceToFields = () => {
+  const applyVoiceToFields = async () => {
     if (!voiceTranscript.trim()) {
       toast.error('No voice transcript to apply');
       return;
     }
     
-    updateField('raw_input_text', (formData.raw_input_text || '') + '\n' + voiceTranscript);
-    toast.success('Voice transcript added to raw input. Click "Generate AI" to parse and apply.');
-    setVoiceTranscript('');
+    setIsParsingVoice(true);
+    
+    try {
+      // Call the parse-voice edge function
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-voice`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({ 
+          transcript: voiceTranscript,
+          existingCondition: formData.condition 
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Voice parsing failed');
+      }
+      
+      const data = await response.json();
+      const parsed = data.parsed;
+      
+      if (Object.keys(parsed).length === 0) {
+        toast.info('No fields detected in voice input. Try speaking more clearly.');
+        return;
+      }
+      
+      // Apply parsed fields to form
+      const fieldUpdates: Partial<Product> = {};
+      const updatedFields: string[] = [];
+      
+      if (parsed.price !== undefined) {
+        fieldUpdates.price = parsed.price;
+        updatedFields.push('price');
+      }
+      if (parsed.department) {
+        fieldUpdates.department = parsed.department;
+        updatedFields.push('department');
+      }
+      if (parsed.era) {
+        fieldUpdates.era = parsed.era;
+        updatedFields.push('era');
+      }
+      if (parsed.condition) {
+        fieldUpdates.condition = parsed.condition;
+        updatedFields.push('condition');
+      }
+      if (parsed.size_label) {
+        fieldUpdates.size_label = parsed.size_label;
+        updatedFields.push('size');
+      }
+      if (parsed.size_recommended) {
+        fieldUpdates.size_recommended = parsed.size_recommended;
+        updatedFields.push('recommended size');
+      }
+      if (parsed.brand) {
+        fieldUpdates.brand = parsed.brand;
+        updatedFields.push('brand');
+      }
+      if (parsed.material) {
+        fieldUpdates.material = parsed.material;
+        updatedFields.push('material');
+      }
+      if (parsed.colour_main) {
+        fieldUpdates.colour_main = parsed.colour_main;
+        updatedFields.push('colour');
+      }
+      if (parsed.colour_secondary) {
+        fieldUpdates.colour_secondary = parsed.colour_secondary;
+        updatedFields.push('secondary colour');
+      }
+      if (parsed.pattern) {
+        fieldUpdates.pattern = parsed.pattern;
+        updatedFields.push('pattern');
+      }
+      if (parsed.fit) {
+        fieldUpdates.fit = parsed.fit;
+        updatedFields.push('fit');
+      }
+      if (parsed.garment_type) {
+        fieldUpdates.garment_type = parsed.garment_type;
+        updatedFields.push('garment type');
+      }
+      if (parsed.notes) {
+        fieldUpdates.notes = (formData.notes || '') + '\n' + parsed.notes;
+        updatedFields.push('notes');
+      }
+      
+      // Update form data
+      setFormData(prev => ({ ...prev, ...fieldUpdates }));
+      
+      // Also add transcript to raw input for reference
+      updateField('raw_input_text', (formData.raw_input_text || '') + '\n' + voiceTranscript);
+      
+      toast.success(`Updated: ${updatedFields.join(', ')}`);
+      setVoiceTranscript('');
+      
+    } catch (error) {
+      console.error('Voice parsing error:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to parse voice input');
+    } finally {
+      setIsParsingVoice(false);
+    }
   };
 
   const CopyButton = ({ text, field }: { text: string; field: string }) => (
@@ -628,8 +735,19 @@ export function ProductDetailPanel({
                       )}
                     </Button>
                     {voiceTranscript && (
-                      <Button variant="outline" onClick={applyVoiceToFields}>
-                        Apply to Fields
+                      <Button 
+                        variant="outline" 
+                        onClick={applyVoiceToFields}
+                        disabled={isParsingVoice}
+                      >
+                        {isParsingVoice ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Parsing...
+                          </>
+                        ) : (
+                          'Apply to Fields'
+                        )}
                       </Button>
                     )}
                   </div>
