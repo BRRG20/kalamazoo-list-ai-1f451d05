@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   X, 
   ChevronLeft, 
@@ -6,6 +6,7 @@ import {
   Sparkles, 
   Mic, 
   MicOff,
+  Square,
   Copy, 
   Check,
   Save,
@@ -67,7 +68,7 @@ export function ProductDetailPanel({
   const [voiceTranscript, setVoiceTranscript] = useState('');
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [recognitionRef, setRecognitionRef] = useState<any>(null);
+  const recognitionRef = useRef<any>(null);
 
   useEffect(() => {
     setFormData({
@@ -129,16 +130,33 @@ export function ProductDetailPanel({
       return;
     }
 
+    // Clear previous transcript when starting new recording
+    setVoiceTranscript('');
+
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
+    recognition.lang = 'en-GB';
 
-    recognition.onstart = () => setIsListening(true);
-    recognition.onend = () => setIsListening(false);
-    recognition.onerror = () => {
+    recognition.onstart = () => {
+      console.log('Voice recognition started');
+      setIsListening(true);
+    };
+    
+    recognition.onend = () => {
+      console.log('Voice recognition ended');
       setIsListening(false);
-      toast.error('Voice recognition error. Please try again.');
+    };
+    
+    recognition.onerror = (event: any) => {
+      console.error('Voice recognition error:', event.error);
+      setIsListening(false);
+      if (event.error === 'not-allowed') {
+        toast.error('Microphone access denied. Please allow microphone access and try again.');
+      } else if (event.error !== 'aborted') {
+        toast.error('Voice recognition error. Please try again.');
+      }
     };
 
     recognition.onresult = (event: any) => {
@@ -146,19 +164,45 @@ export function ProductDetailPanel({
       for (let i = 0; i < event.results.length; i++) {
         transcript += event.results[i][0].transcript;
       }
+      console.log('Transcript:', transcript);
       setVoiceTranscript(transcript);
     };
 
-    setRecognitionRef(recognition);
-    recognition.start();
+    recognitionRef.current = recognition;
+    
+    try {
+      recognition.start();
+      toast.info('Listening... Speak now');
+    } catch (error) {
+      console.error('Failed to start recognition:', error);
+      toast.error('Failed to start voice input. Please try again.');
+    }
   };
 
   const stopVoiceInput = () => {
-    if (recognitionRef) {
-      recognitionRef.stop();
+    console.log('Stopping voice input');
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {
+        console.log('Recognition already stopped');
+      }
     }
     setIsListening(false);
   };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch (e) {
+          // Ignore
+        }
+      }
+    };
+  }, []);
 
   const applyVoiceToFields = async () => {
     if (!voiceTranscript.trim()) {
@@ -839,26 +883,36 @@ export function ProductDetailPanel({
               <section>
                 <h3 className="font-semibold text-foreground mb-3">Voice Input & Notes</h3>
                 <div className="space-y-4">
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant={isListening ? 'destructive' : 'outline'}
-                      onClick={isListening ? stopVoiceInput : startVoiceInput}
-                    >
-                      {isListening ? (
-                        <>
-                          <MicOff className="w-4 h-4 mr-2" />
-                          Stop Recording
-                        </>
-                      ) : (
-                        <>
-                          <Mic className="w-4 h-4 mr-2" />
-                          Start Voice Input
-                        </>
-                      )}
-                    </Button>
-                    {voiceTranscript && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {!isListening ? (
+                      <Button
+                        variant="outline"
+                        onClick={startVoiceInput}
+                        disabled={isParsingVoice}
+                      >
+                        <Mic className="w-4 h-4 mr-2" />
+                        Start Recording
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="destructive"
+                        onClick={stopVoiceInput}
+                      >
+                        <Square className="w-4 h-4 mr-2" />
+                        Stop Recording
+                      </Button>
+                    )}
+                    
+                    {isListening && (
+                      <span className="text-sm text-destructive animate-pulse flex items-center gap-2">
+                        <span className="w-2 h-2 bg-destructive rounded-full animate-pulse" />
+                        Recording...
+                      </span>
+                    )}
+                    
+                    {voiceTranscript && !isListening && (
                       <Button 
-                        variant="outline" 
+                        variant="default" 
                         onClick={applyVoiceToFields}
                         disabled={isParsingVoice}
                       >
@@ -868,17 +922,36 @@ export function ProductDetailPanel({
                             Parsing...
                           </>
                         ) : (
-                          'Apply to Fields'
+                          <>
+                            <Sparkles className="w-4 h-4 mr-2" />
+                            Apply to Fields
+                          </>
                         )}
+                      </Button>
+                    )}
+                    
+                    {voiceTranscript && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setVoiceTranscript('')}
+                      >
+                        Clear
                       </Button>
                     )}
                   </div>
                   
                   {voiceTranscript && (
-                    <div className="p-3 bg-muted/50 rounded-lg">
-                      <Label className="text-xs">Voice Transcript:</Label>
-                      <p className="text-sm mt-1">{voiceTranscript}</p>
+                    <div className="p-3 bg-muted/50 rounded-lg border border-border">
+                      <Label className="text-xs text-muted-foreground">Voice Transcript:</Label>
+                      <p className="text-sm mt-1 text-foreground">{voiceTranscript}</p>
                     </div>
+                  )}
+                  
+                  {!voiceTranscript && !isListening && (
+                    <p className="text-xs text-muted-foreground">
+                      Speak product details like "Price 25 pounds, women's department, 90s era, condition very good with minor bobbling on sleeves"
+                    </p>
                   )}
 
                   <div>
