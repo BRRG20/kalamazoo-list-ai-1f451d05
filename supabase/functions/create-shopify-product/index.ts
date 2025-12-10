@@ -58,8 +58,16 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+    
+    // Ensure https:// prefix exists
+    if (!storeUrl.startsWith('https://') && !storeUrl.startsWith('http://')) {
+      storeUrl = `https://${storeUrl}`;
+    }
+    
     // Remove trailing slash
     storeUrl = storeUrl.replace(/\/$/, '');
+    
+    console.log(`Using Shopify store URL: ${storeUrl}`);
 
     const results: { 
       productId: string; 
