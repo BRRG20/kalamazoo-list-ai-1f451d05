@@ -151,6 +151,19 @@ export default function SettingsPage() {
                 </AlertDescription>
               </Alert>
 
+              {shopifyConnected && (
+                <div className="flex justify-end pt-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={() => toast.info('Contact your administrator to disconnect Shopify')}
+                  >
+                    Disconnect Shopify
+                  </Button>
+                </div>
+              )}
+
               {!shopifyConnected && (
                 <Alert>
                   <AlertCircle className="h-4 w-4" />
