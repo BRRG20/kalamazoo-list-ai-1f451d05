@@ -10,6 +10,7 @@ import {
   DragStartEvent,
   DragEndEvent,
   DragOverEvent,
+  useDroppable,
 } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -92,9 +93,12 @@ export function ImageGroupManager({
     // Determine destination
     let destGroupId: string | null = null;
     let destIsUnassigned = false;
+    let destIsNewGroup = false;
 
     if (overId === 'unassigned-pool') {
       destIsUnassigned = true;
+    } else if (overId === 'new-group-dropzone') {
+      destIsNewGroup = true;
     } else {
       // Check if dropped on a group or an image within a group
       const destGroup = groups.find(g => 
@@ -107,7 +111,11 @@ export function ImageGroupManager({
 
     // Handle movement
     if (activeSource.type === 'unassigned') {
-      if (destGroupId) {
+      if (destIsNewGroup) {
+        // Create new group from unassigned image
+        onUpdateUnassigned(unassignedImages.filter(url => url !== activeUrl));
+        onCreateNewGroup([activeUrl]);
+      } else if (destGroupId) {
         // Move from unassigned to group
         onUpdateUnassigned(unassignedImages.filter(url => url !== activeUrl));
         const newGroups = groups.map(g => {
@@ -119,7 +127,21 @@ export function ImageGroupManager({
         onUpdateGroups(newGroups);
       }
     } else if (activeSource.groupId) {
-      if (destIsUnassigned) {
+      if (destIsNewGroup) {
+        // Move from group to new group
+        const newGroups = groups.map(g => {
+          if (g.productId === activeSource.groupId) {
+            return { 
+              ...g, 
+              images: g.images.filter(url => url !== activeUrl),
+              selectedImages: new Set([...g.selectedImages].filter(url => url !== activeUrl))
+            };
+          }
+          return g;
+        });
+        onUpdateGroups(newGroups);
+        onCreateNewGroup([activeUrl]);
+      } else if (destIsUnassigned) {
         // Move from group to unassigned
         const newGroups = groups.map(g => {
           if (g.productId === activeSource.groupId) {
@@ -328,6 +350,32 @@ export function ImageGroupManager({
 
   const activeImageUrl = activeId;
 
+  // Drop zone component for creating new groups
+  const NewGroupDropZone = () => {
+    const { isOver, setNodeRef } = useDroppable({
+      id: 'new-group-dropzone',
+    });
+
+    return (
+      <div
+        ref={setNodeRef}
+        className={`
+          border-2 border-dashed rounded-lg p-6 transition-all
+          flex items-center justify-center gap-2
+          ${isOver 
+            ? 'border-primary bg-primary/10 text-primary' 
+            : 'border-muted-foreground/30 text-muted-foreground hover:border-muted-foreground/50'
+          }
+        `}
+      >
+        <Plus className="w-5 h-5" />
+        <span className="text-sm font-medium">
+          {isOver ? 'Drop to create new product' : 'Drag image here to create new product'}
+        </span>
+      </div>
+    );
+  };
+
   return (
     <DndContext
       sensors={sensors}
@@ -387,17 +435,8 @@ export function ImageGroupManager({
           ))}
         </div>
 
-        {/* Create new group button */}
-        {unassignedImages.length > 0 && (
-          <Button
-            variant="outline"
-            className="w-full border-dashed"
-            onClick={() => handleCreateGroupFromUnassigned(unassignedImages.slice(0, imagesPerProduct))}
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Create New Product Group from Unassigned
-          </Button>
-        )}
+        {/* Drop zone to create new group */}
+        <NewGroupDropZone />
       </div>
 
       <DragOverlay>
