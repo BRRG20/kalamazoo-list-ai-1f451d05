@@ -95,6 +95,8 @@ export type Database = {
           currency: string
           department: Database["public"]["Enums"]["department"] | null
           description: string | null
+          description_style_a: string | null
+          description_style_b: string | null
           era: Database["public"]["Enums"]["era"] | null
           etsy_tags: string | null
           fit: string | null
@@ -129,6 +131,8 @@ export type Database = {
           currency?: string
           department?: Database["public"]["Enums"]["department"] | null
           description?: string | null
+          description_style_a?: string | null
+          description_style_b?: string | null
           era?: Database["public"]["Enums"]["era"] | null
           etsy_tags?: string | null
           fit?: string | null
@@ -163,6 +167,8 @@ export type Database = {
           currency?: string
           department?: Database["public"]["Enums"]["department"] | null
           description?: string | null
+          description_style_a?: string | null
+          description_style_b?: string | null
           era?: Database["public"]["Enums"]["era"] | null
           etsy_tags?: string | null
           fit?: string | null

@@ -31,6 +31,8 @@ export interface Product {
   raw_input_text: string;
   title: string;
   description: string;
+  description_style_a: string;
+  description_style_b: string;
   price: number;
   currency: string;
   era: Era;

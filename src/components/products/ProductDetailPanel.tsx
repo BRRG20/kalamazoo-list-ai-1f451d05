@@ -28,12 +28,13 @@ interface ProductDetailPanelProps {
   onSave: (updates: Partial<Product>) => void;
   onUpdateImage: (imageId: string, updates: Partial<ProductImage>) => void;
   onReorderImages: (imageId: string, newPosition: number) => void;
-  onGenerateAI: () => void;
+  onGenerateAI: (regenerateOnly?: 'title' | 'style_a' | 'style_b' | 'all') => void;
   onPrevious?: () => void;
   onNext?: () => void;
   hasPrevious: boolean;
   hasNext: boolean;
   isGenerating: boolean;
+  regeneratingField?: string | null;
 }
 
 const departments: Department[] = ['Women', 'Men', 'Unisex', 'Kids'];
@@ -56,6 +57,7 @@ export function ProductDetailPanel({
   hasPrevious,
   hasNext,
   isGenerating,
+  regeneratingField,
 }: ProductDetailPanelProps) {
   const [formData, setFormData] = useState<Partial<Product>>({});
   const [isListening, setIsListening] = useState(false);
@@ -85,6 +87,8 @@ export function ProductDetailPanel({
       collections_tags: product.collections_tags,
       etsy_tags: product.etsy_tags,
       description: product.description,
+      description_style_a: product.description_style_a,
+      description_style_b: product.description_style_b,
       listing_block: product.listing_block,
       raw_input_text: product.raw_input_text,
       notes: product.notes,
@@ -205,15 +209,15 @@ export function ProductDetailPanel({
           <div className="flex items-center gap-2">
             <Button
               variant="default"
-              onClick={onGenerateAI}
+              onClick={() => onGenerateAI('all')}
               disabled={isGenerating}
             >
-              {isGenerating ? (
+              {isGenerating && !regeneratingField ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               ) : (
                 <Sparkles className="w-4 h-4 mr-2" />
               )}
-              Generate AI
+              Generate All
             </Button>
             <Button onClick={handleSave} disabled={isSaving}>
               {isSaving ? (
@@ -249,14 +253,33 @@ export function ProductDetailPanel({
                 <div className="grid gap-4">
                   <div className="flex items-center gap-2">
                     <div className="flex-1">
-                      <Label>Title</Label>
+                      <Label>Title (max 80 chars)</Label>
                       <Input
                         value={formData.title || ''}
                         onChange={(e) => updateField('title', e.target.value)}
-                        placeholder="e.g. 90s Red Chunky Jumper – Women's L"
+                        placeholder="Vintage 90s Brand Womens Grey Hoodie Size L"
+                        maxLength={80}
                       />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {(formData.title || '').length}/80 characters
+                      </p>
                     </div>
-                    <CopyButton text={formData.title || ''} field="Title" />
+                    <div className="flex flex-col gap-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onGenerateAI('title')}
+                        disabled={isGenerating}
+                        title="Regenerate title only"
+                      >
+                        {regeneratingField === 'title' ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <Sparkles className="w-3 h-3" />
+                        )}
+                      </Button>
+                      <CopyButton text={formData.title || ''} field="Title" />
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
@@ -505,33 +528,80 @@ export function ProductDetailPanel({
                 </div>
               </section>
 
-              {/* Description & Listing Block */}
+              {/* Description Styles */}
               <section>
-                <h3 className="font-semibold text-foreground mb-3">Description & Listing Block</h3>
+                <h3 className="font-semibold text-foreground mb-3">Descriptions</h3>
                 <div className="space-y-4">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <Label>Style A – Ultra Minimal (~55-65 words)</Label>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onGenerateAI('style_a')}
+                          disabled={isGenerating}
+                          title="Regenerate Style A only"
+                        >
+                          {regeneratingField === 'style_a' ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Sparkles className="w-3 h-3" />
+                          )}
+                        </Button>
+                        <CopyButton text={formData.description_style_a || ''} field="Style A" />
+                      </div>
+                    </div>
+                    <Textarea
+                      value={formData.description_style_a || ''}
+                      onChange={(e) => updateField('description_style_a', e.target.value)}
+                      placeholder="Ultra minimal description..."
+                      rows={6}
+                    />
+                  </div>
+                  
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <Label>Style B – Natural Minimal SEO (~70-80 words)</Label>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onGenerateAI('style_b')}
+                          disabled={isGenerating}
+                          title="Regenerate Style B only"
+                        >
+                          {regeneratingField === 'style_b' ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Sparkles className="w-3 h-3" />
+                          )}
+                        </Button>
+                        <CopyButton text={formData.description_style_b || ''} field="Style B" />
+                      </div>
+                    </div>
+                    <Textarea
+                      value={formData.description_style_b || ''}
+                      onChange={(e) => updateField('description_style_b', e.target.value)}
+                      placeholder="Natural minimal SEO description..."
+                      rows={6}
+                    />
+                  </div>
+
                   <div className="flex items-start gap-2">
                     <div className="flex-1">
-                      <Label>Description</Label>
+                      <Label>Legacy Description (for Shopify)</Label>
                       <Textarea
                         value={formData.description || ''}
                         onChange={(e) => updateField('description', e.target.value)}
-                        placeholder="A beautiful vintage piece..."
+                        placeholder="Description used for Shopify..."
                         rows={4}
                       />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Tip: Copy Style A or B above to use as your Shopify description
+                      </p>
                     </div>
                     <CopyButton text={formData.description || ''} field="Description" />
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <div className="flex-1">
-                      <Label>Listing Block (auto-generated)</Label>
-                      <Textarea
-                        value={formData.listing_block || ''}
-                        readOnly
-                        rows={6}
-                        className="bg-muted/50"
-                      />
-                    </div>
-                    <CopyButton text={formData.listing_block || ''} field="Listing block" />
                   </div>
                 </div>
               </section>
