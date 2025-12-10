@@ -505,7 +505,9 @@ export default function BatchesPage() {
               isGenerating={isGenerating}
               generationProgress={generationProgress}
               isCreatingShopify={isCreatingShopify}
-              pendingImageCount={pendingImageUrls.length}
+              pendingImageUrls={pendingImageUrls}
+              onRemovePendingImage={(index) => setPendingImageUrls(prev => prev.filter((_, i) => i !== index))}
+              onClearAllPendingImages={() => setPendingImageUrls([])}
               isUploading={uploading}
               uploadProgress={progress}
               uploadStartTime={uploadStartTime}
