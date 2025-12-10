@@ -14,7 +14,218 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      batches: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          notes: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      images: {
+        Row: {
+          batch_id: string | null
+          created_at: string
+          id: string
+          include_in_shopify: boolean
+          position: number
+          product_id: string | null
+          url: string
+        }
+        Insert: {
+          batch_id?: string | null
+          created_at?: string
+          id?: string
+          include_in_shopify?: boolean
+          position?: number
+          product_id?: string | null
+          url: string
+        }
+        Update: {
+          batch_id?: string | null
+          created_at?: string
+          id?: string
+          include_in_shopify?: boolean
+          position?: number
+          product_id?: string | null
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "images_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "images_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      products: {
+        Row: {
+          batch_id: string
+          brand: string | null
+          collections_tags: string | null
+          colour_main: string | null
+          colour_secondary: string | null
+          condition: Database["public"]["Enums"]["condition_type"] | null
+          created_at: string
+          currency: string
+          department: Database["public"]["Enums"]["department"] | null
+          description: string | null
+          era: Database["public"]["Enums"]["era"] | null
+          etsy_tags: string | null
+          fit: string | null
+          flaws: string | null
+          garment_type: string | null
+          id: string
+          listing_block: string | null
+          made_in: string | null
+          material: string | null
+          notes: string | null
+          pattern: string | null
+          price: number | null
+          raw_input_text: string | null
+          shopify_handle: string | null
+          shopify_product_id: string | null
+          shopify_tags: string | null
+          size_label: string | null
+          size_recommended: string | null
+          sku: string | null
+          status: Database["public"]["Enums"]["product_status"]
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          batch_id: string
+          brand?: string | null
+          collections_tags?: string | null
+          colour_main?: string | null
+          colour_secondary?: string | null
+          condition?: Database["public"]["Enums"]["condition_type"] | null
+          created_at?: string
+          currency?: string
+          department?: Database["public"]["Enums"]["department"] | null
+          description?: string | null
+          era?: Database["public"]["Enums"]["era"] | null
+          etsy_tags?: string | null
+          fit?: string | null
+          flaws?: string | null
+          garment_type?: string | null
+          id?: string
+          listing_block?: string | null
+          made_in?: string | null
+          material?: string | null
+          notes?: string | null
+          pattern?: string | null
+          price?: number | null
+          raw_input_text?: string | null
+          shopify_handle?: string | null
+          shopify_product_id?: string | null
+          shopify_tags?: string | null
+          size_label?: string | null
+          size_recommended?: string | null
+          sku?: string | null
+          status?: Database["public"]["Enums"]["product_status"]
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          batch_id?: string
+          brand?: string | null
+          collections_tags?: string | null
+          colour_main?: string | null
+          colour_secondary?: string | null
+          condition?: Database["public"]["Enums"]["condition_type"] | null
+          created_at?: string
+          currency?: string
+          department?: Database["public"]["Enums"]["department"] | null
+          description?: string | null
+          era?: Database["public"]["Enums"]["era"] | null
+          etsy_tags?: string | null
+          fit?: string | null
+          flaws?: string | null
+          garment_type?: string | null
+          id?: string
+          listing_block?: string | null
+          made_in?: string | null
+          material?: string | null
+          notes?: string | null
+          pattern?: string | null
+          price?: number | null
+          raw_input_text?: string | null
+          shopify_handle?: string | null
+          shopify_product_id?: string | null
+          shopify_tags?: string | null
+          size_label?: string | null
+          size_recommended?: string | null
+          sku?: string | null
+          status?: Database["public"]["Enums"]["product_status"]
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "products_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      settings: {
+        Row: {
+          created_at: string
+          default_currency: string
+          default_images_per_product: number
+          id: string
+          shopify_access_token: string | null
+          shopify_store_url: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          default_currency?: string
+          default_images_per_product?: number
+          id?: string
+          shopify_access_token?: string | null
+          shopify_store_url?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          default_currency?: string
+          default_images_per_product?: number
+          id?: string
+          shopify_access_token?: string | null
+          shopify_store_url?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +234,15 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      condition_type: "Excellent" | "Very good" | "Good" | "Fair"
+      department: "Women" | "Men" | "Unisex" | "Kids"
+      era: "80s" | "90s" | "Y2K" | "Modern"
+      product_status:
+        | "new"
+        | "generated"
+        | "ready_for_shopify"
+        | "created_in_shopify"
+        | "error"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +369,17 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      condition_type: ["Excellent", "Very good", "Good", "Fair"],
+      department: ["Women", "Men", "Unisex", "Kids"],
+      era: ["80s", "90s", "Y2K", "Modern"],
+      product_status: [
+        "new",
+        "generated",
+        "ready_for_shopify",
+        "created_in_shopify",
+        "error",
+      ],
+    },
   },
 } as const
