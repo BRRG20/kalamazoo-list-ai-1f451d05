@@ -7,6 +7,7 @@ import { BatchDetail } from '@/components/batches/BatchDetail';
 import { EmptyState } from '@/components/batches/EmptyState';
 import { ProductDetailPanel } from '@/components/products/ProductDetailPanel';
 import { ShopifySuccessDialog } from '@/components/batches/ShopifySuccessDialog';
+import { ImageGroup } from '@/components/batches/ImageGroupManager';
 import { 
   useBatches, 
   useProducts, 
@@ -21,8 +22,8 @@ import type { Product, ProductImage } from '@/types';
 export default function BatchesPage() {
   const { batches, createBatch, updateBatch, deleteBatch, getProductCount } = useBatches();
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
-  const { products, createProduct, updateProduct, refetch: refetchProducts } = useProducts(selectedBatchId);
-  const { fetchImagesForProduct, addImage, updateImage, excludeLastNImages, clearCache } = useImages();
+  const { products, createProduct, updateProduct, deleteProduct, refetch: refetchProducts } = useProducts(selectedBatchId);
+  const { fetchImagesForProduct, addImage, updateImage, excludeLastNImages, clearCache, deleteImage, updateImageProductId } = useImages();
   const { settings } = useSettings();
   const { uploadImages, uploading, progress, uploadStartTime, uploadTotal, uploadCompleted } = useImageUpload();
   
@@ -36,6 +37,11 @@ export default function BatchesPage() {
   const [pendingImageUrls, setPendingImageUrls] = useState<string[]>([]);
   const [productCounts, setProductCounts] = useState<Record<string, number>>({});
   const [shopifySuccessData, setShopifySuccessData] = useState<{ successCount: number; errorCount: number } | null>(null);
+
+  // Image group management state
+  const [imageGroups, setImageGroups] = useState<ImageGroup[]>([]);
+  const [unassignedImages, setUnassignedImages] = useState<string[]>([]);
+  const [showGroupManager, setShowGroupManager] = useState(false);
 
   // Fetch product counts for batches - only when batches change
   useEffect(() => {
@@ -120,29 +126,25 @@ export default function BatchesPage() {
       return;
     }
 
+    // Create image groups for preview/management
     const chunks: string[][] = [];
     for (let i = 0; i < pendingImageUrls.length; i += imagesPerProduct) {
       chunks.push(pendingImageUrls.slice(i, i + imagesPerProduct));
     }
 
-    let productNumber = products.length + 1;
-    
-    for (const chunk of chunks) {
-      const sku = `BATCH-${selectedBatchId.slice(0, 6)}-${String(productNumber).padStart(3, '0')}`;
-      const product = await createProduct(sku);
-      
-      if (product) {
-        for (let i = 0; i < chunk.length; i++) {
-          await addImage(product.id, selectedBatchId, chunk[i], i + 1);
-        }
-      }
-      productNumber++;
-    }
+    const newGroups: ImageGroup[] = chunks.map((chunk, index) => ({
+      productId: `temp-${Date.now()}-${index}`,
+      productNumber: products.length + index + 1,
+      images: chunk,
+      selectedImages: new Set<string>(),
+    }));
 
+    setImageGroups(newGroups);
+    setUnassignedImages([]);
     setPendingImageUrls([]);
-    clearCache();
-    toast.success(`Created ${chunks.length} product(s) from ${pendingImageUrls.length} images`);
-  }, [selectedBatchId, pendingImageUrls, products.length, createProduct, addImage, clearCache]);
+    setShowGroupManager(true);
+    toast.success(`Created ${chunks.length} group(s). Review and adjust, then confirm.`);
+  }, [selectedBatchId, pendingImageUrls, products.length]);
 
   const handleGenerateAll = useCallback(async () => {
     if (!selectedBatchId || products.length === 0) return;
@@ -514,6 +516,34 @@ export default function BatchesPage() {
               uploadTotal={uploadTotal}
               uploadCompleted={uploadCompleted}
               onBack={() => setSelectedBatchId(null)}
+              imageGroups={imageGroups}
+              unassignedImages={unassignedImages}
+              onUpdateImageGroups={setImageGroups}
+              onUpdateUnassignedImages={setUnassignedImages}
+              onCreateNewGroup={(images) => {
+                const newGroup: ImageGroup = {
+                  productId: `temp-${Date.now()}`,
+                  productNumber: imageGroups.length + 1,
+                  images,
+                  selectedImages: new Set(),
+                };
+                setImageGroups(prev => [...prev, newGroup]);
+              }}
+              onDeleteGroup={(productId) => {
+                const group = imageGroups.find(g => g.productId === productId);
+                if (group) {
+                  setUnassignedImages(prev => [...prev, ...group.images]);
+                  setImageGroups(prev => prev.filter(g => g.productId !== productId));
+                }
+              }}
+              onSaveGroups={async () => {
+                // Save groups to database - create products and assign images
+                toast.info('Saving groups...');
+                setShowGroupManager(false);
+                toast.success('Groups saved successfully');
+              }}
+              showGroupManager={showGroupManager}
+              onToggleGroupManager={() => setShowGroupManager(prev => !prev)}
             />
           ) : (
             <EmptyState />

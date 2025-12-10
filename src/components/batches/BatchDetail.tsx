@@ -10,7 +10,8 @@ import {
   Image as ImageIcon,
   ArrowLeft,
   X,
-  Trash2
+  Trash2,
+  Settings2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +19,7 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
 import { ProductCard } from './ProductCard';
+import { ImageGroupManager, ImageGroup } from './ImageGroupManager';
 import { useSettings } from '@/hooks/use-database';
 import type { Batch, Product, ProductImage } from '@/types';
 
@@ -45,6 +47,16 @@ interface BatchDetailProps {
   uploadTotal: number;
   uploadCompleted: number;
   onBack?: () => void;
+  // New props for image group management
+  imageGroups: ImageGroup[];
+  unassignedImages: string[];
+  onUpdateImageGroups: (groups: ImageGroup[]) => void;
+  onUpdateUnassignedImages: (images: string[]) => void;
+  onCreateNewGroup: (images: string[]) => void;
+  onDeleteGroup: (productId: string) => void;
+  onSaveGroups: () => void;
+  showGroupManager: boolean;
+  onToggleGroupManager: () => void;
 }
 
 export function BatchDetail({
@@ -71,6 +83,15 @@ export function BatchDetail({
   uploadTotal,
   uploadCompleted,
   onBack,
+  imageGroups,
+  unassignedImages,
+  onUpdateImageGroups,
+  onUpdateUnassignedImages,
+  onCreateNewGroup,
+  onDeleteGroup,
+  onSaveGroups,
+  showGroupManager,
+  onToggleGroupManager,
 }: BatchDetailProps) {
   const { settings, isShopifyConfigured } = useSettings();
   const [imagesPerProduct, setImagesPerProduct] = useState(settings?.default_images_per_product || 9);
@@ -287,6 +308,19 @@ export function BatchDetail({
             <span className="hidden sm:inline">Auto-</span>group
           </Button>
 
+          {/* Toggle Group Manager */}
+          {(imageGroups.length > 0 || unassignedImages.length > 0) && (
+            <Button
+              variant={showGroupManager ? "default" : "outline"}
+              size="sm"
+              onClick={onToggleGroupManager}
+              className="text-xs md:text-sm"
+            >
+              <Settings2 className="w-4 h-4 mr-1 md:mr-2" />
+              <span className="hidden sm:inline">Manage</span> Groups
+            </Button>
+          )}
+
           <Button
             variant="default"
             size="sm"
@@ -358,9 +392,21 @@ export function BatchDetail({
         </div>
       </div>
 
-      {/* Products grid */}
-      <div className="flex-1 p-4">
-        {products.length === 0 ? (
+      {/* Content area */}
+      <div className="flex-1 p-4 overflow-auto">
+        {/* Image Group Manager Mode */}
+        {showGroupManager && (imageGroups.length > 0 || unassignedImages.length > 0) ? (
+          <ImageGroupManager
+            groups={imageGroups}
+            unassignedImages={unassignedImages}
+            onUpdateGroups={onUpdateImageGroups}
+            onUpdateUnassigned={onUpdateUnassignedImages}
+            onCreateNewGroup={onCreateNewGroup}
+            onDeleteGroup={onDeleteGroup}
+            onSaveGroups={onSaveGroups}
+            imagesPerProduct={imagesPerProduct}
+          />
+        ) : products.length === 0 ? (
           <div className="text-center py-16">
             <Upload className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="font-medium text-foreground mb-2">No products yet</h3>

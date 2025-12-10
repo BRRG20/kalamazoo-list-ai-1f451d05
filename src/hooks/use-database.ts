@@ -367,6 +367,21 @@ export function useImages() {
     return images;
   };
 
+  const fetchImagesForBatch = async (batchId: string): Promise<ProductImage[]> => {
+    const { data, error } = await supabase
+      .from('images')
+      .select('*')
+      .eq('batch_id', batchId)
+      .order('position', { ascending: true });
+    
+    if (error) {
+      console.error('Error fetching batch images:', error);
+      return [];
+    }
+    
+    return (data || []).map(mapImage);
+  };
+
   const addImage = async (productId: string, batchId: string, url: string, position: number) => {
     const userId = await getCurrentUserId();
     if (!userId) {
@@ -400,6 +415,34 @@ export function useImages() {
     return newImage;
   };
 
+  const addImageToBatch = async (batchId: string, url: string, position: number) => {
+    const userId = await getCurrentUserId();
+    if (!userId) {
+      console.error('No user ID for image upload');
+      return null;
+    }
+
+    const { data, error } = await supabase
+      .from('images')
+      .insert({ 
+        product_id: null, 
+        batch_id: batchId,
+        url, 
+        position,
+        include_in_shopify: true,
+        user_id: userId,
+      })
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error adding image to batch:', error);
+      return null;
+    }
+    
+    return mapImage(data);
+  };
+
   const updateImage = async (id: string, productId: string, updates: Partial<ProductImage>) => {
     const dbUpdates: Record<string, any> = {};
     if (updates.position !== undefined) dbUpdates.position = updates.position;
@@ -421,6 +464,36 @@ export function useImages() {
         img.id === id ? { ...img, ...updates } : img
       ).sort((a, b) => a.position - b.position),
     }));
+    return true;
+  };
+
+  const updateImageProductId = async (imageId: string, newProductId: string | null, position: number) => {
+    const { error } = await supabase
+      .from('images')
+      .update({ product_id: newProductId, position })
+      .eq('id', imageId);
+    
+    if (error) {
+      console.error('Error updating image product:', error);
+      return false;
+    }
+    
+    return true;
+  };
+
+  const deleteImage = async (id: string) => {
+    const { error } = await supabase
+      .from('images')
+      .delete()
+      .eq('id', id);
+    
+    if (error) {
+      console.error('Error deleting image:', error);
+      return false;
+    }
+    
+    // Clear all caches since we don't know which product this was in
+    setImageCache({});
     return true;
   };
 
@@ -446,7 +519,18 @@ export function useImages() {
     }
   };
 
-  return { fetchImagesForProduct, addImage, updateImage, excludeLastNImages, clearCache, imageCache };
+  return { 
+    fetchImagesForProduct, 
+    fetchImagesForBatch,
+    addImage, 
+    addImageToBatch,
+    updateImage, 
+    updateImageProductId,
+    deleteImage,
+    excludeLastNImages, 
+    clearCache, 
+    imageCache 
+  };
 }
 
 // Settings Hook
