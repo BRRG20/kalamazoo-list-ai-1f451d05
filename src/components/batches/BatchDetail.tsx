@@ -11,7 +11,8 @@ import {
   ArrowLeft,
   X,
   Trash2,
-  Settings2
+  Settings2,
+  Plus
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,7 +28,7 @@ interface BatchDetailProps {
   batch: Batch;
   products: Product[];
   getProductImages: (productId: string) => Promise<ProductImage[]>;
-  onUploadImages: (files: File[]) => void;
+  onUploadImages: (files: File[], addToUnassigned?: boolean) => void;
   onAutoGroup: (imagesPerProduct: number) => void;
   onGenerateAll: () => void;
   onExcludeLast2All: () => void;
@@ -57,6 +58,7 @@ interface BatchDetailProps {
   onSaveGroups: () => void;
   showGroupManager: boolean;
   onToggleGroupManager: () => void;
+  onAddToUnassigned: (urls: string[]) => void;
 }
 
 export function BatchDetail({
@@ -92,6 +94,7 @@ export function BatchDetail({
   onSaveGroups,
   showGroupManager,
   onToggleGroupManager,
+  onAddToUnassigned,
 }: BatchDetailProps) {
   const { settings, isShopifyConfigured } = useSettings();
   const [imagesPerProduct, setImagesPerProduct] = useState(settings?.default_images_per_product || 9);
@@ -118,15 +121,29 @@ export function BatchDetail({
     fetchAllImages();
   }, [products, getProductImages]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, addToUnassigned: boolean = false) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-      onUploadImages(Array.from(files));
+      onUploadImages(Array.from(files), addToUnassigned);
     }
     // Reset input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  };
+
+  const handleUploadToUnassigned = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.multiple = true;
+    input.onchange = (e) => {
+      const files = (e.target as HTMLInputElement).files;
+      if (files && files.length > 0) {
+        onUploadImages(Array.from(files), true);
+      }
+    };
+    input.click();
   };
 
   const handleCreateInShopify = () => {
@@ -265,22 +282,40 @@ export function BatchDetail({
             accept="image/*"
             multiple
             className="hidden"
-            onChange={handleFileChange}
+            onChange={(e) => handleFileChange(e, false)}
           />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading}
-            className="text-xs md:text-sm"
-          >
-            {isUploading ? (
-              <Loader2 className="w-4 h-4 mr-1 md:mr-2 animate-spin" />
-            ) : (
-              <Upload className="w-4 h-4 mr-1 md:mr-2" />
+          
+          {/* Upload buttons group */}
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              className="text-xs md:text-sm"
+            >
+              {isUploading ? (
+                <Loader2 className="w-4 h-4 mr-1 md:mr-2 animate-spin" />
+              ) : (
+                <Upload className="w-4 h-4 mr-1 md:mr-2" />
+              )}
+              <span className="hidden sm:inline">Upload</span> Images
+            </Button>
+            
+            {/* Show "Add to Pool" when there are existing groups */}
+            {(imageGroups.length > 0 || products.length > 0) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleUploadToUnassigned}
+                disabled={isUploading}
+                className="text-xs md:text-sm text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950"
+                title="Add images directly to unassigned pool"
+              >
+                <Plus className="w-4 h-4" />
+              </Button>
             )}
-            <span className="hidden sm:inline">Upload</span> Images
-          </Button>
+          </div>
 
           <div className="flex items-center gap-1 md:gap-2">
             <Label htmlFor="imagesPerProduct" className="text-xs md:text-sm whitespace-nowrap hidden sm:inline">

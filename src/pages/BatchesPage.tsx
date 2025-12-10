@@ -99,7 +99,7 @@ export default function BatchesPage() {
     }
   }, [selectedBatchId, deleteBatch]);
 
-  const handleUploadImages = useCallback(async (files: File[]) => {
+  const handleUploadImages = useCallback(async (files: File[], addToUnassigned: boolean = false) => {
     if (!selectedBatchId) return;
     
     // Show warning for large batches
@@ -117,8 +117,16 @@ export default function BatchesPage() {
         await addImageToBatch(selectedBatchId, urls[i], i);
       }
       
-      setPendingImageUrls(prev => [...prev, ...urls]);
-      toast.success(`${urls.length} image(s) uploaded and saved. Click "Auto-group" to create products.`);
+      if (addToUnassigned) {
+        // Add directly to unassigned pool
+        setUnassignedImages(prev => [...prev, ...urls]);
+        setShowGroupManager(true);
+        toast.success(`${urls.length} image(s) added to unassigned pool.`);
+      } else {
+        // Add to pending for auto-grouping
+        setPendingImageUrls(prev => [...prev, ...urls]);
+        toast.success(`${urls.length} image(s) uploaded. Click "Auto-group" to create products.`);
+      }
     } else {
       toast.error('Failed to upload images');
     }
@@ -581,6 +589,10 @@ export default function BatchesPage() {
               }}
               showGroupManager={showGroupManager}
               onToggleGroupManager={() => setShowGroupManager(prev => !prev)}
+              onAddToUnassigned={(urls) => {
+                setUnassignedImages(prev => [...prev, ...urls]);
+                setShowGroupManager(true);
+              }}
             />
           ) : (
             <EmptyState />
