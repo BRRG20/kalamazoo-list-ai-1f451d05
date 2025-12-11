@@ -68,8 +68,20 @@ export function UnassignedImagePool({
   };
 
   const handleCreateGroup = () => {
-    if (selectedImages.size === 0) return;
-    onCreateGroup([...selectedImages]);
+    // If no images are selected but there's only one image, use that
+    const imagesToUse = selectedImages.size > 0 
+      ? [...selectedImages] 
+      : images.length === 1 
+        ? [images[0]] 
+        : [];
+    
+    if (imagesToUse.length === 0) {
+      console.warn('No images selected for creating group');
+      return;
+    }
+    
+    console.log('Creating group with images:', imagesToUse);
+    onCreateGroup(imagesToUse);
     setSelectedImages(new Set());
   };
 
@@ -265,14 +277,24 @@ export function UnassignedImagePool({
           ))}
         </div>
 
-        {/* Actions */}
-        {selectedImages.size > 0 && (
-          <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-border">
-            <Button size="sm" onClick={handleCreateGroup}>
-              <Plus className="w-4 h-4 mr-1" />
-              Create New Product ({selectedImages.size} images)
-            </Button>
+        {/* Actions - Always show create button if there are images */}
+        <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-border">
+          {/* Create New Product button - always visible if there are images */}
+          <Button 
+            size="sm" 
+            onClick={handleCreateGroup}
+            disabled={images.length === 0}
+          >
+            <Plus className="w-4 h-4 mr-1" />
+            {selectedImages.size > 0 
+              ? `Create New Product (${selectedImages.size} images)` 
+              : images.length === 1 
+                ? 'Create New Product (1 image)'
+                : 'Create New Product (select images first)'
+            }
+          </Button>
 
+          {selectedImages.size > 0 && (
             <Button 
               size="sm" 
               variant="destructive"
@@ -284,34 +306,34 @@ export function UnassignedImagePool({
               <Trash2 className="w-4 h-4 mr-1" />
               Delete Selected
             </Button>
+          )}
 
-            {groups.length > 0 && (
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">or add to:</span>
-                <Select value={targetGroupId} onValueChange={setTargetGroupId}>
-                  <SelectTrigger className="w-40 h-8 bg-background">
-                    <SelectValue placeholder="Select group" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-popover">
-                    {groups.map((group) => (
-                      <SelectItem key={group.productId} value={group.productId}>
-                        Product {String(group.productNumber).padStart(3, '0')}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button 
-                  size="sm" 
-                  variant="outline" 
-                  onClick={handleAddToExistingGroup}
-                  disabled={!targetGroupId}
-                >
-                  Add
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
+          {groups.length > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">or add to:</span>
+              <Select value={targetGroupId} onValueChange={setTargetGroupId}>
+                <SelectTrigger className="w-40 h-8 bg-background">
+                  <SelectValue placeholder="Select group" />
+                </SelectTrigger>
+                <SelectContent className="bg-popover">
+                  {groups.map((group) => (
+                    <SelectItem key={group.productId} value={group.productId}>
+                      Product {String(group.productNumber).padStart(3, '0')}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button 
+                size="sm" 
+                variant="outline" 
+                onClick={handleAddToExistingGroup}
+                disabled={!targetGroupId || selectedImages.size === 0}
+              >
+                Add
+              </Button>
+            </div>
+          )}
+        </div>
 
         <p className="text-xs text-muted-foreground mt-3">
           Click images to preview. Use checkboxes to select, then create products or add to existing groups.
