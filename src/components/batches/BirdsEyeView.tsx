@@ -1,11 +1,17 @@
 import { useState } from 'react';
-import { X, ZoomIn, Check } from 'lucide-react';
+import { X, ZoomIn, Check, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import type { Product, ProductImage } from '@/types';
 import { cn } from '@/lib/utils';
+
+interface MoveHistory {
+  imageIds: string[];
+  fromProductId: string;
+  toProductId: string;
+}
 
 interface BirdsEyeViewProps {
   products: Product[];
@@ -25,6 +31,7 @@ export function BirdsEyeView({
   const [dropTargetProductId, setDropTargetProductId] = useState<string | null>(null);
   const [recentlyMovedImages, setRecentlyMovedImages] = useState<Set<string>>(new Set());
   const [recentlyReceivedProduct, setRecentlyReceivedProduct] = useState<string | null>(null);
+  const [lastMove, setLastMove] = useState<MoveHistory | null>(null);
 
   const toggleImageSelection = (imageId: string, productId: string) => {
     setSelectedImages(prev => {
@@ -38,10 +45,11 @@ export function BirdsEyeView({
     });
   };
 
-  const handleMoveToProduct = (targetProductId: string) => {
+  const handleMoveToProduct = (targetProductId: string, isUndo = false) => {
     // Group selected images by source product
     const imagesByProduct = new Map<string, string[]>();
     const movedImageIds: string[] = [];
+    let fromProductId = '';
     
     selectedImages.forEach(({ imageId, productId }) => {
       if (productId !== targetProductId) {
@@ -50,15 +58,28 @@ export function BirdsEyeView({
         }
         imagesByProduct.get(productId)!.push(imageId);
         movedImageIds.push(imageId);
+        fromProductId = productId; // Track for undo (simple case: single source)
       }
     });
 
     if (movedImageIds.length === 0) return;
 
     // Move images from each source product
-    imagesByProduct.forEach((imageIds, fromProductId) => {
-      onMoveImages(imageIds, fromProductId, targetProductId);
+    imagesByProduct.forEach((imageIds, sourceProductId) => {
+      onMoveImages(imageIds, sourceProductId, targetProductId);
+      fromProductId = sourceProductId;
     });
+
+    // Save move history for undo (only if not already undoing)
+    if (!isUndo) {
+      setLastMove({
+        imageIds: movedImageIds,
+        fromProductId,
+        toProductId: targetProductId,
+      });
+    } else {
+      setLastMove(null);
+    }
 
     // Show visual feedback
     setRecentlyMovedImages(new Set(movedImageIds));
@@ -68,7 +89,11 @@ export function BirdsEyeView({
     const targetProduct = products.find(p => p.id === targetProductId);
     const targetName = targetProduct?.title || `Product #${products.findIndex(p => p.id === targetProductId) + 1}`;
     
-    toast.success(`Moved ${movedImageIds.length} image${movedImageIds.length > 1 ? 's' : ''} to ${targetName}`);
+    toast.success(
+      isUndo 
+        ? `Undone: ${movedImageIds.length} image${movedImageIds.length > 1 ? 's' : ''} returned`
+        : `Moved ${movedImageIds.length} image${movedImageIds.length > 1 ? 's' : ''} to ${targetName}`
+    );
 
     // Clear visual feedback after animation
     setTimeout(() => {
@@ -78,6 +103,43 @@ export function BirdsEyeView({
 
     setSelectedImages(new Map());
     setDropTargetProductId(null);
+  };
+
+  const handleUndo = () => {
+    if (!lastMove) return;
+    
+    // Reconstruct selection for undo
+    const undoSelection = new Map<string, { imageId: string; productId: string }>();
+    lastMove.imageIds.forEach(imageId => {
+      undoSelection.set(imageId, { imageId, productId: lastMove.toProductId });
+    });
+    
+    setSelectedImages(undoSelection);
+    
+    // Move back to original product
+    setTimeout(() => {
+      lastMove.imageIds.forEach(imageId => {
+        onMoveImages([imageId], lastMove.toProductId, lastMove.fromProductId);
+      });
+      
+      // Show visual feedback
+      setRecentlyMovedImages(new Set(lastMove.imageIds));
+      setRecentlyReceivedProduct(lastMove.fromProductId);
+      
+      const fromProduct = products.find(p => p.id === lastMove.fromProductId);
+      const fromName = fromProduct?.title || `Product #${products.findIndex(p => p.id === lastMove.fromProductId) + 1}`;
+      
+      toast.success(`Undone: ${lastMove.imageIds.length} image${lastMove.imageIds.length > 1 ? 's' : ''} returned to ${fromName}`);
+      
+      // Clear visual feedback after animation
+      setTimeout(() => {
+        setRecentlyMovedImages(new Set());
+        setRecentlyReceivedProduct(null);
+      }, 1500);
+      
+      setSelectedImages(new Map());
+      setLastMove(null);
+    }, 50);
   };
 
   const clearSelection = () => {
@@ -124,6 +186,17 @@ export function BirdsEyeView({
                 Click a product card to move images there
               </span>
             </div>
+          )}
+          {lastMove && selectedImages.size === 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleUndo}
+              className="ml-4 gap-1.5 text-amber-600 border-amber-300 hover:bg-amber-50 hover:text-amber-700"
+            >
+              <Undo2 className="w-4 h-4" />
+              Undo move ({lastMove.imageIds.length} image{lastMove.imageIds.length > 1 ? 's' : ''})
+            </Button>
           )}
         </div>
         <Button variant="ghost" size="icon" onClick={onClose}>
