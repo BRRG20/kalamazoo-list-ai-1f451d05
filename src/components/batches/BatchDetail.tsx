@@ -26,7 +26,7 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
 import { ProductCard } from './ProductCard';
-import { ImageGroupManager, ImageGroup } from './ImageGroupManager';
+import { ImageGroupManager, ImageGroup, MatchingProgress } from './ImageGroupManager';
 import { BirdsEyeView } from './BirdsEyeView';
 import { useSettings } from '@/hooks/use-database';
 import {
@@ -90,6 +90,7 @@ interface BatchDetailProps {
   onRegroupUnassigned?: (imagesPerProduct: number) => void;
   onSmartMatch?: () => Promise<void>;
   isMatching?: boolean;
+  matchingProgress?: MatchingProgress;
 }
 
 export function BatchDetail({
@@ -139,6 +140,7 @@ export function BatchDetail({
   onRegroupUnassigned,
   onSmartMatch,
   isMatching,
+  matchingProgress,
 }: BatchDetailProps) {
   const { settings, isShopifyConfigured } = useSettings();
   const [imagesPerProduct, setImagesPerProduct] = useState(settings?.default_images_per_product || 9);
@@ -678,6 +680,7 @@ export function BatchDetail({
             onRegroupUnassigned={onRegroupUnassigned}
             onSmartMatch={onSmartMatch}
             isMatching={isMatching}
+            matchingProgress={matchingProgress}
           />
         ) : products.length === 0 ? (
           <div className="text-center py-16">

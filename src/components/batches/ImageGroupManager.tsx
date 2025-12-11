@@ -19,6 +19,7 @@ import {
 } from '@dnd-kit/sortable';
 import { Plus, Images, Layers, Grid3X3, Sparkles, Undo2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,6 +46,14 @@ export interface ImageGroup {
   selectedImages: Set<string>;
 }
 
+// Progress state for AI matching
+export interface MatchingProgress {
+  current: number;
+  total: number;
+  currentBatch: number;
+  totalBatches: number;
+}
+
 interface ImageGroupManagerProps {
   groups: ImageGroup[];
   unassignedImages: string[];
@@ -58,6 +67,7 @@ interface ImageGroupManagerProps {
   onRegroupUnassigned?: (imagesPerProduct: number) => void;
   onSmartMatch?: () => Promise<void>;
   isMatching?: boolean;
+  matchingProgress?: MatchingProgress;
 }
 
 export function ImageGroupManager({
@@ -73,6 +83,7 @@ export function ImageGroupManager({
   onRegroupUnassigned,
   onSmartMatch,
   isMatching,
+  matchingProgress,
 }: ImageGroupManagerProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeSource, setActiveSource] = useState<{ type: 'group' | 'unassigned'; groupId?: string } | null>(null);
@@ -545,6 +556,29 @@ export function ImageGroupManager({
             </Button>
           </div>
         </div>
+
+        {/* AI Matching Progress Bar */}
+        {isMatching && matchingProgress && (
+          <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="flex items-center gap-2 text-primary font-medium">
+                <Sparkles className="w-4 h-4 animate-pulse" />
+                AI Matching in progress...
+              </span>
+              <span className="text-muted-foreground">
+                Batch {matchingProgress.currentBatch} of {matchingProgress.totalBatches}
+              </span>
+            </div>
+            <Progress 
+              value={(matchingProgress.current / matchingProgress.total) * 100} 
+              className="h-2"
+            />
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>{matchingProgress.current} of {matchingProgress.total} images processed</span>
+              <span>{Math.round((matchingProgress.current / matchingProgress.total) * 100)}%</span>
+            </div>
+          </div>
+        )}
 
         {/* Unassigned Images Pool */}
         {unassignedImages.length > 0 && (
