@@ -14,7 +14,8 @@ import {
   Settings2,
   Plus,
   RefreshCw,
-  Search
+  Search,
+  LayoutGrid
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,6 +24,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
 import { ProductCard } from './ProductCard';
 import { ImageGroupManager, ImageGroup } from './ImageGroupManager';
+import { BirdsEyeView } from './BirdsEyeView';
 import { useSettings } from '@/hooks/use-database';
 import type { Batch, Product, ProductImage } from '@/types';
 
@@ -67,6 +69,7 @@ interface BatchDetailProps {
   onToggleGroupManager: () => void;
   onAddToUnassigned: (urls: string[]) => void;
   onMoveImageBetweenProducts?: (imageUrl: string, fromProductId: string, toProductId: string) => void;
+  onMoveImagesById?: (imageIds: string[], targetProductId: string) => void;
   onReorderProductImages?: (productId: string, imageIds: string[]) => void;
 }
 
@@ -110,6 +113,7 @@ export function BatchDetail({
   onToggleGroupManager,
   onAddToUnassigned,
   onMoveImageBetweenProducts,
+  onMoveImagesById,
   onReorderProductImages,
 }: BatchDetailProps) {
   const { settings, isShopifyConfigured } = useSettings();
@@ -117,6 +121,7 @@ export function BatchDetail({
   const [productImages, setProductImages] = useState<Record<string, ProductImage[]>>({});
   const [imagesLoading, setImagesLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showBirdsEyeView, setShowBirdsEyeView] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const shopifyConfigured = isShopifyConfigured();
   
@@ -491,6 +496,17 @@ export function BatchDetail({
             <ImageMinus className="w-4 h-4 mr-2" />
             Exclude Last 2 Images
           </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowBirdsEyeView(true)}
+            disabled={products.length === 0}
+            className="text-xs md:text-sm"
+          >
+            <LayoutGrid className="w-4 h-4 mr-1 md:mr-2" />
+            <span className="hidden sm:inline">Birds Eye</span>
+          </Button>
         </div>
 
         {/* Shopify row */}
@@ -661,6 +677,32 @@ export function BatchDetail({
           </div>
         )}
       </div>
+
+      {/* Birds Eye View */}
+      {showBirdsEyeView && (
+        <BirdsEyeView
+          products={products}
+          productImages={productImages}
+          onClose={() => {
+            setShowBirdsEyeView(false);
+            handleRefreshImages();
+          }}
+          onMoveImages={(imageIds, fromProductId, toProductId) => {
+            if (onMoveImagesById) {
+              onMoveImagesById(imageIds, toProductId);
+            } else if (onMoveImageBetweenProducts) {
+              // Fallback to URL-based move
+              const fromImages = productImages[fromProductId] || [];
+              imageIds.forEach(imageId => {
+                const image = fromImages.find(img => img.id === imageId);
+                if (image) {
+                  onMoveImageBetweenProducts(image.url, fromProductId, toProductId);
+                }
+              });
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
