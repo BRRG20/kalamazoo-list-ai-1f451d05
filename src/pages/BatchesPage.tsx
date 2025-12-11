@@ -351,12 +351,18 @@ const handleSelectBatch = useCallback((id: string) => {
       return;
     }
 
-    if (unassignedImages.length > 100) {
-      toast.error('AI matching works best with 100 or fewer images. Please use auto-group first, then refine.');
+    if (unassignedImages.length > 500) {
+      toast.error('AI matching supports up to 500 images. Please use auto-group first to split into smaller sets.');
       return;
     }
 
     setIsMatching(true);
+    
+    // Show progress toast for large batches
+    const estimatedBatches = Math.ceil(unassignedImages.length / 15);
+    if (unassignedImages.length > 30) {
+      toast.info(`Processing ${unassignedImages.length} images in ${estimatedBatches} batches. This may take a minute...`);
+    }
     
     try {
       const { data, error } = await supabase.functions.invoke('match-images', {
@@ -386,7 +392,13 @@ const handleSelectBatch = useCallback((id: string) => {
 
       setImageGroups(prev => [...prev, ...newGroups]);
       setUnassignedImages([]);
-      toast.success(`AI matched ${unassignedImages.length} images into ${newGroups.length} product groups.`);
+      
+      // Show stats if available
+      if (data.stats) {
+        toast.success(`AI matched ${data.stats.totalImages} images into ${newGroups.length} product groups (${data.stats.batchesProcessed} batches processed).`);
+      } else {
+        toast.success(`AI matched ${unassignedImages.length} images into ${newGroups.length} product groups.`);
+      }
     } catch (error) {
       console.error('Smart match error:', error);
       toast.error(error instanceof Error ? error.message : 'AI matching failed');

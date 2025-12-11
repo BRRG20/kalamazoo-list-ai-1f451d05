@@ -5,8 +5,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const MAX_IMAGES = 200;
-const BATCH_SIZE = 20; // Process images in batches
+const MAX_IMAGES = 500;
+const BATCH_SIZE = 15; // Process 15 images at a time for best AI accuracy
 
 const SYSTEM_PROMPT = `You are an image similarity expert. Analyze these product images and group them by visual similarity.
 
@@ -51,7 +51,7 @@ serve(async (req) => {
     }
 
     if (imageUrls.length > MAX_IMAGES) {
-      return new Response(JSON.stringify({ error: `Maximum ${MAX_IMAGES} images allowed` }), {
+      return new Response(JSON.stringify({ error: `Maximum ${MAX_IMAGES} images allowed. You have ${imageUrls.length} images.` }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -62,36 +62,61 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    // For smaller batches, process all at once
-    if (imageUrls.length <= BATCH_SIZE) {
-      const groups = await analyzeImageBatch(imageUrls, LOVABLE_API_KEY, 0, imagesPerGroup);
-      return new Response(JSON.stringify({ groups }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    const totalBatches = Math.ceil(imageUrls.length / BATCH_SIZE);
+    console.log(`Processing ${imageUrls.length} images in ${totalBatches} batches of up to ${BATCH_SIZE}`);
 
-    // For larger sets, process in batches and merge results
+    // Process all images in sequential batches
     const allGroups: { imageUrl: string; groupNumber: number }[] = [];
-    let currentGroupOffset = 0;
+    let globalGroupOffset = 0;
 
-    for (let i = 0; i < imageUrls.length; i += BATCH_SIZE) {
-      const batchUrls = imageUrls.slice(i, i + BATCH_SIZE);
-      const batchResult = await analyzeImageBatch(batchUrls, LOVABLE_API_KEY, i, imagesPerGroup);
+    for (let batchStart = 0; batchStart < imageUrls.length; batchStart += BATCH_SIZE) {
+      const batchUrls = imageUrls.slice(batchStart, batchStart + BATCH_SIZE);
+      const batchNumber = Math.floor(batchStart / BATCH_SIZE) + 1;
       
-      // Offset group numbers to avoid conflicts between batches
-      const maxGroupInBatch = Math.max(...batchResult.map((r: any) => r.groupNumber), 0);
-      
-      for (const item of batchResult) {
-        allGroups.push({
-          imageUrl: item.imageUrl,
-          groupNumber: item.groupNumber + currentGroupOffset
-        });
+      console.log(`Processing batch ${batchNumber}/${totalBatches} (${batchUrls.length} images, offset ${batchStart})`);
+
+      try {
+        const batchResult = await analyzeImageBatch(batchUrls, LOVABLE_API_KEY, imagesPerGroup);
+        
+        // Find max group number in this batch to offset next batch
+        const maxGroupInBatch = Math.max(...batchResult.map((r: any) => r.groupNumber), 0);
+        
+        // Add results with offset
+        for (const item of batchResult) {
+          allGroups.push({
+            imageUrl: item.imageUrl,
+            groupNumber: item.groupNumber + globalGroupOffset
+          });
+        }
+        
+        globalGroupOffset += maxGroupInBatch;
+        console.log(`Batch ${batchNumber} complete: ${maxGroupInBatch} groups found, total offset now ${globalGroupOffset}`);
+      } catch (batchError) {
+        console.error(`Batch ${batchNumber} failed:`, batchError);
+        // On batch failure, assign remaining images to individual groups
+        for (const url of batchUrls) {
+          globalGroupOffset++;
+          allGroups.push({ imageUrl: url, groupNumber: globalGroupOffset });
+        }
+        console.log(`Batch ${batchNumber} recovered: assigned ${batchUrls.length} images to individual groups`);
       }
-      
-      currentGroupOffset += maxGroupInBatch;
+
+      // Small delay between batches to avoid rate limiting
+      if (batchStart + BATCH_SIZE < imageUrls.length) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
     }
 
-    return new Response(JSON.stringify({ groups: allGroups }), {
+    console.log(`All ${totalBatches} batches complete: ${allGroups.length} images assigned to ${globalGroupOffset} total groups`);
+
+    return new Response(JSON.stringify({ 
+      groups: allGroups,
+      stats: {
+        totalImages: allGroups.length,
+        totalGroups: globalGroupOffset,
+        batchesProcessed: totalBatches
+      }
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
@@ -108,7 +133,6 @@ serve(async (req) => {
 async function analyzeImageBatch(
   imageUrls: string[], 
   apiKey: string, 
-  startIndex: number,
   imagesPerGroup?: number
 ): Promise<{ imageUrl: string; groupNumber: number }[]> {
   // Build content with images
@@ -168,13 +192,23 @@ Return a JSON array with imageIndex and groupNumber for each image.`
     if (jsonMatch) {
       parsed = JSON.parse(jsonMatch[0]);
     } else {
+      console.error("Failed to parse AI response:", rawContent);
       throw new Error("Could not parse AI response");
     }
   }
 
-  // Map back to URLs
-  return parsed.map((item: { imageIndex: number; groupNumber: number }) => ({
-    imageUrl: imageUrls[item.imageIndex],
-    groupNumber: item.groupNumber
-  }));
+  // Validate and map back to URLs
+  if (!Array.isArray(parsed)) {
+    throw new Error("AI response is not an array");
+  }
+
+  return parsed.map((item: { imageIndex: number; groupNumber: number }) => {
+    if (typeof item.imageIndex !== 'number' || item.imageIndex < 0 || item.imageIndex >= imageUrls.length) {
+      console.warn(`Invalid imageIndex ${item.imageIndex}, defaulting to groupNumber ${item.groupNumber}`);
+    }
+    return {
+      imageUrl: imageUrls[item.imageIndex] || imageUrls[0],
+      groupNumber: item.groupNumber || 1
+    };
+  });
 }
