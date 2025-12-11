@@ -21,6 +21,7 @@ import {
   UPLOAD_LIMITS,
 } from '@/hooks/use-database';
 import { useDefaultTags } from '@/hooks/use-default-tags';
+import { useAIGeneration } from '@/hooks/use-ai-generation';
 import type { Product, ProductImage } from '@/types';
 
 export default function BatchesPage() {
@@ -33,19 +34,38 @@ export default function BatchesPage() {
   const { uploadImages, uploading, progress, uploadStartTime, uploadTotal, uploadCompleted } = useImageUpload();
   const { getMatchingTags } = useDefaultTags();
   
+  // AI Generation hook
+  const aiGeneration = useAIGeneration({
+    fetchImagesForProduct: async (productId: string) => {
+      const images = await fetchImagesForProduct(productId);
+      return images.map(img => ({ url: img.url }));
+    },
+    updateProduct,
+    getMatchingTags,
+  });
+  
+  // Initialize AI generated status when products load
+  useEffect(() => {
+    if (products.length > 0) {
+      aiGeneration.initializeAIGeneratedStatus(products);
+    }
+  }, [products]);
+  
   // Deleted products panel state
   const [showDeletedProducts, setShowDeletedProducts] = useState(false);
   
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [editingProductImages, setEditingProductImages] = useState<ProductImage[]>([]);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generationProgress, setGenerationProgress] = useState({ current: 0, total: 0 });
   const [regeneratingField, setRegeneratingField] = useState<string | null>(null);
   const [isCreatingShopify, setIsCreatingShopify] = useState(false);
   const [pendingImageUrls, setPendingImageUrls] = useState<string[]>([]);
   const [productCounts, setProductCounts] = useState<Record<string, number>>({});
   const [shopifySuccessData, setShopifySuccessData] = useState<{ successCount: number; errorCount: number } | null>(null);
+  
+  // Use AI generation state from hook
+  const isGenerating = aiGeneration.isGenerating;
+  const generationProgress = aiGeneration.generationProgress;
 
   // Image group management state
   const [imageGroups, setImageGroups] = useState<ImageGroup[]>([]);

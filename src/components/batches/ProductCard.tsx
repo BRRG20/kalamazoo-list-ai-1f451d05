@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Edit2, ImageIcon, Trash2, Eye, GripVertical } from 'lucide-react';
+import { Edit2, ImageIcon, Trash2, Eye, GripVertical, Sparkles, Undo2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -17,6 +17,11 @@ interface ProductCardProps {
   onReceiveImage?: (imageUrl: string, fromProductId: string) => void;
   onReorderImages?: (imageIds: string[]) => void;
   isDraggingImage?: boolean;
+  // AI generation props
+  onGenerateAI?: () => void;
+  onUndoAI?: () => void;
+  isGenerating?: boolean;
+  hasUndoState?: boolean;
 }
 
 export function ProductCard({
@@ -29,6 +34,10 @@ export function ProductCard({
   onReceiveImage,
   onReorderImages,
   isDraggingImage,
+  onGenerateAI,
+  onUndoAI,
+  isGenerating,
+  hasUndoState,
 }: ProductCardProps) {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewIndex, setPreviewIndex] = useState(0);
@@ -177,13 +186,23 @@ export function ProductCard({
             <Trash2 className="w-4 h-4 text-destructive-foreground" />
           </button>
 
+          {/* Generating indicator overlay */}
+          {isGenerating && (
+            <div className="absolute inset-0 bg-background/80 flex items-center justify-center">
+              <div className="flex flex-col items-center gap-2">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                <span className="text-sm font-medium text-foreground">Generating...</span>
+              </div>
+            </div>
+          )}
+
           {/* Image count badge */}
           <div className="absolute bottom-2 right-2 bg-foreground/80 text-background text-xs px-2 py-0.5 rounded">
             {images.length} images
           </div>
 
           {/* Mini image strip on hover - draggable & reorderable */}
-          {images.length > 1 && (
+          {images.length > 1 && !isGenerating && (
             <div className="absolute bottom-8 left-0 right-0 px-2 opacity-0 group-hover:opacity-100 transition-opacity">
               <div className="flex gap-1 overflow-x-auto py-1 bg-background/80 rounded px-1">
                 {images.slice(0, 6).map((img, idx) => (
@@ -255,10 +274,51 @@ export function ProductCard({
             {product.department && <span>{product.department}</span>}
           </div>
 
-          <Button variant="outline" size="sm" onClick={onEdit} className="w-full">
-            <Edit2 className="w-3 h-3 mr-2" />
-            Edit
-          </Button>
+          {/* Action buttons */}
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={onEdit} className="flex-1">
+              <Edit2 className="w-3 h-3 mr-2" />
+              Edit
+            </Button>
+            
+            {/* Generate AI button */}
+            {onGenerateAI && (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onGenerateAI();
+                }}
+                disabled={isGenerating || images.length === 0}
+                title={images.length === 0 ? 'No images to analyze' : 'Generate AI for this product'}
+                className="px-2"
+              >
+                {isGenerating ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <Sparkles className="w-3 h-3" />
+                )}
+              </Button>
+            )}
+
+            {/* Undo AI button */}
+            {hasUndoState && onUndoAI && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onUndoAI();
+                }}
+                disabled={isGenerating}
+                title="Undo last AI change"
+                className="px-2 text-amber-600 hover:text-amber-700 border-amber-300 hover:border-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950"
+              >
+                <Undo2 className="w-3 h-3" />
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
