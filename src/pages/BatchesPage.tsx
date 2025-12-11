@@ -582,188 +582,42 @@ const handleSelectBatch = useCallback((id: string) => {
   }, [unassignedImages, imageGroups, settings?.default_images_per_product, saveUndoState]);
 
 
+  // Use the new AI generation hook for bulk operations
   const handleGenerateAll = useCallback(async () => {
     if (!selectedBatchId || products.length === 0) return;
+    await aiGeneration.generateBulk(products, selectedProductIds.size > 0 ? selectedProductIds : undefined);
+  }, [selectedBatchId, products, selectedProductIds, aiGeneration]);
+
+  // Generate bulk 20 - specifically for processing next 20 ungenerated products
+  const handleGenerateBulk20 = useCallback(async () => {
+    if (!selectedBatchId || products.length === 0) return;
+    await aiGeneration.generateBulk(products);
+  }, [selectedBatchId, products, aiGeneration]);
+
+  // Generate AI for a single product
+  const handleGenerateSingleProduct = useCallback(async (productId: string) => {
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
     
-    // Prevent duplicate runs
-    if (isGenerating) {
-      toast.warning('AI generation already in progress');
-      return;
-    }
-    
-    // Debug log to track selection
-    console.log('Generate AI - Selected IDs:', Array.from(selectedProductIds));
-    console.log('Generate AI - Selection size:', selectedProductIds.size);
-    
-    // If products are selected, only generate for those; otherwise generate for NEW products only
-    const hasSelection = selectedProductIds.size > 0;
-    const productsToGenerate = hasSelection 
-      ? products.filter(p => selectedProductIds.has(p.id))
-      : products.filter(p => p.status === 'new'); // Skip already generated products
-    
-    console.log('Generate AI - Products to generate:', productsToGenerate.length);
-    
-    // Deduplicate products by ID to prevent processing the same product twice
-    const uniqueProducts = Array.from(
-      new Map(productsToGenerate.map(p => [p.id, p])).values()
-    );
-    
-    // Filter out products that don't have valid IDs or are already being processed
-    const validProducts = uniqueProducts.filter(p => p && p.id && p.id.trim() !== '');
-    
-    const totalProducts = validProducts.length;
-    
-    console.log('Generate AI - Valid products count:', totalProducts);
-    
-    if (totalProducts === 0) {
-      // Check if all products are already generated
-      const alreadyGenerated = products.filter(p => p.status !== 'new').length;
-      if (alreadyGenerated > 0 && !hasSelection) {
-        toast.info(`All ${alreadyGenerated} products already generated. Select specific products to re-generate.`);
+    const result = await aiGeneration.generateSingleProduct(product);
+    if (!result.success && !result.skipped) {
+      if (result.noImages) {
+        toast.error('This product has no images to analyze.');
       } else {
-        toast.error('No valid products to generate.');
-      }
-      return;
-    }
-    
-    // Show warning for large product counts (20 is the recommended limit)
-    if (totalProducts > UPLOAD_LIMITS.RECOMMENDED_PRODUCTS_FOR_AI) {
-      toast.warning(`Processing ${totalProducts} products. For best stability, generate in batches of ${UPLOAD_LIMITS.RECOMMENDED_PRODUCTS_FOR_AI} or fewer.`, { duration: 5000 });
-    }
-    
-    toast.info(`Generating AI for ${totalProducts} product${totalProducts > 1 ? 's' : ''}...`);
-    
-    setIsGenerating(true);
-    setGenerationProgress({ current: 0, total: totalProducts });
-    
-    let successCount = 0;
-    let errorCount = 0;
-    const processedIds = new Set<string>(); // Track processed products to avoid duplicates
-    
-    // Process in batches of 5 to avoid overwhelming the system
-    const BATCH_SIZE = 5;
-    
-    for (let batchStart = 0; batchStart < totalProducts; batchStart += BATCH_SIZE) {
-      const batchEnd = Math.min(batchStart + BATCH_SIZE, totalProducts);
-      const batch = validProducts.slice(batchStart, batchEnd);
-      
-      // Process this batch in parallel
-      const results = await Promise.allSettled(
-        batch.map(async (product, batchIndex) => {
-          // Skip if already processed (safety check)
-          if (processedIds.has(product.id)) {
-            console.warn(`Skipping duplicate product: ${product.id}`);
-            return { success: true, productId: product.id, skipped: true };
-          }
-          processedIds.add(product.id);
-          
-          try {
-            // Get product images for AI context
-            const images = await fetchImagesForProduct(product.id);
-            
-            // Skip products with no images
-            if (images.length === 0) {
-              console.warn(`Skipping product with no images: ${product.id}`);
-              return { success: false, productId: product.id, noImages: true };
-            }
-            
-            const imageUrls = images.slice(0, 2).map(img => img.url);
-            
-            // Call the edge function
-            const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-listing`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-              },
-              body: JSON.stringify({ product, imageUrls }),
-            });
-            
-            if (!response.ok) {
-              const errorData = await response.json();
-              console.error(`Error generating for ${product.sku}:`, errorData.error);
-              await updateProduct(product.id, { status: 'error' });
-              return { success: false, productId: product.id };
-            }
-            
-            const data = await response.json();
-            const generated = data.generated;
-            
-            // Get default tags based on garment type, gender, and keywords
-            const garmentType = product.garment_type || generated.garment_type || '';
-            const department = product.department || '';
-            const defaultTags = getMatchingTags({
-              garmentType,
-              department,
-              title: generated.title || product.title || '',
-              description: generated.description_style_a || '',
-              notes: product.notes || ''
-            });
-            
-            // Merge default tags with AI-generated tags
-            let finalShopifyTags = generated.shopify_tags || product.shopify_tags || '';
-            if (defaultTags.length > 0) {
-              const existingTags = finalShopifyTags.split(',').map(t => t.trim()).filter(Boolean);
-              const allTags = [...new Set([...existingTags, ...defaultTags])];
-              finalShopifyTags = allTags.join(', ');
-            }
-            
-            // Update product with generated content
-            await updateProduct(product.id, {
-              status: 'generated',
-              title: generated.title || product.title,
-              description_style_a: generated.description_style_a,
-              description_style_b: generated.description_style_b,
-              shopify_tags: finalShopifyTags,
-              etsy_tags: generated.etsy_tags || product.etsy_tags,
-              collections_tags: generated.collections_tags || product.collections_tags,
-            });
-            
-            return { success: true, productId: product.id };
-            
-          } catch (error) {
-            console.error(`Error generating for ${product.sku}:`, error);
-            await updateProduct(product.id, { status: 'error' });
-            return { success: false, productId: product.id };
-          }
-        })
-      );
-      
-      // Count successes and failures from this batch
-      for (const result of results) {
-        if (result.status === 'fulfilled') {
-          const value = result.value;
-          if (value.skipped) continue; // Don't count skipped products
-          if (value.noImages) {
-            errorCount++;
-          } else if (value.success) {
-            successCount++;
-          } else {
-            errorCount++;
-          }
-        } else {
-          errorCount++;
-        }
-      }
-      
-      // Update progress after each batch
-      setGenerationProgress({ current: batchEnd, total: totalProducts });
-      
-      // Small delay between batches to prevent rate limiting
-      if (batchEnd < totalProducts) {
-        await new Promise(resolve => setTimeout(resolve, 500));
+        toast.error(`AI generation failed: ${result.error || 'Unknown error'}`);
       }
     }
-    
-    setIsGenerating(false);
-    setGenerationProgress({ current: 0, total: 0 });
-    
-    if (errorCount > 0) {
-      toast.warning(`Generated ${successCount} product(s). ${errorCount} failed or had no images.`);
-    } else {
-      toast.success(`AI generated details for ${successCount} product(s)`);
-    }
-  }, [selectedBatchId, products, selectedProductIds, isGenerating, updateProduct, fetchImagesForProduct, getMatchingTags]);
+  }, [products, aiGeneration]);
+
+  // Undo AI for a single product
+  const handleUndoSingleProduct = useCallback(async (productId: string) => {
+    await aiGeneration.undoSingleProduct(productId);
+  }, [aiGeneration]);
+
+  // Undo bulk AI generation
+  const handleUndoBulkGeneration = useCallback(async () => {
+    await aiGeneration.undoBulkGeneration();
+  }, [aiGeneration]);
 
   const handleExcludeLast2All = useCallback(async () => {
     if (!selectedBatchId) return;
@@ -960,7 +814,6 @@ const handleSelectBatch = useCallback((id: string) => {
     const product = products.find(p => p.id === editingProductId);
     if (!product) return;
     
-    setIsGenerating(true);
     if (regenerateOnly && regenerateOnly !== 'all') {
       setRegeneratingField(regenerateOnly);
     }
@@ -1017,7 +870,6 @@ const handleSelectBatch = useCallback((id: string) => {
       console.error('Generation error:', error);
       toast.error(error instanceof Error ? error.message : 'Generation failed');
     } finally {
-      setIsGenerating(false);
       setRegeneratingField(null);
     }
   }, [editingProductId, products, updateProduct, fetchImagesForProduct]);
@@ -1204,6 +1056,15 @@ const handleSelectBatch = useCallback((id: string) => {
               onAutoGroup={handleAutoGroup}
               onReAutoGroupAll={handleReAutoGroupAll}
               onGenerateAll={handleGenerateAll}
+              onGenerateBulk20={handleGenerateBulk20}
+              onGenerateSingleProduct={handleGenerateSingleProduct}
+              onUndoSingleProduct={handleUndoSingleProduct}
+              onUndoBulkGeneration={handleUndoBulkGeneration}
+              isProductGenerating={aiGeneration.isProductGenerating}
+              hasProductUndoState={aiGeneration.hasUndoState}
+              unprocessedCount={aiGeneration.getUnprocessedCount(products)}
+              hasBulkUndoState={aiGeneration.hasBulkUndoState}
+              lastBulkCount={aiGeneration.lastBulkCount}
               onExcludeLast2All={handleExcludeLast2All}
               onCreateInShopify={handleCreateInShopify}
               onEditProduct={setEditingProductId}

@@ -606,20 +606,56 @@ export function BatchDetail({
             </Button>
           )}
 
+          {/* Generate AI (20) - bulk generation button */}
           <Button
             variant="default"
             size="sm"
-            onClick={onGenerateAll}
-            disabled={isGenerating || products.length === 0}
+            onClick={onGenerateBulk20}
+            disabled={isGenerating || products.length === 0 || unprocessedCount === 0}
             className="text-xs md:text-sm"
+            title={unprocessedCount > 0 ? `Generate AI for next ${Math.min(20, unprocessedCount)} unprocessed products` : 'All products have been generated'}
           >
             {isGenerating ? (
               <Loader2 className="w-4 h-4 mr-1 md:mr-2 animate-spin" />
             ) : (
               <Sparkles className="w-4 h-4 mr-1 md:mr-2" />
             )}
-            <span className="hidden sm:inline">Generate</span> AI
+            <span className="hidden sm:inline">Generate</span> AI ({Math.min(20, unprocessedCount)})
           </Button>
+
+          {/* Undo bulk AI generation */}
+          {hasBulkUndoState && onUndoBulkGeneration && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onUndoBulkGeneration}
+              disabled={isGenerating}
+              className="text-xs md:text-sm text-amber-600 hover:text-amber-700 border-amber-300 hover:border-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950"
+              title={`Undo last bulk AI generation (${lastBulkCount} products)`}
+            >
+              <Undo2 className="w-4 h-4 mr-1 md:mr-2" />
+              Undo Bulk ({lastBulkCount})
+            </Button>
+          )}
+
+          {/* Legacy Generate All button for selected products */}
+          {selectedProductIds.size > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onGenerateAll}
+              disabled={isGenerating}
+              className="text-xs md:text-sm"
+              title="Generate AI for selected products only"
+            >
+              {isGenerating ? (
+                <Loader2 className="w-4 h-4 mr-1 md:mr-2 animate-spin" />
+              ) : (
+                <Sparkles className="w-4 h-4 mr-1 md:mr-2" />
+              )}
+              AI Selected ({selectedProductIds.size})
+            </Button>
+          )}
 
           <Button
             variant="outline"
@@ -878,6 +914,10 @@ export function BatchDetail({
                     onMoveImageBetweenProducts?.(imageUrl, fromProductId, product.id)
                   }
                   onReorderImages={(imageIds) => onReorderProductImages?.(product.id, imageIds)}
+                  onGenerateAI={() => onGenerateSingleProduct(product.id)}
+                  onUndoAI={() => onUndoSingleProduct(product.id)}
+                  isGenerating={isProductGenerating(product.id)}
+                  hasUndoState={hasProductUndoState(product.id)}
                 />
               ))}
               {!imagesLoading && products.length > 0 && Object.keys(productImages).length === 0 && (
