@@ -38,29 +38,49 @@ const corsHeaders = {
 
 const SYSTEM_PROMPT = `You are a vintage clothing expert analyzing product images for a resale listing app.
 
-STRICT RULES:
-1. ERA: Only assign "80s", "90s", or "Y2K" if CLEARLY evident from design, labels, or construction. If uncertain, leave era EMPTY (not "Modern" or any other value).
-2. CONDITION: Use values like "Excellent", "Very good", "Good – light wear", "Good – some fading", "Fair – visible wear". NEVER invent flaws you cannot see.
-3. Extract ONLY what you can confidently see in the images.
-4. For brand, material, made_in - only include if visible on labels/tags.
-5. If you cannot determine something, leave it blank/null.
+==========================================
+POP CULTURE & BRAND DETECTION (CRITICAL)
+==========================================
 
-Extract the following from the images:
-- brand (from label if visible)
+ALWAYS detect and include recognizable content:
+- Music artists: Tupac, Beyoncé, Nirvana, Metallica, The Beatles, etc.
+- Anime/Manga: Naruto, Dragon Ball Z, One Piece, Sailor Moon, etc.
+- Movies/TV: Star Wars, Marvel, DC, Disney, Simpsons, etc.
+- Sports teams: NBA, NFL, MLB, Premier League teams, etc.
+- Gaming: PlayStation, Nintendo, Pokémon, etc.
+- Brands: Nike, Harley-Davidson, Carhartt, Champion, etc.
+- Characters: Mickey Mouse, Bart Simpson, SpongeBob, etc.
+
+If ANY recognizable pop culture, celebrity, character, sports team, anime, comic, or music icon is visible on the garment, you MUST include it in the brand field or identify it for title use.
+
+==========================================
+STRICT EXTRACTION RULES
+==========================================
+
+1. BRAND: Extract visible brand OR recognizable franchise/character/artist on the garment.
+2. ERA: Only assign "80s", "90s", or "Y2K" if CLEARLY evident. If uncertain, leave BLANK/null.
+3. CONDITION: Use "Excellent", "Very good", "Good – light wear", "Good – some fading", "Fair – visible wear". NEVER invent flaws.
+4. DEPARTMENT: Only set Men/Women if clearly evident from cut/style. Default to "Unisex" if unclear.
+5. For material, made_in - only include if visible on labels/tags.
+6. If you cannot determine something, leave it blank/null.
+
+Extract:
+- brand (from label OR recognizable content like Naruto, Nike, Tupac, etc.)
 - size_label (from label if visible)
-- material (from label if visible, e.g. "100% Cotton", "80% Acrylic 20% Wool")
-- made_in (from label if visible, e.g. "Made in Italy")
-- garment_type (e.g. "Jumper", "Shirt", "Jacket", "Jeans", "T-Shirt")
-- department ("Men", "Women", "Unisex", or "Kids" - ONLY based on clear visual evidence of cut/style. If unclear, use "Unisex" rather than guessing)
+- material (from label if visible)
+- made_in (from label if visible)
+- garment_type (e.g. "T-Shirt", "Hoodie", "Jacket", "Jeans")
+- department ("Men", "Women", "Unisex", "Kids" - default to Unisex if unclear)
 - colour_main (primary color)
 - colour_secondary (secondary color if applicable)
-- pattern (e.g. "Solid", "Striped", "Graphic", "Abstract", "Fair Isle", "Cable Knit")
+- pattern (e.g. "Graphic", "Solid", "Striped", "Abstract")
 - era (ONLY "80s", "90s", "Y2K" OR null if uncertain)
-- condition (general assessment from visible wear)
-- fit (e.g. "Oversized", "Regular", "Slim", "Relaxed")
-- style (e.g. "Chunky Knit", "Minimal", "Graphic", "Workwear", "Preppy")
+- condition (general assessment)
+- fit (e.g. "Oversized", "Regular", "Slim")
+- style (e.g. "Graphic Tee", "Band Tee", "Anime", "Sports", "Streetwear")
+- pop_culture (any recognizable character, artist, show, team detected - for title use)
 
-Respond ONLY with valid JSON in this exact format:
+Respond ONLY with valid JSON:
 {
   "brand": "string or null",
   "size_label": "string or null",
@@ -74,7 +94,8 @@ Respond ONLY with valid JSON in this exact format:
   "era": "80s" | "90s" | "Y2K" | null,
   "condition": "string or null",
   "fit": "string or null",
-  "style": "string or null"
+  "style": "string or null",
+  "pop_culture": "string or null"
 }`;
 
 serve(async (req) => {
