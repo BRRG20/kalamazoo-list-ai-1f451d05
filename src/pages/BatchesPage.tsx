@@ -502,11 +502,17 @@ const handleSelectBatch = useCallback((id: string) => {
       return;
     }
     
+    // Debug log to track selection
+    console.log('Generate AI - Selected IDs:', Array.from(selectedProductIds));
+    console.log('Generate AI - Selection size:', selectedProductIds.size);
+    
     // If products are selected, only generate for those; otherwise generate for NEW products only
     const hasSelection = selectedProductIds.size > 0;
     const productsToGenerate = hasSelection 
       ? products.filter(p => selectedProductIds.has(p.id))
       : products.filter(p => p.status === 'new'); // Skip already generated products
+    
+    console.log('Generate AI - Products to generate:', productsToGenerate.length);
     
     // Deduplicate products by ID to prevent processing the same product twice
     const uniqueProducts = Array.from(
@@ -517,6 +523,8 @@ const handleSelectBatch = useCallback((id: string) => {
     const validProducts = uniqueProducts.filter(p => p && p.id && p.id.trim() !== '');
     
     const totalProducts = validProducts.length;
+    
+    console.log('Generate AI - Valid products count:', totalProducts);
     
     if (totalProducts === 0) {
       // Check if all products are already generated
@@ -533,6 +541,8 @@ const handleSelectBatch = useCallback((id: string) => {
     if (totalProducts > UPLOAD_LIMITS.RECOMMENDED_PRODUCTS_FOR_AI) {
       toast.warning(`Processing ${totalProducts} products. For best stability, generate in batches of ${UPLOAD_LIMITS.RECOMMENDED_PRODUCTS_FOR_AI} or fewer.`, { duration: 5000 });
     }
+    
+    toast.info(`Generating AI for ${totalProducts} product${totalProducts > 1 ? 's' : ''}...`);
     
     setIsGenerating(true);
     setGenerationProgress({ current: 0, total: totalProducts });
