@@ -268,6 +268,52 @@ const handleSelectBatch = useCallback((id: string) => {
     toast.success(`Loaded ${allBatchImages.length} images (${groups.length} products, ${unassigned.length} unassigned)`);
   }, [selectedBatchId, fetchImagesForBatch, products]);
 
+  // Regroup selected products - collect their images and re-chunk them
+  const handleRegroupSelectedProducts = useCallback(async (productIds: string[], imagesPerProduct: number) => {
+    if (productIds.length === 0) {
+      toast.error('No products selected to regroup.');
+      return;
+    }
+
+    // Fetch images for all selected products
+    const allImages: string[] = [];
+    for (const productId of productIds) {
+      const images = await fetchImagesForProduct(productId);
+      allImages.push(...images.map(img => img.url));
+    }
+
+    if (allImages.length === 0) {
+      toast.error('No images found in selected products.');
+      return;
+    }
+
+    // Create new groups from collected images
+    const chunks: string[][] = [];
+    for (let i = 0; i < allImages.length; i += imagesPerProduct) {
+      chunks.push(allImages.slice(i, i + imagesPerProduct));
+    }
+
+    const newGroups: ImageGroup[] = chunks.map((chunk, index) => ({
+      productId: `temp-regroup-${Date.now()}-${index}`,
+      productNumber: index + 1,
+      images: chunk,
+      selectedImages: new Set<string>(),
+    }));
+
+    // Delete the old products
+    for (const productId of productIds) {
+      await deleteProduct(productId);
+    }
+
+    // Clear selection
+    setSelectedProductIds(new Set());
+
+    setImageGroups(newGroups);
+    setUnassignedImages([]);
+    setShowGroupManager(true);
+    toast.success(`Re-grouped ${allImages.length} images into ${chunks.length} product(s). Review and confirm.`);
+  }, [fetchImagesForProduct, deleteProduct]);
+
   const handleGenerateAll = useCallback(async () => {
     if (!selectedBatchId || products.length === 0) return;
     
@@ -1004,6 +1050,7 @@ const handleSelectBatch = useCallback((id: string) => {
               onMoveImagesById={handleMoveImagesByIdStandalone}
               onReorderProductImages={handleReorderProductImages}
               onLoadAllImagesIntoGroups={handleLoadAllImagesIntoGroups}
+              onRegroupSelectedProducts={handleRegroupSelectedProducts}
             />
           ) : (
             <EmptyState />
