@@ -588,6 +588,10 @@ export function ImageGroupManager({
             onAddToGroup={(url, groupId) => handleAddFromUnassigned(groupId, url)}
             onDeleteImage={handleDeleteImageFromUnassigned}
             groups={groups}
+            onAutoGroupUnassigned={onRegroupUnassigned ? (num) => {
+              saveToHistory('Before auto-group');
+              onRegroupUnassigned(num);
+            } : undefined}
           />
         )}
 
