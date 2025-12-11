@@ -774,6 +774,7 @@ export function BatchDetail({
             onSmartMatch={onSmartMatch}
             isMatching={isMatching}
             matchingProgress={matchingProgress}
+            onOpenProduct={onEditProduct}
           />
         ) : products.length === 0 ? (
           <div className="text-center py-16">

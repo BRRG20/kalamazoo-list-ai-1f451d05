@@ -99,6 +99,7 @@ interface ImageGroupManagerProps {
   onSmartMatch?: () => Promise<void>;
   isMatching?: boolean;
   matchingProgress?: MatchingProgress;
+  onOpenProduct?: (productId: string) => void;
 }
 
 export function ImageGroupManager({
@@ -115,6 +116,7 @@ export function ImageGroupManager({
   onSmartMatch,
   isMatching,
   matchingProgress,
+  onOpenProduct,
 }: ImageGroupManagerProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeSource, setActiveSource] = useState<{ type: 'group' | 'unassigned'; groupId?: string } | null>(null);
@@ -621,6 +623,7 @@ export function ImageGroupManager({
               onReorder={(oldIndex, newIndex) => handleReorderWithinGroup(group.productId, oldIndex, newIndex)}
               unassignedImages={unassignedImages}
               onAddFromUnassigned={(url) => handleAddFromUnassigned(group.productId, url)}
+              onOpenProduct={onOpenProduct ? () => onOpenProduct(group.productId) : undefined}
             />
           ))}
         </div>
