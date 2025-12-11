@@ -72,6 +72,7 @@ interface BatchDetailProps {
   onMoveImageBetweenProducts?: (imageUrl: string, fromProductId: string, toProductId: string) => void;
   onMoveImagesById?: (imageIds: string[], targetProductId: string) => void;
   onReorderProductImages?: (productId: string, imageIds: string[]) => void;
+  onLoadAllImagesIntoGroups?: () => void;
 }
 
 export function BatchDetail({
@@ -116,6 +117,7 @@ export function BatchDetail({
   onMoveImageBetweenProducts,
   onMoveImagesById,
   onReorderProductImages,
+  onLoadAllImagesIntoGroups,
 }: BatchDetailProps) {
   const { settings, isShopifyConfigured } = useSettings();
   const [imagesPerProduct, setImagesPerProduct] = useState(settings?.default_images_per_product || 9);
@@ -469,6 +471,19 @@ export function BatchDetail({
             >
               <Settings2 className="w-4 h-4 mr-1 md:mr-2" />
               <span className="hidden sm:inline">Manage</span> Groups
+            </Button>
+          )}
+
+          {/* View All Images button - always visible when products exist */}
+          {products.length > 0 && onLoadAllImagesIntoGroups && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onLoadAllImagesIntoGroups}
+              className="text-xs md:text-sm"
+            >
+              <ImageIcon className="w-4 h-4 mr-1 md:mr-2" />
+              <span className="hidden sm:inline">View All</span> Images
             </Button>
           )}
 
