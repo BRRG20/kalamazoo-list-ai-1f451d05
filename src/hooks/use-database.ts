@@ -326,13 +326,14 @@ export function useProducts(batchId: string | null) {
   };
 
   const deleteProduct = async (id: string) => {
+    // Soft delete: set deleted_at timestamp instead of actually deleting
     const { error } = await supabase
       .from('products')
-      .delete()
+      .update({ deleted_at: new Date().toISOString() })
       .eq('id', id);
     
     if (error) {
-      console.error('Error deleting product:', error);
+      console.error('Error soft-deleting product:', error);
       return false;
     }
     
@@ -340,7 +341,122 @@ export function useProducts(batchId: string | null) {
     return true;
   };
 
-  return { products, loading, createProduct, updateProduct, deleteProduct, refetch: fetchProducts };
+  const permanentlyDeleteProduct = async (id: string) => {
+    const { error } = await supabase
+      .from('products')
+      .delete()
+      .eq('id', id);
+    
+    if (error) {
+      console.error('Error permanently deleting product:', error);
+      return false;
+    }
+    
+    return true;
+  };
+
+  return { products, loading, createProduct, updateProduct, deleteProduct, permanentlyDeleteProduct, refetch: fetchProducts };
+}
+
+// Deleted Products Hook (for recovery)
+export function useDeletedProducts(batchId: string | null) {
+  const [deletedProducts, setDeletedProducts] = useState<(Product & { deleted_at: string })[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const fetchDeletedProducts = useCallback(async () => {
+    if (!batchId) {
+      setDeletedProducts([]);
+      return;
+    }
+    
+    setLoading(true);
+    // Use RPC or direct query with explicit filter to bypass default RLS
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .eq('batch_id', batchId)
+      .not('deleted_at', 'is', null)
+      .order('deleted_at', { ascending: false });
+    
+    if (error) {
+      console.error('Error fetching deleted products:', error);
+      setLoading(false);
+      return;
+    }
+    
+    setDeletedProducts((data || []).map(row => ({
+      ...mapProduct(row),
+      deleted_at: row.deleted_at,
+    })));
+    setLoading(false);
+  }, [batchId]);
+
+  useEffect(() => {
+    fetchDeletedProducts();
+  }, [fetchDeletedProducts]);
+
+  const recoverProduct = async (id: string) => {
+    const { error } = await supabase
+      .from('products')
+      .update({ deleted_at: null })
+      .eq('id', id);
+    
+    if (error) {
+      console.error('Error recovering product:', error);
+      toast.error('Failed to recover product');
+      return false;
+    }
+    
+    setDeletedProducts(prev => prev.filter(p => p.id !== id));
+    toast.success('Product recovered successfully');
+    return true;
+  };
+
+  const permanentlyDelete = async (id: string) => {
+    const { error } = await supabase
+      .from('products')
+      .delete()
+      .eq('id', id);
+    
+    if (error) {
+      console.error('Error permanently deleting product:', error);
+      toast.error('Failed to permanently delete product');
+      return false;
+    }
+    
+    setDeletedProducts(prev => prev.filter(p => p.id !== id));
+    toast.success('Product permanently deleted');
+    return true;
+  };
+
+  const emptyTrash = async () => {
+    if (deletedProducts.length === 0) return;
+    
+    const ids = deletedProducts.map(p => p.id);
+    const { error } = await supabase
+      .from('products')
+      .delete()
+      .in('id', ids);
+    
+    if (error) {
+      console.error('Error emptying trash:', error);
+      toast.error('Failed to empty trash');
+      return false;
+    }
+    
+    setDeletedProducts([]);
+    toast.success('Trash emptied successfully');
+    return true;
+  };
+
+  return { 
+    deletedProducts, 
+    loading, 
+    recoverProduct, 
+    permanentlyDelete, 
+    emptyTrash, 
+    refetch: fetchDeletedProducts 
+  };
 }
 
 // Images Hook

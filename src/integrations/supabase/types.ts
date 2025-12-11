@@ -150,6 +150,7 @@ export type Database = {
           condition: Database["public"]["Enums"]["condition_type"] | null
           created_at: string
           currency: string
+          deleted_at: string | null
           department: Database["public"]["Enums"]["department"] | null
           description: string | null
           description_style_a: string | null
@@ -187,6 +188,7 @@ export type Database = {
           condition?: Database["public"]["Enums"]["condition_type"] | null
           created_at?: string
           currency?: string
+          deleted_at?: string | null
           department?: Database["public"]["Enums"]["department"] | null
           description?: string | null
           description_style_a?: string | null
@@ -224,6 +226,7 @@ export type Database = {
           condition?: Database["public"]["Enums"]["condition_type"] | null
           created_at?: string
           currency?: string
+          deleted_at?: string | null
           department?: Database["public"]["Enums"]["department"] | null
           description?: string | null
           description_style_a?: string | null

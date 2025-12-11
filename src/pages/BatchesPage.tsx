@@ -8,6 +8,7 @@ import { BatchDetail } from '@/components/batches/BatchDetail';
 import { EmptyState } from '@/components/batches/EmptyState';
 import { ProductDetailPanel } from '@/components/products/ProductDetailPanel';
 import { ShopifySuccessDialog } from '@/components/batches/ShopifySuccessDialog';
+import { DeletedProductsPanel } from '@/components/batches/DeletedProductsPanel';
 import { ImageGroup, MatchingProgress } from '@/components/batches/ImageGroupManager';
 import { 
   useBatches, 
@@ -15,6 +16,7 @@ import {
   useImages, 
   useSettings, 
   useImageUpload,
+  useDeletedProducts,
   generateListingBlock,
   UPLOAD_LIMITS,
 } from '@/hooks/use-database';
@@ -25,10 +27,14 @@ export default function BatchesPage() {
   const { batches, createBatch, updateBatch, deleteBatch, getProductCount } = useBatches();
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const { products, createProduct, updateProduct, deleteProduct, refetch: refetchProducts } = useProducts(selectedBatchId);
+  const { deletedProducts, recoverProduct, permanentlyDelete: permanentlyDeleteProduct, emptyTrash, refetch: refetchDeletedProducts } = useDeletedProducts(selectedBatchId);
   const { fetchImagesForProduct, fetchImagesForBatch, addImageToBatch, updateImage, excludeLastNImages, clearCache, deleteImage, updateImageProductIdByUrl } = useImages();
   const { settings } = useSettings();
   const { uploadImages, uploading, progress, uploadStartTime, uploadTotal, uploadCompleted } = useImageUpload();
   const { getMatchingTags } = useDefaultTags();
+  
+  // Deleted products panel state
+  const [showDeletedProducts, setShowDeletedProducts] = useState(false);
   
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
@@ -73,9 +79,9 @@ export default function BatchesPage() {
       if (lastAction.unassignedImages) setUnassignedImages(lastAction.unassignedImages);
       toast.success(`Undone: ${lastAction.label}`);
     } else if (lastAction.type === 'delete_products') {
-      // For deleted products, we'd need to restore from database which isn't possible
-      // So we just notify the user
-      toast.error('Cannot undo product deletion - products have been permanently removed');
+      // Deleted products can now be recovered from the trash
+      toast.info('Deleted products can be recovered from the trash bin');
+      setShowDeletedProducts(true);
     }
   };
 
@@ -1318,6 +1324,8 @@ const handleSelectBatch = useCallback((id: string) => {
               undoStackLength={undoStack.length}
               onGlobalUndo={handleGlobalUndo}
               lastUndoLabel={undoStack.length > 0 ? undoStack[undoStack.length - 1].label : undefined}
+              deletedProductsCount={deletedProducts.length}
+              onOpenDeletedProducts={() => setShowDeletedProducts(true)}
             />
           ) : (
             <EmptyState />
@@ -1357,6 +1365,20 @@ const handleSelectBatch = useCallback((id: string) => {
         successCount={shopifySuccessData?.successCount || 0}
         errorCount={shopifySuccessData?.errorCount || 0}
         storeUrl={settings?.shopify_store_url || undefined}
+      />
+
+      {/* Deleted Products Panel */}
+      <DeletedProductsPanel
+        open={showDeletedProducts}
+        onClose={() => setShowDeletedProducts(false)}
+        deletedProducts={deletedProducts}
+        onRecover={recoverProduct}
+        onPermanentDelete={permanentlyDeleteProduct}
+        onEmptyTrash={emptyTrash}
+        onProductsChanged={() => {
+          refetchProducts();
+          refetchDeletedProducts();
+        }}
       />
     </AppLayout>
   );
