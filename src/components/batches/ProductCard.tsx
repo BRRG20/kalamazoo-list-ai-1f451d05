@@ -15,6 +15,7 @@ interface ProductCardProps {
   onEdit: () => void;
   onDelete: () => void;
   onReceiveImage?: (imageUrl: string, fromProductId: string) => void;
+  onReorderImages?: (imageIds: string[]) => void;
   isDraggingImage?: boolean;
 }
 
@@ -26,12 +27,15 @@ export function ProductCard({
   onEdit,
   onDelete,
   onReceiveImage,
+  onReorderImages,
   isDraggingImage,
 }: ProductCardProps) {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewIndex, setPreviewIndex] = useState(0);
   const [isDragOver, setIsDragOver] = useState(false);
   const [draggedImageUrl, setDraggedImageUrl] = useState<string | null>(null);
+  const [internalDragIndex, setInternalDragIndex] = useState<number | null>(null);
+  const [internalDragOverIndex, setInternalDragOverIndex] = useState<number | null>(null);
 
   const thumbnail = images[0]?.url;
   const imageUrls = images.map(img => img.url);
@@ -42,21 +46,49 @@ export function ProductCard({
     setPreviewOpen(true);
   };
 
-  // Drag source handlers
-  const handleDragStart = (e: React.DragEvent, imageUrl: string) => {
+  // Drag source handlers for moving between cards
+  const handleDragStart = (e: React.DragEvent, imageUrl: string, index: number) => {
     e.dataTransfer.setData('text/plain', JSON.stringify({
       imageUrl,
       fromProductId: product.id,
+      isInternal: false,
     }));
     e.dataTransfer.effectAllowed = 'move';
     setDraggedImageUrl(imageUrl);
+    setInternalDragIndex(index);
   };
 
   const handleDragEnd = () => {
     setDraggedImageUrl(null);
+    setInternalDragIndex(null);
+    setInternalDragOverIndex(null);
   };
 
-  // Drop target handlers
+  // Internal reorder handlers
+  const handleInternalDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (internalDragIndex !== null && internalDragIndex !== index) {
+      setInternalDragOverIndex(index);
+    }
+  };
+
+  const handleInternalDrop = (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (internalDragIndex !== null && internalDragIndex !== dropIndex && onReorderImages) {
+      const newOrder = [...images];
+      const [draggedItem] = newOrder.splice(internalDragIndex, 1);
+      newOrder.splice(dropIndex, 0, draggedItem);
+      onReorderImages(newOrder.map(img => img.id));
+    }
+    
+    setInternalDragIndex(null);
+    setInternalDragOverIndex(null);
+  };
+
+  // Drop target handlers for receiving from other cards
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
@@ -104,7 +136,7 @@ export function ProductCard({
               className="w-full h-full object-cover cursor-pointer"
               onClick={(e) => handleImageClick(e, 0)}
               draggable
-              onDragStart={(e) => handleDragStart(e, thumbnail)}
+              onDragStart={(e) => handleDragStart(e, thumbnail, 0)}
               onDragEnd={handleDragEnd}
             />
           ) : (
@@ -150,7 +182,7 @@ export function ProductCard({
             {images.length} images
           </div>
 
-          {/* Mini image strip on hover - draggable */}
+          {/* Mini image strip on hover - draggable & reorderable */}
           {images.length > 1 && (
             <div className="absolute bottom-8 left-0 right-0 px-2 opacity-0 group-hover:opacity-100 transition-opacity">
               <div className="flex gap-1 overflow-x-auto py-1 bg-background/80 rounded px-1">
@@ -158,14 +190,17 @@ export function ProductCard({
                   <div
                     key={img.id}
                     className={cn(
-                      "flex-shrink-0 w-8 h-8 rounded border cursor-grab active:cursor-grabbing relative",
-                      draggedImageUrl === img.url && "opacity-50"
+                      "flex-shrink-0 w-8 h-8 rounded border cursor-grab active:cursor-grabbing relative transition-all",
+                      draggedImageUrl === img.url && "opacity-50 scale-95",
+                      internalDragOverIndex === idx && "ring-2 ring-primary scale-110"
                     )}
                     draggable
-                    onDragStart={(e) => handleDragStart(e, img.url)}
+                    onDragStart={(e) => handleDragStart(e, img.url, idx)}
                     onDragEnd={handleDragEnd}
+                    onDragOver={(e) => handleInternalDragOver(e, idx)}
+                    onDrop={(e) => handleInternalDrop(e, idx)}
                     onClick={(e) => handleImageClick(e, idx)}
-                    title={`Drag to move • Click to preview`}
+                    title={`Drag to reorder or move • Click to preview`}
                   >
                     <img
                       src={img.url}

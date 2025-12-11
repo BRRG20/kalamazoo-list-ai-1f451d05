@@ -590,6 +590,28 @@ export default function BatchesPage() {
     toast.success('Image moved successfully');
   }, [fetchImagesForProduct, clearCache, refetchProducts]);
 
+  const handleReorderProductImages = useCallback(async (productId: string, imageIds: string[]) => {
+    // Update positions for all images in the new order
+    const updates = imageIds.map((id, index) => 
+      supabase
+        .from('images')
+        .update({ position: index })
+        .eq('id', id)
+    );
+
+    const results = await Promise.all(updates);
+    const hasError = results.some(r => r.error);
+
+    if (hasError) {
+      toast.error('Failed to reorder images');
+      return;
+    }
+
+    // Clear cache and refetch
+    clearCache();
+    await refetchProducts();
+  }, [clearCache, refetchProducts]);
+
   const isShopifyConfigured = !!settings?.shopify_store_url;
 
   const editingProduct = editingProductId ? products.find(p => p.id === editingProductId) : null;
@@ -748,6 +770,7 @@ export default function BatchesPage() {
                 setShowGroupManager(true);
               }}
               onMoveImageBetweenProducts={handleMoveImageBetweenProducts}
+              onReorderProductImages={handleReorderProductImages}
             />
           ) : (
             <EmptyState />
