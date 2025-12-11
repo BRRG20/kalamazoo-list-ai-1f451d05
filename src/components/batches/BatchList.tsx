@@ -139,10 +139,13 @@ export function BatchList({
 
               return (
                 <li key={batch.id}>
-                  <button
+                  <div
+                    role="button"
+                    tabIndex={0}
                     onClick={() => onSelectBatch(batch.id)}
+                    onKeyDown={(e) => e.key === 'Enter' && onSelectBatch(batch.id)}
                     className={cn(
-                      "w-full text-left px-3 py-2.5 rounded-md transition-colors group",
+                      "w-full text-left px-3 py-2.5 rounded-md transition-colors group cursor-pointer",
                       isSelected
                         ? "bg-primary/10 text-foreground"
                         : "hover:bg-muted text-foreground"
@@ -157,12 +160,14 @@ export function BatchList({
                       </div>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <button
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             onClick={(e) => e.stopPropagation()}
-                            className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-muted-foreground/10 transition-opacity"
+                            className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
                           >
                             <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
-                          </button>
+                          </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => openEditDialog(batch)}>
@@ -179,7 +184,7 @@ export function BatchList({
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
-                  </button>
+                  </div>
                 </li>
               );
             })}
