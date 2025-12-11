@@ -51,7 +51,7 @@ Extract the following from the images:
 - material (from label if visible, e.g. "100% Cotton", "80% Acrylic 20% Wool")
 - made_in (from label if visible, e.g. "Made in Italy")
 - garment_type (e.g. "Jumper", "Shirt", "Jacket", "Jeans", "T-Shirt")
-- department ("Women", "Men", "Unisex", "Kids" - based on cut/style)
+- department ("Men", "Women", "Unisex", or "Kids" - ONLY based on clear visual evidence of cut/style. If unclear, use "Unisex" rather than guessing)
 - colour_main (primary color)
 - colour_secondary (secondary color if applicable)
 - pattern (e.g. "Solid", "Striped", "Graphic", "Abstract", "Fair Isle", "Cable Knit")
@@ -67,7 +67,7 @@ Respond ONLY with valid JSON in this exact format:
   "material": "string or null",
   "made_in": "string or null",
   "garment_type": "string or null",
-  "department": "Women" | "Men" | "Unisex" | "Kids" | null,
+  "department": "Men" | "Women" | "Unisex" | "Kids" | null,
   "colour_main": "string or null",
   "colour_secondary": "string or null",
   "pattern": "string or null",
