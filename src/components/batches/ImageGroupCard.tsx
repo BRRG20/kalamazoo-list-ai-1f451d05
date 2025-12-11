@@ -13,6 +13,7 @@ import {
   ImagePlus,
   MoreHorizontal,
   Eye,
+  Pencil,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -152,6 +153,7 @@ interface ImageGroupCardProps {
   onReorder: (oldIndex: number, newIndex: number) => void;
   unassignedImages: string[];
   onAddFromUnassigned: (url: string) => void;
+  onOpenProduct?: () => void;
 }
 
 export function ImageGroupCard({
@@ -171,6 +173,7 @@ export function ImageGroupCard({
   onReorder,
   unassignedImages,
   onAddFromUnassigned,
+  onOpenProduct,
 }: ImageGroupCardProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showAddPopover, setShowAddPopover] = useState(false);
@@ -185,7 +188,14 @@ export function ImageGroupCard({
       <div className="bg-card border border-border rounded-lg overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-3 bg-muted/30 border-b border-border">
-          <div className="flex items-center gap-3">
+          <div 
+            className={cn(
+              "flex items-center gap-3",
+              onOpenProduct && "cursor-pointer hover:text-primary transition-colors"
+            )}
+            onClick={onOpenProduct}
+            title={onOpenProduct ? "Click to edit product" : undefined}
+          >
             <span className="font-semibold text-foreground">
               Product {String(group.productNumber).padStart(3, '0')}
             </span>
@@ -200,6 +210,19 @@ export function ImageGroupCard({
           </div>
 
           <div className="flex items-center gap-1">
+            {/* Edit product button */}
+            {onOpenProduct && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onOpenProduct}
+                title="Edit product"
+                className="text-primary hover:text-primary hover:bg-primary/10"
+              >
+                <Pencil className="w-4 h-4" />
+              </Button>
+            )}
+
             {/* Quick actions when images are selected */}
             {hasSelectedImages && (
               <>
