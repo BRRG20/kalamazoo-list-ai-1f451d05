@@ -19,7 +19,9 @@ import {
   LayoutGrid,
   MoreVertical,
   Layers,
-  Undo2
+  Undo2,
+  HelpCircle,
+  Info
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,6 +33,13 @@ import { ImageGroupManager, ImageGroup, MatchingProgress } from './ImageGroupMan
 import { BirdsEyeView } from './BirdsEyeView';
 import { useSettings } from '@/hooks/use-database';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -41,6 +50,12 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import type { Batch, Product, ProductImage } from '@/types';
 
 interface BatchDetailProps {
@@ -182,6 +197,7 @@ export function BatchDetail({
   const [searchQuery, setSearchQuery] = useState('');
   const [showBirdsEyeView, setShowBirdsEyeView] = useState(false);
   const [bulkSelectKey, setBulkSelectKey] = useState(0);
+  const [showInfoDialog, setShowInfoDialog] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const shopifyConfigured = isShopifyConfigured();
   
@@ -379,7 +395,26 @@ export function BatchDetail({
             </Button>
           )}
           <div className="min-w-0 flex-1">
-            <h2 className="text-lg md:text-xl font-semibold text-foreground truncate">{batch.name}</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg md:text-xl font-semibold text-foreground truncate">{batch.name}</h2>
+              <TooltipProvider delayDuration={300}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                      onClick={() => setShowInfoDialog(true)}
+                    >
+                      <Info className="w-4 h-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    <p>Learn about the workflow</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
             {batch.notes && (
               <p className="text-sm text-muted-foreground mt-0.5 truncate">{batch.notes}</p>
             )}
@@ -471,247 +506,339 @@ export function BatchDetail({
         )}
 
         {/* Actions bar */}
-        <div className="flex flex-wrap items-center gap-2 md:gap-3">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            multiple
-            className="hidden"
-            onChange={(e) => handleFileChange(e, false)}
-          />
-          
-          {/* Upload buttons group */}
-          <div className="flex items-center gap-1">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isUploading}
-              className="text-xs md:text-sm"
-            >
-              {isUploading ? (
-                <Loader2 className="w-4 h-4 mr-1 md:mr-2 animate-spin" />
-              ) : (
-                <Upload className="w-4 h-4 mr-1 md:mr-2" />
-              )}
-              <span className="hidden sm:inline">Upload</span> Images
-            </Button>
-            
-            {/* Show "Add to Pool" when there are existing groups */}
-            {(imageGroups.length > 0 || products.length > 0) && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleUploadToUnassigned}
-                disabled={isUploading}
-                className="text-xs md:text-sm text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950"
-                title="Add images directly to unassigned pool"
-              >
-                <Plus className="w-4 h-4" />
-              </Button>
-            )}
-          </div>
-
-          <div className="flex items-center gap-1 md:gap-2">
-            <Label htmlFor="imagesPerProduct" className="text-xs md:text-sm whitespace-nowrap hidden sm:inline">
-              Per product:
-            </Label>
-            <Input
-              id="imagesPerProduct"
-              type="number"
-              min={1}
-              max={20}
-              value={imagesPerProduct}
-              onChange={(e) => setImagesPerProduct(parseInt(e.target.value) || 1)}
-              className="w-14 md:w-16 h-8 md:h-9 text-sm"
+        <TooltipProvider delayDuration={300}>
+          <div className="flex flex-wrap items-center gap-2 md:gap-3">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(e) => handleFileChange(e, false)}
             />
-          </div>
+            
+            {/* Upload buttons group */}
+            <div className="flex items-center gap-1">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploading}
+                    className="text-xs md:text-sm"
+                  >
+                    {isUploading ? (
+                      <Loader2 className="w-4 h-4 mr-1 md:mr-2 animate-spin" />
+                    ) : (
+                      <Upload className="w-4 h-4 mr-1 md:mr-2" />
+                    )}
+                    <span className="hidden sm:inline">Upload</span> Images
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Upload product images to this batch (max 500 images)</p>
+                </TooltipContent>
+              </Tooltip>
+              
+              {/* Show "Add to Pool" when there are existing groups */}
+              {(imageGroups.length > 0 || products.length > 0) && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleUploadToUnassigned}
+                      disabled={isUploading}
+                      className="text-xs md:text-sm text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Add images directly to unassigned pool</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </div>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              saveToHistory('Before auto-group');
-              onAutoGroup(imagesPerProduct);
-            }}
-            disabled={pendingImageUrls.length === 0}
-            className="text-xs md:text-sm"
-          >
-            <Grid3X3 className="w-4 h-4 mr-1 md:mr-2" />
-            <span className="hidden sm:inline">Auto-</span>group
-          </Button>
+            <div className="flex items-center gap-1 md:gap-2">
+              <Label htmlFor="imagesPerProduct" className="text-xs md:text-sm whitespace-nowrap hidden sm:inline">
+                Per product:
+              </Label>
+              <Input
+                id="imagesPerProduct"
+                type="number"
+                min={1}
+                max={20}
+                value={imagesPerProduct}
+                onChange={(e) => setImagesPerProduct(parseInt(e.target.value) || 1)}
+                className="w-14 md:w-16 h-8 md:h-9 text-sm"
+              />
+            </div>
 
-          {/* Re-group All - available when there are existing groups */}
-          {(imageGroups.length > 0 || unassignedImages.length > 0) && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                saveToHistory('Before re-group all');
-                onReAutoGroupAll(imagesPerProduct);
-              }}
-              className="text-xs md:text-sm text-amber-600 hover:text-amber-700 border-amber-300 hover:border-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950"
-              title="Re-group all images based on current images-per-product setting"
-            >
-              <RefreshCw className="w-4 h-4 mr-1 md:mr-2" />
-              <span className="hidden sm:inline">Re-</span>group All
-            </Button>
-          )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    saveToHistory('Before auto-group');
+                    onAutoGroup(imagesPerProduct);
+                  }}
+                  disabled={pendingImageUrls.length === 0}
+                  className="text-xs md:text-sm"
+                >
+                  <Grid3X3 className="w-4 h-4 mr-1 md:mr-2" />
+                  <span className="hidden sm:inline">Auto-</span>group
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Automatically group pending images into products</p>
+              </TooltipContent>
+            </Tooltip>
 
-          {/* Toggle Group Manager */}
-          {(imageGroups.length > 0 || unassignedImages.length > 0) && (
-            <Button
-              variant={showGroupManager ? "default" : "outline"}
-              size="sm"
-              onClick={onToggleGroupManager}
-              className="text-xs md:text-sm"
-            >
-              <Settings2 className="w-4 h-4 mr-1 md:mr-2" />
-              <span className="hidden sm:inline">Manage</span> Groups
-            </Button>
-          )}
-
-          {/* Undo button - visible when there's any undo history (local or global) */}
-          {(history.length > 0 || undoStackLength > 0) && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                // Prefer local history, fall back to global
-                if (history.length > 0) {
-                  handleUndo();
-                } else if (onGlobalUndo) {
-                  onGlobalUndo();
-                }
-              }}
-              className="text-xs md:text-sm text-amber-600 hover:text-amber-700 border-amber-300 hover:border-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950"
-              title={`Undo: ${history[history.length - 1]?.label || lastUndoLabel || 'last action'}`}
-            >
-              <Undo2 className="w-4 h-4 mr-1 md:mr-2" />
-              Undo
-            </Button>
-          )}
-
-          {/* View All Images button - always visible when products exist */}
-          {products.length > 0 && onLoadAllImagesIntoGroups && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onLoadAllImagesIntoGroups}
-              className="text-xs md:text-sm"
-            >
-              <ImageIcon className="w-4 h-4 mr-1 md:mr-2" />
-              <span className="hidden sm:inline">View All</span> Images
-            </Button>
-          )}
-
-          {/* Generate AI (20) - bulk generation button */}
-          <Button
-            variant="default"
-            size="sm"
-            onClick={onGenerateBulk20}
-            disabled={isGenerating || products.length === 0 || unprocessedCount === 0}
-            className="text-xs md:text-sm"
-            title={unprocessedCount > 0 ? `Generate AI for next ${Math.min(20, unprocessedCount)} unprocessed products` : 'All products have been generated'}
-          >
-            {isGenerating ? (
-              <Loader2 className="w-4 h-4 mr-1 md:mr-2 animate-spin" />
-            ) : (
-              <Sparkles className="w-4 h-4 mr-1 md:mr-2" />
+            {/* Re-group All - available when there are existing groups */}
+            {(imageGroups.length > 0 || unassignedImages.length > 0) && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      saveToHistory('Before re-group all');
+                      onReAutoGroupAll(imagesPerProduct);
+                    }}
+                    className="text-xs md:text-sm text-amber-600 hover:text-amber-700 border-amber-300 hover:border-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950"
+                  >
+                    <RefreshCw className="w-4 h-4 mr-1 md:mr-2" />
+                    <span className="hidden sm:inline">Re-</span>group All
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Re-distribute all images into new product groups</p>
+                </TooltipContent>
+              </Tooltip>
             )}
-            <span className="hidden sm:inline">Generate</span> AI ({Math.min(20, unprocessedCount)})
-          </Button>
 
-          {/* Undo bulk AI generation */}
-          {hasBulkUndoState && onUndoBulkGeneration && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onUndoBulkGeneration}
-              disabled={isGenerating}
-              className="text-xs md:text-sm text-amber-600 hover:text-amber-700 border-amber-300 hover:border-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950"
-              title={`Undo last bulk AI generation (${lastBulkCount} products)`}
-            >
-              <Undo2 className="w-4 h-4 mr-1 md:mr-2" />
-              Undo Bulk ({lastBulkCount})
-            </Button>
-          )}
+            {/* Toggle Group Manager */}
+            {(imageGroups.length > 0 || unassignedImages.length > 0) && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={showGroupManager ? "default" : "outline"}
+                    size="sm"
+                    onClick={onToggleGroupManager}
+                    className="text-xs md:text-sm"
+                  >
+                    <Settings2 className="w-4 h-4 mr-1 md:mr-2" />
+                    <span className="hidden sm:inline">Manage</span> Groups
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Manually adjust image groupings before confirming</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
 
-          {/* Legacy Generate All button for selected products */}
-          {selectedProductIds.size > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onGenerateAll}
-              disabled={isGenerating}
-              className="text-xs md:text-sm"
-              title="Generate AI for selected products only"
-            >
-              {isGenerating ? (
-                <Loader2 className="w-4 h-4 mr-1 md:mr-2 animate-spin" />
-              ) : (
-                <Sparkles className="w-4 h-4 mr-1 md:mr-2" />
-              )}
-              AI Selected ({selectedProductIds.size})
-            </Button>
-          )}
+            {/* Undo button - visible when there's any undo history (local or global) */}
+            {(history.length > 0 || undoStackLength > 0) && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      // Prefer local history, fall back to global
+                      if (history.length > 0) {
+                        handleUndo();
+                      } else if (onGlobalUndo) {
+                        onGlobalUndo();
+                      }
+                    }}
+                    className="text-xs md:text-sm text-amber-600 hover:text-amber-700 border-amber-300 hover:border-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950"
+                  >
+                    <Undo2 className="w-4 h-4 mr-1 md:mr-2" />
+                    Undo
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Undo: {history[history.length - 1]?.label || lastUndoLabel || 'last action'}</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onExcludeLast2All}
-            disabled={products.length === 0}
-            className="text-xs md:text-sm hidden md:flex"
-          >
-            <ImageMinus className="w-4 h-4 mr-2" />
-            Exclude Last 2 Images
-          </Button>
+            {/* View All Images button - always visible when products exist */}
+            {products.length > 0 && onLoadAllImagesIntoGroups && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onLoadAllImagesIntoGroups}
+                    className="text-xs md:text-sm"
+                  >
+                    <ImageIcon className="w-4 h-4 mr-1 md:mr-2" />
+                    <span className="hidden sm:inline">View All</span> Images
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>View and manage all images in this batch</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={async () => {
-              // Force refresh images before opening Birds Eye View
-              await handleRefreshImages();
-              setShowBirdsEyeView(true);
-            }}
-            disabled={products.length === 0 || imagesLoading}
-            className="text-xs md:text-sm"
-          >
-            <LayoutGrid className="w-4 h-4 mr-1 md:mr-2" />
-            <span className="hidden sm:inline">Birds Eye</span>
-          </Button>
+            {/* Generate AI (20) - bulk generation button */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={onGenerateBulk20}
+                  disabled={isGenerating || products.length === 0 || unprocessedCount === 0}
+                  className="text-xs md:text-sm"
+                >
+                  {isGenerating ? (
+                    <Loader2 className="w-4 h-4 mr-1 md:mr-2 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-4 h-4 mr-1 md:mr-2" />
+                  )}
+                  <span className="hidden sm:inline">Generate</span> AI ({Math.min(20, unprocessedCount)})
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{unprocessedCount > 0 ? `Generate AI for next ${Math.min(20, unprocessedCount)} unprocessed products` : 'All products have been generated'}</p>
+              </TooltipContent>
+            </Tooltip>
 
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleRefreshImages}
-            disabled={imagesLoading || products.length === 0}
-            className="text-xs md:text-sm"
-            title="Refresh all images from database"
-          >
-            <RefreshCw className={cn("w-4 h-4", imagesLoading && "animate-spin")} />
-          </Button>
+            {/* Undo bulk AI generation */}
+            {hasBulkUndoState && onUndoBulkGeneration && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onUndoBulkGeneration}
+                    disabled={isGenerating}
+                    className="text-xs md:text-sm text-amber-600 hover:text-amber-700 border-amber-300 hover:border-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950"
+                  >
+                    <Undo2 className="w-4 h-4 mr-1 md:mr-2" />
+                    Undo Bulk ({lastBulkCount})
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Restore {lastBulkCount} products to their state before AI generation</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
 
-          {/* Trash button - show deleted products */}
-          {onOpenDeletedProducts && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onOpenDeletedProducts}
-              className="text-xs md:text-sm relative"
-              title="View deleted products"
-            >
-              <Trash2 className="w-4 h-4" />
-              {deletedProductsCount > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-destructive text-destructive-foreground text-xs rounded-full flex items-center justify-center">
-                  {deletedProductsCount}
-                </span>
-              )}
-            </Button>
-          )}
-        </div>
+            {/* Legacy Generate All button for selected products */}
+            {selectedProductIds.size > 0 && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onGenerateAll}
+                    disabled={isGenerating}
+                    className="text-xs md:text-sm"
+                  >
+                    {isGenerating ? (
+                      <Loader2 className="w-4 h-4 mr-1 md:mr-2 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-4 h-4 mr-1 md:mr-2" />
+                    )}
+                    AI Selected ({selectedProductIds.size})
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Generate AI for selected products only</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onExcludeLast2All}
+                  disabled={products.length === 0}
+                  className="text-xs md:text-sm hidden md:flex"
+                >
+                  <ImageMinus className="w-4 h-4 mr-2" />
+                  Exclude Last 2 Images
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Mark last 2 images of each product to be excluded from Shopify upload</p>
+              </TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    // Force refresh images before opening Birds Eye View
+                    await handleRefreshImages();
+                    setShowBirdsEyeView(true);
+                  }}
+                  disabled={products.length === 0 || imagesLoading}
+                  className="text-xs md:text-sm"
+                >
+                  <LayoutGrid className="w-4 h-4 mr-1 md:mr-2" />
+                  <span className="hidden sm:inline">Birds Eye</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>View all products and images in a grid for easy organization</p>
+              </TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleRefreshImages}
+                  disabled={imagesLoading || products.length === 0}
+                  className="text-xs md:text-sm"
+                >
+                  <RefreshCw className={cn("w-4 h-4", imagesLoading && "animate-spin")} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Refresh all images from database</p>
+              </TooltipContent>
+            </Tooltip>
+
+            {/* Trash button - show deleted products */}
+            {onOpenDeletedProducts && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onOpenDeletedProducts}
+                    className="text-xs md:text-sm relative"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    {deletedProductsCount > 0 && (
+                      <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-destructive text-destructive-foreground text-xs rounded-full flex items-center justify-center">
+                        {deletedProductsCount}
+                      </span>
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>View deleted products</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </div>
+        </TooltipProvider>
 
         {/* Shopify row */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mt-3 pt-3 border-t border-border">
@@ -981,6 +1108,63 @@ export function BatchDetail({
           }}
         />
       )}
+
+      {/* Workflow Info Dialog */}
+      <Dialog open={showInfoDialog} onOpenChange={setShowInfoDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <HelpCircle className="w-5 h-5 text-primary" />
+              Batch Workflow Guide
+            </DialogTitle>
+            <DialogDescription>
+              Follow these steps to process your product images:
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            <div className="flex gap-3">
+              <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium">1</div>
+              <div>
+                <p className="font-medium">Upload Images</p>
+                <p className="text-sm text-muted-foreground">Click "Upload Images" to add photos. Up to 500 images per batch.</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium">2</div>
+              <div>
+                <p className="font-medium">Group Images</p>
+                <p className="text-sm text-muted-foreground">Set "Per product" count and click "Auto-group" or use "AI Smart Match" for intelligent grouping.</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium">3</div>
+              <div>
+                <p className="font-medium">Confirm Grouping</p>
+                <p className="text-sm text-muted-foreground">Review groups in "Manage Groups", adjust as needed, then click "Confirm Grouping".</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium">4</div>
+              <div>
+                <p className="font-medium">Generate AI</p>
+                <p className="text-sm text-muted-foreground">Click "Generate AI" to auto-fill titles, descriptions, and tags for products.</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium">5</div>
+              <div>
+                <p className="font-medium">Upload to Shopify</p>
+                <p className="text-sm text-muted-foreground">Select products and click "Upload to Shopify" to create listings.</p>
+              </div>
+            </div>
+          </div>
+          <div className="mt-4 pt-4 border-t border-border">
+            <p className="text-xs text-muted-foreground">
+              <strong>Tip:</strong> Use "Birds Eye" view for a quick overview of all products and their images. Use "Exclude Last 2 Images" to hide reference photos from Shopify.
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

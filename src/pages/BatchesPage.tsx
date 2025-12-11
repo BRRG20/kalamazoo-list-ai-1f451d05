@@ -1109,6 +1109,8 @@ const handleSelectBatch = useCallback((id: string) => {
                   selectedImages: new Set(),
                 };
                 setImageGroups(prev => [...prev, newGroup]);
+                // Remove these images from unassigned pool
+                setUnassignedImages(prev => prev.filter(url => !images.includes(url)));
               }}
               onDeleteGroup={(productId) => {
                 const group = imageGroups.find(g => g.productId === productId);
