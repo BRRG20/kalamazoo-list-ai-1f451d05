@@ -55,6 +55,7 @@ interface BatchDetailProps {
   onEditProduct: (productId: string) => void;
   onDeleteProduct: (productId: string) => void;
   onToggleProductSelection: (productId: string) => void;
+  onBulkSelectProducts?: (productIds: string[]) => void;
   onSelectAllProducts: () => void;
   onDeselectAllProducts: () => void;
   selectedProductIds: Set<string>;
@@ -106,6 +107,7 @@ export function BatchDetail({
   onEditProduct,
   onDeleteProduct,
   onToggleProductSelection,
+  onBulkSelectProducts,
   onSelectAllProducts,
   onDeselectAllProducts,
   selectedProductIds,
@@ -579,20 +581,17 @@ export function BatchDetail({
                 <div className="flex gap-1 items-center">
                   {/* Bulk select dropdown */}
                   <select
-                    className="h-8 px-2 text-sm rounded-md border border-input bg-background text-foreground"
+                    className="h-8 px-2 text-sm rounded-md border border-input bg-background text-foreground cursor-pointer"
                     onChange={(e) => {
                       const count = parseInt(e.target.value);
-                      if (count > 0) {
+                      if (count > 0 && onBulkSelectProducts) {
                         const productIdsToSelect = filteredProducts.slice(0, count).map(p => p.id);
-                        productIdsToSelect.forEach(id => {
-                          if (!selectedProductIds.has(id)) {
-                            onToggleProductSelection(id);
-                          }
-                        });
+                        onBulkSelectProducts(productIdsToSelect);
                       }
+                      // Reset to placeholder
                       e.target.value = '';
                     }}
-                    defaultValue=""
+                    value=""
                   >
                     <option value="" disabled>Bulk select...</option>
                     <option value="5">Select 5</option>

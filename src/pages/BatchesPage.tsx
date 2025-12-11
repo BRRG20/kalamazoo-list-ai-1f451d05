@@ -740,6 +740,10 @@ const handleSelectBatch = useCallback((id: string) => {
     });
   }, []);
 
+  const handleBulkSelectProducts = useCallback((productIds: string[]) => {
+    setSelectedProductIds(new Set(productIds));
+  }, []);
+
   const handleSaveProduct = useCallback(async (updates: Partial<Product>) => {
     if (!editingProductId) return;
     
@@ -1080,6 +1084,7 @@ const handleSelectBatch = useCallback((id: string) => {
                 });
               }}
               onToggleProductSelection={handleToggleProductSelection}
+              onBulkSelectProducts={handleBulkSelectProducts}
               onSelectAllProducts={() => {
                 setSelectedProductIds(new Set(products.map(p => p.id)));
               }}
