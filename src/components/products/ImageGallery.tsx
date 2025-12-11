@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { ChevronUp, ChevronDown, ImageIcon, Trash2, GripVertical, ZoomIn, Check } from 'lucide-react';
+import { ChevronUp, ChevronDown, ImageIcon, Trash2, GripVertical, ZoomIn, Check, ChevronsUpDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import type { ProductImage, Product } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -32,6 +33,7 @@ export function ImageGallery({
   const [previewImage, setPreviewImage] = useState<ProductImage | null>(null);
   const [selectedImageIds, setSelectedImageIds] = useState<Set<string>>(new Set());
   const [moveTargetProductId, setMoveTargetProductId] = useState<string>('');
+  const [moveDropdownOpen, setMoveDropdownOpen] = useState(false);
 
   const moveImage = (imageId: string, direction: 'up' | 'down') => {
     const image = images.find(i => i.id === imageId);
@@ -101,6 +103,7 @@ export function ImageGallery({
     onMoveImages(Array.from(selectedImageIds), moveTargetProductId);
     setSelectedImageIds(new Set());
     setMoveTargetProductId('');
+    setMoveDropdownOpen(false);
   };
 
   const selectAll = () => {
@@ -146,21 +149,56 @@ export function ImageGallery({
         {/* Move selected images UI */}
         {selectedImageIds.size > 0 && availableProducts.length > 0 && onMoveImages && (
           <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 border border-border">
-            <span className="text-xs text-muted-foreground">
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
               {selectedImageIds.size} selected
             </span>
-            <Select value={moveTargetProductId} onValueChange={setMoveTargetProductId}>
-              <SelectTrigger className="h-8 text-xs flex-1">
-                <SelectValue placeholder="Move to product..." />
-              </SelectTrigger>
-              <SelectContent>
-                {availableProducts.map((product, index) => (
-                  <SelectItem key={product.id} value={product.id} className="text-xs">
-                    {product.title || `Product ${index + 1}`}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Popover open={moveDropdownOpen} onOpenChange={setMoveDropdownOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={moveDropdownOpen}
+                  className="h-8 text-xs flex-1 justify-between"
+                >
+                  {moveTargetProductId
+                    ? (availableProducts.find(p => p.id === moveTargetProductId)?.title || 
+                       `Product ${availableProducts.findIndex(p => p.id === moveTargetProductId) + 1}`)
+                    : "Move to product..."}
+                  <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[300px] p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="Search products..." className="h-9" />
+                  <CommandList>
+                    <CommandEmpty>No product found.</CommandEmpty>
+                    <CommandGroup>
+                      {availableProducts.map((product, index) => (
+                        <CommandItem
+                          key={product.id}
+                          value={product.title || `Product ${index + 1}`}
+                          onSelect={() => {
+                            setMoveTargetProductId(product.id);
+                            setMoveDropdownOpen(false);
+                          }}
+                          className="text-xs"
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              moveTargetProductId === product.id ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          <span className="truncate">
+                            {product.title || `Product ${index + 1}`}
+                          </span>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
             <Button
               size="sm"
               className="h-8 text-xs"
