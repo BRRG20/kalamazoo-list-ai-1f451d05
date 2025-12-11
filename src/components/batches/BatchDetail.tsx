@@ -93,6 +93,10 @@ interface BatchDetailProps {
   onSmartMatch?: () => Promise<void>;
   isMatching?: boolean;
   matchingProgress?: MatchingProgress;
+  // Global undo
+  undoStackLength?: number;
+  onGlobalUndo?: () => void;
+  lastUndoLabel?: string;
 }
 
 export function BatchDetail({
@@ -144,6 +148,9 @@ export function BatchDetail({
   onSmartMatch,
   isMatching,
   matchingProgress,
+  undoStackLength = 0,
+  onGlobalUndo,
+  lastUndoLabel,
 }: BatchDetailProps) {
   const { settings, isShopifyConfigured } = useSettings();
   const [imagesPerProduct, setImagesPerProduct] = useState(settings?.default_images_per_product || 9);
@@ -542,14 +549,21 @@ export function BatchDetail({
             </Button>
           )}
 
-          {/* Undo button - visible when there's history */}
-          {history.length > 0 && (
+          {/* Undo button - visible when there's any undo history (local or global) */}
+          {(history.length > 0 || undoStackLength > 0) && (
             <Button
               variant="outline"
               size="sm"
-              onClick={handleUndo}
+              onClick={() => {
+                // Prefer local history, fall back to global
+                if (history.length > 0) {
+                  handleUndo();
+                } else if (onGlobalUndo) {
+                  onGlobalUndo();
+                }
+              }}
               className="text-xs md:text-sm text-amber-600 hover:text-amber-700 border-amber-300 hover:border-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950"
-              title={`Undo: ${history[history.length - 1]?.label || 'last action'}`}
+              title={`Undo: ${history[history.length - 1]?.label || lastUndoLabel || 'last action'}`}
             >
               <Undo2 className="w-4 h-4 mr-1 md:mr-2" />
               Undo

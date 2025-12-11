@@ -47,6 +47,37 @@ export default function BatchesPage() {
   const [showGroupManager, setShowGroupManager] = useState(false);
   const [isMatching, setIsMatching] = useState(false);
   const [matchingProgress, setMatchingProgress] = useState<MatchingProgress>({ current: 0, total: 0, currentBatch: 0, totalBatches: 0 });
+  
+  // Global undo state for all actions
+  interface UndoState {
+    type: 'delete_products' | 'group_change';
+    label: string;
+    imageGroups?: ImageGroup[];
+    unassignedImages?: string[];
+    deletedProductIds?: string[];
+  }
+  const [undoStack, setUndoStack] = useState<UndoState[]>([]);
+  
+  const saveUndoState = (state: UndoState) => {
+    setUndoStack(prev => [...prev.slice(-9), state]);
+  };
+  
+  const handleGlobalUndo = async () => {
+    if (undoStack.length === 0) return;
+    
+    const lastAction = undoStack[undoStack.length - 1];
+    setUndoStack(prev => prev.slice(0, -1));
+    
+    if (lastAction.type === 'group_change') {
+      if (lastAction.imageGroups) setImageGroups(lastAction.imageGroups);
+      if (lastAction.unassignedImages) setUnassignedImages(lastAction.unassignedImages);
+      toast.success(`Undone: ${lastAction.label}`);
+    } else if (lastAction.type === 'delete_products') {
+      // For deleted products, we'd need to restore from database which isn't possible
+      // So we just notify the user
+      toast.error('Cannot undo product deletion - products have been permanently removed');
+    }
+  };
 
   // Fetch product counts for batches - only when batches change
   useEffect(() => {
@@ -206,6 +237,14 @@ const handleSelectBatch = useCallback((id: string) => {
       return;
     }
 
+    // Save current state for undo
+    saveUndoState({
+      type: 'group_change',
+      label: 'Before auto-group',
+      imageGroups: imageGroups.map(g => ({ ...g, selectedImages: new Set(g.selectedImages) })),
+      unassignedImages: [...unassignedImages],
+    });
+
     // Create image groups for preview/management
     const chunks: string[][] = [];
     for (let i = 0; i < pendingImageUrls.length; i += imagesPerProduct) {
@@ -224,7 +263,7 @@ const handleSelectBatch = useCallback((id: string) => {
     setPendingImageUrls([]);
     setShowGroupManager(true);
     toast.success(`Created ${chunks.length} group(s). Review and adjust, then confirm.`);
-  }, [selectedBatchId, pendingImageUrls, products.length]);
+  }, [selectedBatchId, pendingImageUrls, products.length, imageGroups, unassignedImages, saveUndoState]);
 
   // Re-auto-group all images (from existing groups + unassigned + pending)
   const handleReAutoGroupAll = useCallback((imagesPerProduct: number) => {
@@ -239,6 +278,14 @@ const handleSelectBatch = useCallback((id: string) => {
       toast.error('No images to group.');
       return;
     }
+
+    // Save current state for undo
+    saveUndoState({
+      type: 'group_change',
+      label: 'Before re-group all',
+      imageGroups: imageGroups.map(g => ({ ...g, selectedImages: new Set(g.selectedImages) })),
+      unassignedImages: [...unassignedImages],
+    });
 
     // Create new groups from all collected images
     const chunks: string[][] = [];
@@ -258,7 +305,7 @@ const handleSelectBatch = useCallback((id: string) => {
     setPendingImageUrls([]);
     setShowGroupManager(true);
     toast.success(`Re-grouped into ${chunks.length} product(s). Review and adjust, then confirm.`);
-  }, [imageGroups, unassignedImages, pendingImageUrls]);
+  }, [imageGroups, unassignedImages, pendingImageUrls, saveUndoState]);
 
   // Load all images from products into group manager view
   const handleLoadAllImagesIntoGroups = useCallback(async () => {
@@ -359,6 +406,14 @@ const handleSelectBatch = useCallback((id: string) => {
       return;
     }
 
+    // Save current state for undo
+    saveUndoState({
+      type: 'group_change',
+      label: 'Before auto-group unassigned',
+      imageGroups: imageGroups.map(g => ({ ...g, selectedImages: new Set(g.selectedImages) })),
+      unassignedImages: [...unassignedImages],
+    });
+
     // Chunk unassigned images into groups
     const chunks: string[][] = [];
     for (let i = 0; i < unassignedImages.length; i += imagesPerProduct) {
@@ -376,7 +431,7 @@ const handleSelectBatch = useCallback((id: string) => {
     setImageGroups(prev => [...prev, ...newGroups]);
     setUnassignedImages([]);
     toast.success(`Grouped ${unassignedImages.length} images into ${chunks.length} new product(s).`);
-  }, [unassignedImages, imageGroups.length]);
+  }, [unassignedImages, imageGroups, saveUndoState]);
 
   // AI Smart Match - uses image recognition to group similar images with real-time progress
   const handleSmartMatch = useCallback(async () => {
@@ -389,6 +444,14 @@ const handleSelectBatch = useCallback((id: string) => {
       toast.error('AI matching supports up to 500 images. Please use auto-group first to split into smaller sets.');
       return;
     }
+
+    // Save current state for undo
+    saveUndoState({
+      type: 'group_change',
+      label: 'Before AI Smart Match',
+      imageGroups: imageGroups.map(g => ({ ...g, selectedImages: new Set(g.selectedImages) })),
+      unassignedImages: [...unassignedImages],
+    });
 
     setIsMatching(true);
     
@@ -490,7 +553,7 @@ const handleSelectBatch = useCallback((id: string) => {
       setIsMatching(false);
       setMatchingProgress({ current: 0, total: 0, currentBatch: 0, totalBatches: 0 });
     }
-  }, [unassignedImages, imageGroups.length, settings?.default_images_per_product]);
+  }, [unassignedImages, imageGroups, settings?.default_images_per_product, saveUndoState]);
 
 
   const handleGenerateAll = useCallback(async () => {
@@ -1252,6 +1315,9 @@ const handleSelectBatch = useCallback((id: string) => {
               onSmartMatch={handleSmartMatch}
               isMatching={isMatching}
               matchingProgress={matchingProgress}
+              undoStackLength={undoStack.length}
+              onGlobalUndo={handleGlobalUndo}
+              lastUndoLabel={undoStack.length > 0 ? undoStack[undoStack.length - 1].label : undefined}
             />
           ) : (
             <EmptyState />
