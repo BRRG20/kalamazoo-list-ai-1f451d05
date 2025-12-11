@@ -51,6 +51,15 @@ interface BatchDetailProps {
   onAutoGroup: (imagesPerProduct: number) => void;
   onReAutoGroupAll: (imagesPerProduct: number) => void;
   onGenerateAll: () => void;
+  onGenerateBulk20: () => void;
+  onGenerateSingleProduct: (productId: string) => void;
+  onUndoSingleProduct: (productId: string) => void;
+  onUndoBulkGeneration?: () => void;
+  isProductGenerating: (productId: string) => boolean;
+  hasProductUndoState: (productId: string) => boolean;
+  unprocessedCount: number;
+  hasBulkUndoState: boolean;
+  lastBulkCount: number;
   onExcludeLast2All: () => void;
   onCreateInShopify: (productIds: string[]) => void;
   onEditProduct: (productId: string) => void;
@@ -110,6 +119,15 @@ export function BatchDetail({
   onAutoGroup,
   onReAutoGroupAll,
   onGenerateAll,
+  onGenerateBulk20,
+  onGenerateSingleProduct,
+  onUndoSingleProduct,
+  onUndoBulkGeneration,
+  isProductGenerating,
+  hasProductUndoState,
+  unprocessedCount,
+  hasBulkUndoState,
+  lastBulkCount,
   onExcludeLast2All,
   onCreateInShopify,
   onEditProduct,
