@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { cn } from '@/lib/utils';
 import { 
   Upload, 
   Sparkles, 
@@ -506,6 +507,17 @@ export function BatchDetail({
           >
             <LayoutGrid className="w-4 h-4 mr-1 md:mr-2" />
             <span className="hidden sm:inline">Birds Eye</span>
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleRefreshImages}
+            disabled={imagesLoading || products.length === 0}
+            className="text-xs md:text-sm"
+            title="Refresh all images from database"
+          >
+            <RefreshCw className={cn("w-4 h-4", imagesLoading && "animate-spin")} />
           </Button>
         </div>
 
