@@ -274,6 +274,7 @@ export function BatchDetail({
     lastFetchedRef.current = ''; // Clear cache to force refetch
     
     try {
+      console.log('Refreshing images for', products.length, 'products');
       const results = await Promise.all(
         products.map(async (product) => {
           const images = await getProductImages(product.id);
@@ -282,13 +283,16 @@ export function BatchDetail({
       );
       
       const imagesMap: Record<string, ProductImage[]> = {};
+      let totalImages = 0;
       for (const { productId, images } of results) {
         imagesMap[productId] = images;
+        totalImages += images.length;
       }
+      console.log('Loaded', totalImages, 'images across', Object.keys(imagesMap).length, 'products');
       setProductImages(imagesMap);
       
       const productIds = products.map(p => p.id).sort().join(',');
-      lastFetchedRef.current = `${batch.id}:${productIds}`;
+      lastFetchedRef.current = `${batch.id}:${productIds}:${products.length}`;
     } catch (error) {
       console.error('Error refreshing images:', error);
     } finally {
@@ -594,8 +598,12 @@ export function BatchDetail({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setShowBirdsEyeView(true)}
-            disabled={products.length === 0}
+            onClick={async () => {
+              // Force refresh images before opening Birds Eye View
+              await handleRefreshImages();
+              setShowBirdsEyeView(true);
+            }}
+            disabled={products.length === 0 || imagesLoading}
             className="text-xs md:text-sm"
           >
             <LayoutGrid className="w-4 h-4 mr-1 md:mr-2" />
