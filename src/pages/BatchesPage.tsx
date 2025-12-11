@@ -699,6 +699,38 @@ export default function BatchesPage() {
     }
   }, [editingProductId, fetchImagesForProduct, clearCache, refetchProducts]);
 
+  // Standalone handler for moving images by ID (used in birds eye view)
+  const handleMoveImagesByIdStandalone = useCallback(async (imageIds: string[], targetProductId: string) => {
+    if (imageIds.length === 0) return;
+    
+    try {
+      // Get the count of images in the target product to set starting position
+      const targetImages = await fetchImagesForProduct(targetProductId);
+      let nextPosition = targetImages.length;
+
+      for (const imageId of imageIds) {
+        const { error } = await supabase
+          .from('images')
+          .update({ product_id: targetProductId, position: nextPosition })
+          .eq('id', imageId);
+
+        if (error) {
+          console.error('Error moving image:', error);
+          continue;
+        }
+        nextPosition++;
+      }
+
+      // Clear cache and refetch
+      clearCache();
+      await refetchProducts();
+      
+      toast.success(`${imageIds.length} image(s) moved`);
+    } catch (error) {
+      console.error('Error moving images:', error);
+      toast.error('Failed to move images');
+    }
+  }, [fetchImagesForProduct, clearCache, refetchProducts]);
   const handleReorderProductImages = useCallback(async (productId: string, imageIds: string[]) => {
     // Update positions for all images in the new order
     const updates = imageIds.map((id, index) => 
@@ -897,6 +929,7 @@ export default function BatchesPage() {
                 setShowGroupManager(true);
               }}
               onMoveImageBetweenProducts={handleMoveImageBetweenProducts}
+              onMoveImagesById={handleMoveImagesByIdStandalone}
               onReorderProductImages={handleReorderProductImages}
             />
           ) : (
