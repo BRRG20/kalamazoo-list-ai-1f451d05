@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { 
   Upload, 
@@ -18,7 +18,8 @@ import {
   Search,
   LayoutGrid,
   MoreVertical,
-  Layers
+  Layers,
+  Undo2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -156,6 +157,32 @@ export function BatchDetail({
   
   // Track last fetched batch to prevent unnecessary refetches
   const lastFetchedRef = useRef<string>('');
+
+  // Undo history state
+  interface HistoryState {
+    imageGroups: ImageGroup[];
+    unassignedImages: string[];
+    label: string;
+  }
+  const [history, setHistory] = useState<HistoryState[]>([]);
+
+  // Save current state to history before making changes
+  const saveToHistory = useCallback((label: string) => {
+    setHistory(prev => [...prev.slice(-9), {
+      imageGroups: imageGroups.map(g => ({ ...g, selectedImages: new Set(g.selectedImages) })),
+      unassignedImages: [...unassignedImages],
+      label
+    }]);
+  }, [imageGroups, unassignedImages]);
+
+  // Undo last action
+  const handleUndo = useCallback(() => {
+    if (history.length === 0) return;
+    const lastState = history[history.length - 1];
+    setHistory(prev => prev.slice(0, -1));
+    onUpdateImageGroups(lastState.imageGroups);
+    onUpdateUnassignedImages(lastState.unassignedImages);
+  }, [history, onUpdateImageGroups, onUpdateUnassignedImages]);
 
   // Filter products based on search query
   const filteredProducts = products.filter(product => {
@@ -470,7 +497,10 @@ export function BatchDetail({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => onAutoGroup(imagesPerProduct)}
+            onClick={() => {
+              saveToHistory('Before auto-group');
+              onAutoGroup(imagesPerProduct);
+            }}
             disabled={pendingImageUrls.length === 0}
             className="text-xs md:text-sm"
           >
@@ -483,7 +513,10 @@ export function BatchDetail({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => onReAutoGroupAll(imagesPerProduct)}
+              onClick={() => {
+                saveToHistory('Before re-group all');
+                onReAutoGroupAll(imagesPerProduct);
+              }}
               className="text-xs md:text-sm text-amber-600 hover:text-amber-700 border-amber-300 hover:border-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950"
               title="Re-group all images based on current images-per-product setting"
             >
@@ -502,6 +535,20 @@ export function BatchDetail({
             >
               <Settings2 className="w-4 h-4 mr-1 md:mr-2" />
               <span className="hidden sm:inline">Manage</span> Groups
+            </Button>
+          )}
+
+          {/* Undo button - visible when there's history */}
+          {history.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleUndo}
+              className="text-xs md:text-sm text-amber-600 hover:text-amber-700 border-amber-300 hover:border-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950"
+              title={`Undo: ${history[history.length - 1]?.label || 'last action'}`}
+            >
+              <Undo2 className="w-4 h-4 mr-1 md:mr-2" />
+              Undo
             </Button>
           )}
 
