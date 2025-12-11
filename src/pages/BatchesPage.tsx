@@ -490,35 +490,47 @@ export default function BatchesPage() {
 
   const handleUpdateImage = useCallback(async (imageId: string, updates: Partial<ProductImage>) => {
     if (!editingProductId) return;
-    await updateImage(imageId, editingProductId, updates);
-    // Refresh images
-    const images = await fetchImagesForProduct(editingProductId);
-    setEditingProductImages(images);
+    const success = await updateImage(imageId, editingProductId, updates);
+    if (success) {
+      // Refresh images
+      const images = await fetchImagesForProduct(editingProductId);
+      setEditingProductImages(images);
+      toast.success('Image updated');
+    } else {
+      toast.error('Failed to update image');
+    }
   }, [editingProductId, updateImage, fetchImagesForProduct]);
 
   const handleReorderImages = useCallback(async (imageId: string, newPosition: number) => {
     if (!editingProductId) return;
     
     const oldPosition = editingProductImages.find(i => i.id === imageId)?.position || 0;
+    if (oldPosition === newPosition) return;
     
-    for (const img of editingProductImages) {
-      if (img.id === imageId) {
-        await updateImage(img.id, editingProductId, { position: newPosition });
-      } else if (oldPosition < newPosition) {
-        if (img.position > oldPosition && img.position <= newPosition) {
-          await updateImage(img.id, editingProductId, { position: img.position - 1 });
-        }
-      } else {
-        if (img.position >= newPosition && img.position < oldPosition) {
-          await updateImage(img.id, editingProductId, { position: img.position + 1 });
+    try {
+      for (const img of editingProductImages) {
+        if (img.id === imageId) {
+          await updateImage(img.id, editingProductId, { position: newPosition });
+        } else if (oldPosition < newPosition) {
+          if (img.position > oldPosition && img.position <= newPosition) {
+            await updateImage(img.id, editingProductId, { position: img.position - 1 });
+          }
+        } else {
+          if (img.position >= newPosition && img.position < oldPosition) {
+            await updateImage(img.id, editingProductId, { position: img.position + 1 });
+          }
         }
       }
+      
+      // Refresh images
+      clearCache(editingProductId);
+      const images = await fetchImagesForProduct(editingProductId);
+      setEditingProductImages(images);
+      toast.success('Image order saved');
+    } catch (error) {
+      console.error('Error reordering images:', error);
+      toast.error('Failed to reorder images');
     }
-    
-    // Refresh images
-    clearCache(editingProductId);
-    const images = await fetchImagesForProduct(editingProductId);
-    setEditingProductImages(images);
   }, [editingProductId, editingProductImages, updateImage, clearCache, fetchImagesForProduct]);
 
   const handleDeleteImageFromProduct = useCallback(async (imageId: string) => {
