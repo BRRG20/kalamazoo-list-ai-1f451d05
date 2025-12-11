@@ -108,6 +108,27 @@ export function UnassignedImagePool({
           </div>
 
           <div className="flex items-center gap-2">
+            <select
+              className="h-8 px-2 text-sm border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+              defaultValue=""
+              key={images.length}
+              onChange={(e) => {
+                const count = parseInt(e.target.value);
+                if (count > 0) {
+                  const imagesToSelect = images.slice(0, count);
+                  setSelectedImages(new Set(imagesToSelect));
+                }
+                e.target.value = '';
+              }}
+            >
+              <option value="" disabled>Bulk select...</option>
+              <option value="5">Select 5</option>
+              <option value="10">Select 10</option>
+              <option value="15">Select 15</option>
+              <option value="20">Select 20</option>
+              <option value="50">Select 50</option>
+              <option value="100">Select 100</option>
+            </select>
             <Button variant="ghost" size="sm" onClick={selectAll}>
               <Check className="w-4 h-4 mr-1" />
               All
