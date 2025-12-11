@@ -149,7 +149,7 @@ export function ImageGallery({
         {/* Move selected images UI */}
         {selectedImageIds.size > 0 && availableProducts.length > 0 && onMoveImages && (
           <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 border border-border">
-            <span className="text-xs text-muted-foreground whitespace-nowrap">
+            <span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
               {selectedImageIds.size} selected
             </span>
             <Popover open={moveDropdownOpen} onOpenChange={setMoveDropdownOpen}>
@@ -158,13 +158,15 @@ export function ImageGallery({
                   variant="outline"
                   role="combobox"
                   aria-expanded={moveDropdownOpen}
-                  className="h-8 text-xs flex-1 justify-between"
+                  className="h-8 text-xs min-w-0 flex-1 justify-between overflow-hidden"
                 >
-                  {moveTargetProductId
-                    ? (availableProducts.find(p => p.id === moveTargetProductId)?.title || 
-                       `Product ${availableProducts.findIndex(p => p.id === moveTargetProductId) + 1}`)
-                    : "Move to product..."}
-                  <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                  <span className="truncate">
+                    {moveTargetProductId
+                      ? (availableProducts.find(p => p.id === moveTargetProductId)?.title || 
+                         `Product ${availableProducts.findIndex(p => p.id === moveTargetProductId) + 1}`)
+                      : "Move to product..."}
+                  </span>
+                  <ChevronsUpDown className="ml-2 h-3 w-3 flex-shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-[300px] p-0" align="start">
@@ -185,7 +187,7 @@ export function ImageGallery({
                         >
                           <Check
                             className={cn(
-                              "mr-2 h-4 w-4",
+                              "mr-2 h-4 w-4 flex-shrink-0",
                               moveTargetProductId === product.id ? "opacity-100" : "opacity-0"
                             )}
                           />
@@ -201,7 +203,7 @@ export function ImageGallery({
             </Popover>
             <Button
               size="sm"
-              className="h-8 text-xs"
+              className="h-8 text-xs flex-shrink-0"
               onClick={handleMoveSelected}
               disabled={!moveTargetProductId}
             >
