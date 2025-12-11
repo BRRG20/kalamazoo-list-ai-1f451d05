@@ -199,16 +199,30 @@ export default function BatchesPage() {
   const handleGenerateAll = useCallback(async () => {
     if (!selectedBatchId || products.length === 0) return;
     
+    // Prevent duplicate runs
+    if (isGenerating) {
+      toast.warning('AI generation already in progress');
+      return;
+    }
+    
     // If products are selected, only generate for those; otherwise generate for all
     const hasSelection = selectedProductIds.size > 0;
     const productsToGenerate = hasSelection 
       ? products.filter(p => selectedProductIds.has(p.id))
       : [...products];
     
-    const totalProducts = productsToGenerate.length;
+    // Deduplicate products by ID to prevent processing the same product twice
+    const uniqueProducts = Array.from(
+      new Map(productsToGenerate.map(p => [p.id, p])).values()
+    );
+    
+    // Filter out products that don't have valid IDs or are already being processed
+    const validProducts = uniqueProducts.filter(p => p && p.id && p.id.trim() !== '');
+    
+    const totalProducts = validProducts.length;
     
     if (totalProducts === 0) {
-      toast.error('No products to generate.');
+      toast.error('No valid products to generate.');
       return;
     }
     
@@ -222,22 +236,35 @@ export default function BatchesPage() {
     
     let successCount = 0;
     let errorCount = 0;
+    const processedIds = new Set<string>(); // Track processed products to avoid duplicates
     
     // Process in batches of 5 to avoid overwhelming the system
     const BATCH_SIZE = 5;
     
     for (let batchStart = 0; batchStart < totalProducts; batchStart += BATCH_SIZE) {
       const batchEnd = Math.min(batchStart + BATCH_SIZE, totalProducts);
-      const batch = productsToGenerate.slice(batchStart, batchEnd);
+      const batch = validProducts.slice(batchStart, batchEnd);
       
       // Process this batch in parallel
       const results = await Promise.allSettled(
         batch.map(async (product, batchIndex) => {
-          const globalIndex = batchStart + batchIndex;
+          // Skip if already processed (safety check)
+          if (processedIds.has(product.id)) {
+            console.warn(`Skipping duplicate product: ${product.id}`);
+            return { success: true, productId: product.id, skipped: true };
+          }
+          processedIds.add(product.id);
           
           try {
             // Get product images for AI context
             const images = await fetchImagesForProduct(product.id);
+            
+            // Skip products with no images
+            if (images.length === 0) {
+              console.warn(`Skipping product with no images: ${product.id}`);
+              return { success: false, productId: product.id, noImages: true };
+            }
+            
             const imageUrls = images.slice(0, 2).map(img => img.url);
             
             // Call the edge function
@@ -302,8 +329,16 @@ export default function BatchesPage() {
       
       // Count successes and failures from this batch
       for (const result of results) {
-        if (result.status === 'fulfilled' && result.value.success) {
-          successCount++;
+        if (result.status === 'fulfilled') {
+          const value = result.value;
+          if (value.skipped) continue; // Don't count skipped products
+          if (value.noImages) {
+            errorCount++;
+          } else if (value.success) {
+            successCount++;
+          } else {
+            errorCount++;
+          }
         } else {
           errorCount++;
         }
@@ -322,11 +357,11 @@ export default function BatchesPage() {
     setGenerationProgress({ current: 0, total: 0 });
     
     if (errorCount > 0) {
-      toast.warning(`Generated ${successCount} product(s). ${errorCount} failed.`);
+      toast.warning(`Generated ${successCount} product(s). ${errorCount} failed or had no images.`);
     } else {
       toast.success(`AI generated details for ${successCount} product(s)`);
     }
-  }, [selectedBatchId, products, selectedProductIds, updateProduct, fetchImagesForProduct, getMatchingTags]);
+  }, [selectedBatchId, products, selectedProductIds, isGenerating, updateProduct, fetchImagesForProduct, getMatchingTags]);
 
   const handleExcludeLast2All = useCallback(async () => {
     if (!selectedBatchId) return;
@@ -728,21 +763,39 @@ export default function BatchesPage() {
               onSaveGroups={async () => {
                 if (!selectedBatchId) return;
                 
+                // Filter out empty groups and groups with only empty/invalid image URLs
+                const validGroups = imageGroups.filter(group => {
+                  const validImages = group.images.filter(url => url && url.trim() !== '');
+                  return validImages.length > 0;
+                });
+                
+                if (validGroups.length === 0) {
+                  toast.error('No valid image groups to save.');
+                  return;
+                }
+                
                 // Save groups to database - create products and assign images
                 toast.info('Saving groups...');
                 
                 let savedCount = 0;
-                for (const group of imageGroups) {
-                  if (group.images.length === 0) continue;
+                const createdProductIds = new Set<string>(); // Track to prevent duplicates
+                
+                for (const group of validGroups) {
+                  // Double-check valid images
+                  const validImages = group.images.filter(url => url && url.trim() !== '');
+                  if (validImages.length === 0) continue;
                   
-                  // Create product with just SKU
-                  const sku = `SKU-${Date.now()}-${savedCount + 1}`;
+                  // Create product with unique SKU
+                  const timestamp = Date.now();
+                  const sku = `SKU-${timestamp}-${savedCount + 1}-${Math.random().toString(36).substr(2, 4)}`;
                   const product = await createProduct(sku);
                   
-                  if (product) {
+                  if (product && !createdProductIds.has(product.id)) {
+                    createdProductIds.add(product.id);
+                    
                     // Update images to link to this product by URL
-                    for (let i = 0; i < group.images.length; i++) {
-                      const imageUrl = group.images[i];
+                    for (let i = 0; i < validImages.length; i++) {
+                      const imageUrl = validImages[i];
                       await updateImageProductIdByUrl(imageUrl, product.id, i);
                     }
                     savedCount++;
