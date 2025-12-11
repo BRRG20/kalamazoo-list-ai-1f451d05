@@ -664,6 +664,41 @@ export default function BatchesPage() {
     toast.success('Image moved successfully');
   }, [fetchImagesForProduct, clearCache, refetchProducts]);
 
+  // Handler for moving multiple images by ID from detail panel
+  const handleMoveImagesById = useCallback(async (imageIds: string[], targetProductId: string) => {
+    if (!editingProductId || imageIds.length === 0) return;
+    
+    try {
+      // Get the count of images in the target product to set starting position
+      const targetImages = await fetchImagesForProduct(targetProductId);
+      let nextPosition = targetImages.length;
+
+      for (const imageId of imageIds) {
+        const { error } = await supabase
+          .from('images')
+          .update({ product_id: targetProductId, position: nextPosition })
+          .eq('id', imageId);
+
+        if (error) {
+          console.error('Error moving image:', error);
+          continue;
+        }
+        nextPosition++;
+      }
+
+      // Refresh images for both products
+      clearCache();
+      const updatedImages = await fetchImagesForProduct(editingProductId);
+      setEditingProductImages(updatedImages);
+      await refetchProducts();
+      
+      toast.success(`${imageIds.length} image(s) moved successfully`);
+    } catch (error) {
+      console.error('Error moving images:', error);
+      toast.error('Failed to move images');
+    }
+  }, [editingProductId, fetchImagesForProduct, clearCache, refetchProducts]);
+
   const handleReorderProductImages = useCallback(async (productId: string, imageIds: string[]) => {
     // Update positions for all images in the new order
     const updates = imageIds.map((id, index) => 
@@ -880,6 +915,8 @@ export default function BatchesPage() {
           onUpdateImage={handleUpdateImage}
           onReorderImages={handleReorderImages}
           onDeleteImage={handleDeleteImageFromProduct}
+          onMoveImages={handleMoveImagesById}
+          otherProducts={products}
           onGenerateAI={handleGenerateProductAI}
           onCreateInShopify={handleCreateSingleProductInShopify}
           onPrevious={() => navigateProduct('prev')}

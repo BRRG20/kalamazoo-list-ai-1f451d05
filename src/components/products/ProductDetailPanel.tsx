@@ -31,6 +31,8 @@ interface ProductDetailPanelProps {
   onUpdateImage: (imageId: string, updates: Partial<ProductImage>) => void;
   onReorderImages: (imageId: string, newPosition: number) => void;
   onDeleteImage?: (imageId: string) => void;
+  onMoveImages?: (imageIds: string[], targetProductId: string) => void;
+  otherProducts?: Product[];
   onGenerateAI: (regenerateOnly?: 'title' | 'style_a' | 'style_b' | 'all') => void;
   onCreateInShopify?: () => void;
   onPrevious?: () => void;
@@ -58,6 +60,8 @@ export function ProductDetailPanel({
   onUpdateImage,
   onReorderImages,
   onDeleteImage,
+  onMoveImages,
+  otherProducts = [],
   onGenerateAI,
   onCreateInShopify,
   onPrevious,
@@ -653,6 +657,9 @@ export function ProductDetailPanel({
               onUpdateImage={onUpdateImage}
               onReorderImages={onReorderImages}
               onDeleteImage={onDeleteImage}
+              onMoveImages={onMoveImages}
+              otherProducts={otherProducts}
+              currentProductId={product.id}
             />
           </div>
 

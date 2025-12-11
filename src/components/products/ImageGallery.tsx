@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { ChevronUp, ChevronDown, ImageIcon, Trash2, GripVertical, ZoomIn } from 'lucide-react';
+import { ChevronUp, ChevronDown, ImageIcon, Trash2, GripVertical, ZoomIn, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import type { ProductImage } from '@/types';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import type { ProductImage, Product } from '@/types';
 import { cn } from '@/lib/utils';
 
 interface ImageGalleryProps {
@@ -12,6 +13,9 @@ interface ImageGalleryProps {
   onUpdateImage: (imageId: string, updates: Partial<ProductImage>) => void;
   onReorderImages: (imageId: string, newPosition: number) => void;
   onDeleteImage?: (imageId: string) => void;
+  onMoveImages?: (imageIds: string[], targetProductId: string) => void;
+  otherProducts?: Product[];
+  currentProductId?: string;
 }
 
 export function ImageGallery({
@@ -19,10 +23,15 @@ export function ImageGallery({
   onUpdateImage,
   onReorderImages,
   onDeleteImage,
+  onMoveImages,
+  otherProducts = [],
+  currentProductId,
 }: ImageGalleryProps) {
   const [draggedImageId, setDraggedImageId] = useState<string | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [previewImage, setPreviewImage] = useState<ProductImage | null>(null);
+  const [selectedImageIds, setSelectedImageIds] = useState<Set<string>>(new Set());
+  const [moveTargetProductId, setMoveTargetProductId] = useState<string>('');
 
   const moveImage = (imageId: string, direction: 'up' | 'down') => {
     const image = images.find(i => i.id === imageId);
@@ -75,6 +84,33 @@ export function ImageGallery({
     setDragOverIndex(null);
   };
 
+  const toggleImageSelection = (imageId: string) => {
+    setSelectedImageIds(prev => {
+      const next = new Set(prev);
+      if (next.has(imageId)) {
+        next.delete(imageId);
+      } else {
+        next.add(imageId);
+      }
+      return next;
+    });
+  };
+
+  const handleMoveSelected = () => {
+    if (selectedImageIds.size === 0 || !moveTargetProductId || !onMoveImages) return;
+    onMoveImages(Array.from(selectedImageIds), moveTargetProductId);
+    setSelectedImageIds(new Set());
+    setMoveTargetProductId('');
+  };
+
+  const selectAll = () => {
+    setSelectedImageIds(new Set(images.map(img => img.id)));
+  };
+
+  const clearSelection = () => {
+    setSelectedImageIds(new Set());
+  };
+
   if (images.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -84,12 +120,57 @@ export function ImageGallery({
     );
   }
 
+  const availableProducts = otherProducts.filter(p => p.id !== currentProductId);
+
   return (
     <>
       <div className="space-y-3">
-        <h3 className="font-semibold text-foreground">
-          Images ({images.length})
-        </h3>
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-foreground">
+            Images ({images.length})
+          </h3>
+          {images.length > 1 && (
+            <div className="flex gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={selectedImageIds.size === images.length ? clearSelection : selectAll}
+                className="text-xs h-7"
+              >
+                {selectedImageIds.size === images.length ? 'Clear' : 'Select All'}
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* Move selected images UI */}
+        {selectedImageIds.size > 0 && availableProducts.length > 0 && onMoveImages && (
+          <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 border border-border">
+            <span className="text-xs text-muted-foreground">
+              {selectedImageIds.size} selected
+            </span>
+            <Select value={moveTargetProductId} onValueChange={setMoveTargetProductId}>
+              <SelectTrigger className="h-8 text-xs flex-1">
+                <SelectValue placeholder="Move to product..." />
+              </SelectTrigger>
+              <SelectContent>
+                {availableProducts.map((product, index) => (
+                  <SelectItem key={product.id} value={product.id} className="text-xs">
+                    {product.title || `Product ${index + 1}`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              size="sm"
+              className="h-8 text-xs"
+              onClick={handleMoveSelected}
+              disabled={!moveTargetProductId}
+            >
+              Move
+            </Button>
+          </div>
+        )}
         
         <div className="space-y-2">
           {images.map((image, index) => (
@@ -105,9 +186,21 @@ export function ImageGallery({
                 "flex gap-3 p-2 rounded-lg border border-border bg-card cursor-grab active:cursor-grabbing transition-all",
                 !image.include_in_shopify && "opacity-60",
                 draggedImageId === image.id && "opacity-40 scale-95",
-                dragOverIndex === index && draggedImageId !== image.id && "border-primary border-2 bg-primary/5"
+                dragOverIndex === index && draggedImageId !== image.id && "border-primary border-2 bg-primary/5",
+                selectedImageIds.has(image.id) && "ring-2 ring-primary bg-primary/5"
               )}
             >
+              {/* Selection checkbox */}
+              {availableProducts.length > 0 && onMoveImages && (
+                <div className="flex items-center">
+                  <Checkbox
+                    checked={selectedImageIds.has(image.id)}
+                    onCheckedChange={() => toggleImageSelection(image.id)}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </div>
+              )}
+
               {/* Drag handle */}
               <div className="flex items-center text-muted-foreground">
                 <GripVertical className="w-4 h-4" />
