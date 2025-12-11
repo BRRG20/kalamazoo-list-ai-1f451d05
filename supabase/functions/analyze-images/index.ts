@@ -39,6 +39,17 @@ const corsHeaders = {
 const SYSTEM_PROMPT = `You are a vintage clothing expert analyzing product images for a resale listing app.
 
 ==========================================
+VISUAL ANALYSIS (USE FULL VOCABULARY)
+==========================================
+
+You are not limited to predefined terms. Use your full visual understanding while staying accurate to clothing.
+
+When describing graphics or patterns, use terms such as (but not limited to):
+abstract graphic, geometric print, retro graphic, minimalist graphic, anime/manga character, portrait graphic, logo print, colour-block design, stripe pattern, distressed texture, chunky knit, ribbed knit, heavyweight cotton, stonewash, oversized fit, boxy fit, clean aesthetic, muted tones, vibrant tones, monochrome palette, embroidered patch, graffiti-style print, line-art graphic, etc.
+
+Generate new descriptive terms when needed based on what you see.
+
+==========================================
 POP CULTURE & BRAND DETECTION (CRITICAL)
 ==========================================
 
@@ -51,7 +62,7 @@ ALWAYS detect and include recognizable content:
 - Brands: Nike, Harley-Davidson, Carhartt, Champion, etc.
 - Characters: Mickey Mouse, Bart Simpson, SpongeBob, etc.
 
-If ANY recognizable pop culture, celebrity, character, sports team, anime, comic, or music icon is visible on the garment, you MUST include it in the brand field or identify it for title use.
+If ANY recognizable pop culture, celebrity, character, sports team, anime, comic, or music icon is visible on the garment, you MUST include it in the brand field or pop_culture field.
 
 ==========================================
 STRICT EXTRACTION RULES
@@ -69,16 +80,17 @@ Extract:
 - size_label (from label if visible)
 - material (from label if visible)
 - made_in (from label if visible)
-- garment_type (e.g. "T-Shirt", "Hoodie", "Jacket", "Jeans")
+- garment_type (e.g. "T-Shirt", "Hoodie", "Jacket", "Jeans", "Sweatshirt", "Crew Neck Sweater")
 - department ("Men", "Women", "Unisex", "Kids" - default to Unisex if unclear)
 - colour_main (primary color)
 - colour_secondary (secondary color if applicable)
-- pattern (e.g. "Graphic", "Solid", "Striped", "Abstract")
+- pattern (e.g. "Graphic", "Solid", "Striped", "Abstract", "Logo Print", "Geometric Print", "Portrait Graphic")
 - era (ONLY "80s", "90s", "Y2K" OR null if uncertain)
 - condition (general assessment)
-- fit (e.g. "Oversized", "Regular", "Slim")
-- style (e.g. "Graphic Tee", "Band Tee", "Anime", "Sports", "Streetwear")
+- fit (e.g. "Oversized", "Regular", "Slim", "Boxy")
+- style (e.g. "Graphic Tee", "Band Tee", "Anime", "Sports", "Streetwear", "Vintage", "Retro")
 - pop_culture (any recognizable character, artist, show, team detected - for title use)
+- visual_style (describe the graphic/pattern style: "abstract graphic", "line-art", "minimalist", "graffiti-style", etc.)
 
 Respond ONLY with valid JSON:
 {
@@ -95,7 +107,8 @@ Respond ONLY with valid JSON:
   "condition": "string or null",
   "fit": "string or null",
   "style": "string or null",
-  "pop_culture": "string or null"
+  "pop_culture": "string or null",
+  "visual_style": "string or null"
 }`;
 
 serve(async (req) => {
