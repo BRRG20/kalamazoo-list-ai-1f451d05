@@ -887,6 +887,7 @@ export function BatchDetail({
         <BirdsEyeView
           products={products}
           productImages={productImages}
+          isLoading={imagesLoading}
           onClose={() => {
             setShowBirdsEyeView(false);
             handleRefreshImages();
@@ -903,6 +904,21 @@ export function BatchDetail({
                   onMoveImageBetweenProducts(image.url, fromProductId, toProductId);
                 }
               });
+            }
+          }}
+          onDeleteImage={async (imageId) => {
+            // Find the image to delete
+            for (const [productId, images] of Object.entries(productImages)) {
+              const image = images.find(img => img.id === imageId);
+              if (image) {
+                onDeleteImage(image.url);
+                // Update local state
+                setProductImages(prev => ({
+                  ...prev,
+                  [productId]: prev[productId].filter(img => img.id !== imageId)
+                }));
+                break;
+              }
             }
           }}
         />
