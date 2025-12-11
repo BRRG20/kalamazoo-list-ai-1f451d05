@@ -81,6 +81,7 @@ export function UnassignedImagePool({
     }
     
     console.log('Creating group with images:', imagesToUse);
+    // Pass true as second param to signal these should be removed from unassigned
     onCreateGroup(imagesToUse);
     setSelectedImages(new Set());
   };
