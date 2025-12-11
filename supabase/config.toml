@@ -11,3 +11,6 @@ verify_jwt = true
 
 [functions.create-shopify-product]
 verify_jwt = true
+
+[functions.match-images]
+verify_jwt = true
