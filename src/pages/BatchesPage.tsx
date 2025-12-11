@@ -45,6 +45,7 @@ export default function BatchesPage() {
   const [imageGroups, setImageGroups] = useState<ImageGroup[]>([]);
   const [unassignedImages, setUnassignedImages] = useState<string[]>([]);
   const [showGroupManager, setShowGroupManager] = useState(false);
+  const [isMatching, setIsMatching] = useState(false);
 
   // Fetch product counts for batches - only when batches change
   useEffect(() => {
@@ -342,6 +343,57 @@ const handleSelectBatch = useCallback((id: string) => {
     setUnassignedImages([]);
     toast.success(`Grouped ${unassignedImages.length} images into ${chunks.length} new product(s).`);
   }, [unassignedImages, imageGroups.length]);
+
+  // AI Smart Match - uses image recognition to group similar images
+  const handleSmartMatch = useCallback(async () => {
+    if (unassignedImages.length === 0) {
+      toast.error('No unassigned images to match.');
+      return;
+    }
+
+    if (unassignedImages.length > 100) {
+      toast.error('AI matching works best with 100 or fewer images. Please use auto-group first, then refine.');
+      return;
+    }
+
+    setIsMatching(true);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('match-images', {
+        body: { 
+          imageUrls: unassignedImages,
+          imagesPerGroup: settings?.default_images_per_product || 9
+        }
+      });
+
+      if (error) throw error;
+      if (!data?.groups) throw new Error('No groups returned from AI');
+
+      // Convert AI response to ImageGroups
+      const groupMap = new Map<number, string[]>();
+      for (const item of data.groups) {
+        const group = groupMap.get(item.groupNumber) || [];
+        group.push(item.imageUrl);
+        groupMap.set(item.groupNumber, group);
+      }
+
+      const newGroups: ImageGroup[] = Array.from(groupMap.entries()).map(([groupNum, images], index) => ({
+        productId: `temp-match-${Date.now()}-${index}`,
+        productNumber: imageGroups.length + index + 1,
+        images,
+        selectedImages: new Set<string>(),
+      }));
+
+      setImageGroups(prev => [...prev, ...newGroups]);
+      setUnassignedImages([]);
+      toast.success(`AI matched ${unassignedImages.length} images into ${newGroups.length} product groups.`);
+    } catch (error) {
+      console.error('Smart match error:', error);
+      toast.error(error instanceof Error ? error.message : 'AI matching failed');
+    } finally {
+      setIsMatching(false);
+    }
+  }, [unassignedImages, imageGroups.length, settings?.default_images_per_product]);
 
   const handleGenerateAll = useCallback(async () => {
     if (!selectedBatchId || products.length === 0) return;
@@ -1081,6 +1133,8 @@ const handleSelectBatch = useCallback((id: string) => {
               onLoadAllImagesIntoGroups={handleLoadAllImagesIntoGroups}
               onRegroupSelectedProducts={handleRegroupSelectedProducts}
               onRegroupUnassigned={handleRegroupUnassigned}
+              onSmartMatch={handleSmartMatch}
+              isMatching={isMatching}
             />
           ) : (
             <EmptyState />
