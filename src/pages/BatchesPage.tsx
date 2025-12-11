@@ -199,83 +199,113 @@ export default function BatchesPage() {
   const handleGenerateAll = useCallback(async () => {
     if (!selectedBatchId || products.length === 0) return;
     
-    // Show warning for large product counts
-    if (products.length > UPLOAD_LIMITS.RECOMMENDED_PRODUCTS_FOR_AI) {
-      toast.warning(`For stability, consider generating AI in groups of ${UPLOAD_LIMITS.RECOMMENDED_PRODUCTS_FOR_AI} products or fewer. Proceeding anyway...`);
+    // Get a stable copy of products at the start to prevent issues during generation
+    const productsToGenerate = [...products];
+    const totalProducts = productsToGenerate.length;
+    
+    // Show warning for large product counts (20 is the recommended limit)
+    if (totalProducts > UPLOAD_LIMITS.RECOMMENDED_PRODUCTS_FOR_AI) {
+      toast.warning(`Processing ${totalProducts} products. For best stability, generate in batches of ${UPLOAD_LIMITS.RECOMMENDED_PRODUCTS_FOR_AI} or fewer.`, { duration: 5000 });
     }
     
     setIsGenerating(true);
-    setGenerationProgress({ current: 0, total: products.length });
+    setGenerationProgress({ current: 0, total: totalProducts });
     
     let successCount = 0;
     let errorCount = 0;
     
-    for (let i = 0; i < products.length; i++) {
-      const product = products[i];
-      setGenerationProgress({ current: i + 1, total: products.length });
+    // Process in batches of 5 to avoid overwhelming the system
+    const BATCH_SIZE = 5;
+    
+    for (let batchStart = 0; batchStart < totalProducts; batchStart += BATCH_SIZE) {
+      const batchEnd = Math.min(batchStart + BATCH_SIZE, totalProducts);
+      const batch = productsToGenerate.slice(batchStart, batchEnd);
       
-      try {
-        // Get product images for AI context
-        const images = await fetchImagesForProduct(product.id);
-        const imageUrls = images.slice(0, 2).map(img => img.url);
-        
-        // Call the edge function
-        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-listing`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-          body: JSON.stringify({ product, imageUrls }),
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json();
-          console.error(`Error generating for ${product.sku}:`, errorData.error);
-          await updateProduct(product.id, { status: 'error' });
+      // Process this batch in parallel
+      const results = await Promise.allSettled(
+        batch.map(async (product, batchIndex) => {
+          const globalIndex = batchStart + batchIndex;
+          
+          try {
+            // Get product images for AI context
+            const images = await fetchImagesForProduct(product.id);
+            const imageUrls = images.slice(0, 2).map(img => img.url);
+            
+            // Call the edge function
+            const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-listing`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+              },
+              body: JSON.stringify({ product, imageUrls }),
+            });
+            
+            if (!response.ok) {
+              const errorData = await response.json();
+              console.error(`Error generating for ${product.sku}:`, errorData.error);
+              await updateProduct(product.id, { status: 'error' });
+              return { success: false, productId: product.id };
+            }
+            
+            const data = await response.json();
+            const generated = data.generated;
+            
+            // Get default tags based on garment type, gender, and keywords
+            const garmentType = product.garment_type || generated.garment_type || '';
+            const department = product.department || '';
+            const defaultTags = getMatchingTags({
+              garmentType,
+              department,
+              title: generated.title || product.title || '',
+              description: generated.description_style_a || '',
+              notes: product.notes || ''
+            });
+            
+            // Merge default tags with AI-generated tags
+            let finalShopifyTags = generated.shopify_tags || product.shopify_tags || '';
+            if (defaultTags.length > 0) {
+              const existingTags = finalShopifyTags.split(',').map(t => t.trim()).filter(Boolean);
+              const allTags = [...new Set([...existingTags, ...defaultTags])];
+              finalShopifyTags = allTags.join(', ');
+            }
+            
+            // Update product with generated content
+            await updateProduct(product.id, {
+              status: 'generated',
+              title: generated.title || product.title,
+              description_style_a: generated.description_style_a,
+              description_style_b: generated.description_style_b,
+              shopify_tags: finalShopifyTags,
+              etsy_tags: generated.etsy_tags || product.etsy_tags,
+              collections_tags: generated.collections_tags || product.collections_tags,
+            });
+            
+            return { success: true, productId: product.id };
+            
+          } catch (error) {
+            console.error(`Error generating for ${product.sku}:`, error);
+            await updateProduct(product.id, { status: 'error' });
+            return { success: false, productId: product.id };
+          }
+        })
+      );
+      
+      // Count successes and failures from this batch
+      for (const result of results) {
+        if (result.status === 'fulfilled' && result.value.success) {
+          successCount++;
+        } else {
           errorCount++;
-          continue;
         }
-        
-        const data = await response.json();
-        const generated = data.generated;
-        
-        // Get default tags based on garment type, gender, and keywords
-        const garmentType = product.garment_type || generated.garment_type || '';
-        const department = product.department || '';
-        const defaultTags = getMatchingTags({
-          garmentType,
-          department,
-          title: generated.title || product.title || '',
-          description: generated.description_style_a || '',
-          notes: product.notes || ''
-        });
-        
-        // Merge default tags with AI-generated tags
-        let finalShopifyTags = generated.shopify_tags || product.shopify_tags || '';
-        if (defaultTags.length > 0) {
-          const existingTags = finalShopifyTags.split(',').map(t => t.trim()).filter(Boolean);
-          const allTags = [...new Set([...existingTags, ...defaultTags])];
-          finalShopifyTags = allTags.join(', ');
-        }
-        
-        // Update product with generated content
-        await updateProduct(product.id, {
-          status: 'generated',
-          title: generated.title || product.title,
-          description_style_a: generated.description_style_a,
-          description_style_b: generated.description_style_b,
-          shopify_tags: finalShopifyTags,
-          etsy_tags: generated.etsy_tags || product.etsy_tags,
-          collections_tags: generated.collections_tags || product.collections_tags,
-        });
-        
-        successCount++;
-        
-      } catch (error) {
-        console.error(`Error generating for ${product.sku}:`, error);
-        await updateProduct(product.id, { status: 'error' });
-        errorCount++;
+      }
+      
+      // Update progress after each batch
+      setGenerationProgress({ current: batchEnd, total: totalProducts });
+      
+      // Small delay between batches to prevent rate limiting
+      if (batchEnd < totalProducts) {
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
     }
     
