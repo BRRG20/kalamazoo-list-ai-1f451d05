@@ -97,6 +97,9 @@ interface BatchDetailProps {
   undoStackLength?: number;
   onGlobalUndo?: () => void;
   lastUndoLabel?: string;
+  // Deleted products
+  deletedProductsCount?: number;
+  onOpenDeletedProducts?: () => void;
 }
 
 export function BatchDetail({
@@ -151,6 +154,8 @@ export function BatchDetail({
   undoStackLength = 0,
   onGlobalUndo,
   lastUndoLabel,
+  deletedProductsCount = 0,
+  onOpenDeletedProducts,
 }: BatchDetailProps) {
   const { settings, isShopifyConfigured } = useSettings();
   const [imagesPerProduct, setImagesPerProduct] = useState(settings?.default_images_per_product || 9);
@@ -634,6 +639,24 @@ export function BatchDetail({
           >
             <RefreshCw className={cn("w-4 h-4", imagesLoading && "animate-spin")} />
           </Button>
+
+          {/* Trash button - show deleted products */}
+          {onOpenDeletedProducts && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onOpenDeletedProducts}
+              className="text-xs md:text-sm relative"
+              title="View deleted products"
+            >
+              <Trash2 className="w-4 h-4" />
+              {deletedProductsCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-destructive text-destructive-foreground text-xs rounded-full flex items-center justify-center">
+                  {deletedProductsCount}
+                </span>
+              )}
+            </Button>
+          )}
         </div>
 
         {/* Shopify row */}
