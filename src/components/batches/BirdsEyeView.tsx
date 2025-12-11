@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
-import { X, GripVertical, ZoomIn, Check } from 'lucide-react';
+import { useState } from 'react';
+import { X, ZoomIn, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { toast } from 'sonner';
 import type { Product, ProductImage } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -23,6 +23,8 @@ export function BirdsEyeView({
   const [selectedImages, setSelectedImages] = useState<Map<string, { imageId: string; productId: string }>>(new Map());
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [dropTargetProductId, setDropTargetProductId] = useState<string | null>(null);
+  const [recentlyMovedImages, setRecentlyMovedImages] = useState<Set<string>>(new Set());
+  const [recentlyReceivedProduct, setRecentlyReceivedProduct] = useState<string | null>(null);
 
   const toggleImageSelection = (imageId: string, productId: string) => {
     setSelectedImages(prev => {
@@ -39,19 +41,40 @@ export function BirdsEyeView({
   const handleMoveToProduct = (targetProductId: string) => {
     // Group selected images by source product
     const imagesByProduct = new Map<string, string[]>();
+    const movedImageIds: string[] = [];
+    
     selectedImages.forEach(({ imageId, productId }) => {
       if (productId !== targetProductId) {
         if (!imagesByProduct.has(productId)) {
           imagesByProduct.set(productId, []);
         }
         imagesByProduct.get(productId)!.push(imageId);
+        movedImageIds.push(imageId);
       }
     });
+
+    if (movedImageIds.length === 0) return;
 
     // Move images from each source product
     imagesByProduct.forEach((imageIds, fromProductId) => {
       onMoveImages(imageIds, fromProductId, targetProductId);
     });
+
+    // Show visual feedback
+    setRecentlyMovedImages(new Set(movedImageIds));
+    setRecentlyReceivedProduct(targetProductId);
+    
+    // Find target product name for toast
+    const targetProduct = products.find(p => p.id === targetProductId);
+    const targetName = targetProduct?.title || `Product #${products.findIndex(p => p.id === targetProductId) + 1}`;
+    
+    toast.success(`Moved ${movedImageIds.length} image${movedImageIds.length > 1 ? 's' : ''} to ${targetName}`);
+
+    // Clear visual feedback after animation
+    setTimeout(() => {
+      setRecentlyMovedImages(new Set());
+      setRecentlyReceivedProduct(null);
+    }, 1500);
 
     setSelectedImages(new Map());
     setDropTargetProductId(null);
@@ -118,6 +141,7 @@ export function BirdsEyeView({
             );
             const isDropTarget = dropTargetProductId === product.id;
             const canReceive = selectedImages.size > 0 && !hasSelectedImages;
+            const justReceived = recentlyReceivedProduct === product.id;
 
             return (
               <div
@@ -126,7 +150,8 @@ export function BirdsEyeView({
                   "border rounded-lg p-2 bg-card transition-all cursor-pointer",
                   isDropTarget && "ring-2 ring-primary bg-primary/10",
                   canReceive && "hover:ring-2 hover:ring-primary/50",
-                  hasSelectedImages && "ring-2 ring-primary"
+                  hasSelectedImages && "ring-2 ring-primary",
+                  justReceived && "ring-2 ring-green-500 bg-green-500/10 animate-pulse"
                 )}
                 onDragOver={(e) => handleDragOver(e, product.id)}
                 onDragLeave={handleDragLeave}
@@ -156,12 +181,15 @@ export function BirdsEyeView({
                 <div className="grid grid-cols-3 gap-1">
                   {images.map((image, imgIndex) => {
                     const isSelected = selectedImages.has(image.id);
+                    const justMoved = recentlyMovedImages.has(image.id);
+                    
                     return (
                       <div
                         key={image.id}
                         className={cn(
-                          "relative aspect-square rounded overflow-hidden cursor-pointer group",
-                          isSelected && "ring-2 ring-primary"
+                          "relative aspect-square rounded overflow-hidden cursor-pointer group transition-all duration-300",
+                          isSelected && "ring-2 ring-primary",
+                          justMoved && "ring-2 ring-green-500 scale-105 shadow-lg"
                         )}
                         onClick={(e) => {
                           e.stopPropagation();
@@ -171,16 +199,22 @@ export function BirdsEyeView({
                         <img
                           src={image.url}
                           alt={`Image ${imgIndex + 1}`}
-                          className="w-full h-full object-cover"
+                          className={cn(
+                            "w-full h-full object-cover transition-all duration-300",
+                            justMoved && "brightness-110"
+                          )}
                         />
                         
                         {/* Selection overlay */}
                         <div className={cn(
                           "absolute inset-0 transition-opacity flex items-center justify-center",
-                          isSelected ? "bg-primary/30" : "bg-black/0 group-hover:bg-black/30"
+                          isSelected ? "bg-primary/30" : justMoved ? "bg-green-500/30" : "bg-black/0 group-hover:bg-black/30"
                         )}>
                           {isSelected && (
                             <Check className="w-4 h-4 text-white drop-shadow-md" />
+                          )}
+                          {justMoved && !isSelected && (
+                            <Check className="w-4 h-4 text-green-100 drop-shadow-md animate-bounce" />
                           )}
                         </div>
 
