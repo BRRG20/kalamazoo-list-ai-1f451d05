@@ -113,7 +113,7 @@ export function BatchDetail({
   const [imagesLoading, setImagesLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const shopifyConfigured = isShopifyConfigured();
-  const fetchedBatchRef = useRef<string | null>(null);
+  
 
   // Update imagesPerProduct when settings load
   useEffect(() => {
@@ -123,42 +123,46 @@ export function BatchDetail({
   }, [settings?.default_images_per_product]);
 
   // Fetch images for all products when batch changes or products list changes
-  // Use batch.id as primary trigger and track product IDs to avoid unnecessary refetches
   useEffect(() => {
-    const productIds = products.map(p => p.id).sort().join(',');
-    const fetchKey = `${batch.id}-${productIds}`;
+    let cancelled = false;
     
-    // Skip if we've already fetched for this exact set
-    if (fetchedBatchRef.current === fetchKey) {
-      return;
-    }
-    
-    if (products.length === 0) {
-      setProductImages({});
-      fetchedBatchRef.current = fetchKey;
-      return;
-    }
-    
-    setImagesLoading(true);
-    
-    // Fetch all images in parallel
-    Promise.all(
-      products.map(async (product) => {
-        const images = await getProductImages(product.id);
-        return { productId: product.id, images };
-      })
-    ).then((results) => {
-      const imagesMap: Record<string, ProductImage[]> = {};
-      for (const { productId, images } of results) {
-        imagesMap[productId] = images;
+    const fetchAllImages = async () => {
+      if (products.length === 0) {
+        setProductImages({});
+        return;
       }
-      setProductImages(imagesMap);
-      fetchedBatchRef.current = fetchKey;
-      setImagesLoading(false);
-    }).catch((error) => {
-      console.error('Error fetching images:', error);
-      setImagesLoading(false);
-    });
+      
+      setImagesLoading(true);
+      
+      try {
+        const results = await Promise.all(
+          products.map(async (product) => {
+            const images = await getProductImages(product.id);
+            return { productId: product.id, images };
+          })
+        );
+        
+        if (!cancelled) {
+          const imagesMap: Record<string, ProductImage[]> = {};
+          for (const { productId, images } of results) {
+            imagesMap[productId] = images;
+          }
+          setProductImages(imagesMap);
+        }
+      } catch (error) {
+        console.error('Error fetching images:', error);
+      } finally {
+        if (!cancelled) {
+          setImagesLoading(false);
+        }
+      }
+    };
+    
+    fetchAllImages();
+    
+    return () => {
+      cancelled = true;
+    };
   }, [batch.id, products, getProductImages]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, addToUnassigned: boolean = false) => {
