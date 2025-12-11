@@ -120,16 +120,39 @@ export function BatchDetail({
     }
   }, [settings?.default_images_per_product]);
 
-  // Fetch images for all products
+  // Fetch images for all products with proper cancellation handling
   useEffect(() => {
+    let cancelled = false;
+    
     const fetchAllImages = async () => {
-      const imagesMap: Record<string, ProductImage[]> = {};
-      for (const product of products) {
-        imagesMap[product.id] = await getProductImages(product.id);
+      if (products.length === 0) {
+        setProductImages({});
+        return;
       }
-      setProductImages(imagesMap);
+      
+      // Fetch all images in parallel for better performance
+      const results = await Promise.all(
+        products.map(async (product) => {
+          const images = await getProductImages(product.id);
+          return { productId: product.id, images };
+        })
+      );
+      
+      // Only update state if this effect hasn't been cancelled
+      if (!cancelled) {
+        const imagesMap: Record<string, ProductImage[]> = {};
+        for (const { productId, images } of results) {
+          imagesMap[productId] = images;
+        }
+        setProductImages(imagesMap);
+      }
     };
+    
     fetchAllImages();
+    
+    return () => {
+      cancelled = true;
+    };
   }, [products, getProductImages]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, addToUnassigned: boolean = false) => {

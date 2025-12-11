@@ -346,11 +346,8 @@ export function useProducts(batchId: string | null) {
 export function useImages() {
   const [imageCache, setImageCache] = useState<Record<string, ProductImage[]>>({});
 
-  const fetchImagesForProduct = async (productId: string): Promise<ProductImage[]> => {
-    if (imageCache[productId]) {
-      return imageCache[productId];
-    }
-
+  const fetchImagesForProduct = useCallback(async (productId: string): Promise<ProductImage[]> => {
+    // Always fetch fresh from database to ensure consistency
     const { data, error } = await supabase
       .from('images')
       .select('*')
@@ -365,9 +362,9 @@ export function useImages() {
     const images = (data || []).map(mapImage);
     setImageCache(prev => ({ ...prev, [productId]: images }));
     return images;
-  };
+  }, []);
 
-  const fetchImagesForBatch = async (batchId: string): Promise<ProductImage[]> => {
+  const fetchImagesForBatch = useCallback(async (batchId: string): Promise<ProductImage[]> => {
     const { data, error } = await supabase
       .from('images')
       .select('*')
@@ -380,7 +377,7 @@ export function useImages() {
     }
     
     return (data || []).map(mapImage);
-  };
+  }, []);
 
   const addImage = async (productId: string, batchId: string, url: string, position: number) => {
     const userId = await getCurrentUserId();
