@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useDroppable } from '@dnd-kit/core';
-import { AlertTriangle, Plus, Check, X, Eye, Trash2 } from 'lucide-react';
+import { AlertTriangle, Plus, Check, X, Eye, Trash2, Grid3X3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -10,6 +10,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import type { ImageGroup } from './ImageGroupManager';
 import { ImagePreviewModal } from './ImagePreviewModal';
@@ -20,6 +28,7 @@ interface UnassignedImagePoolProps {
   onAddToGroup: (url: string, groupId: string) => void;
   onDeleteImage: (url: string) => void;
   groups: ImageGroup[];
+  onAutoGroupUnassigned?: (imagesPerProduct: number) => void;
 }
 
 export function UnassignedImagePool({
@@ -28,6 +37,7 @@ export function UnassignedImagePool({
   onAddToGroup,
   onDeleteImage,
   groups,
+  onAutoGroupUnassigned,
 }: UnassignedImagePoolProps) {
   const [selectedImages, setSelectedImages] = useState<Set<string>>(new Set());
   const [targetGroupId, setTargetGroupId] = useState<string>('');
@@ -157,6 +167,53 @@ export function UnassignedImagePool({
               <X className="w-4 h-4 mr-1" />
               None
             </Button>
+            
+            {/* Auto-group dropdown */}
+            {onAutoGroupUnassigned && images.length >= 2 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="ml-2">
+                    <Grid3X3 className="w-4 h-4 mr-1" />
+                    Auto-group
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="bg-popover">
+                  <DropdownMenuLabel>Images per product</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {[2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15].map((num) => (
+                    <DropdownMenuItem
+                      key={num}
+                      onClick={() => onAutoGroupUnassigned(num)}
+                    >
+                      {num} images per product
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <div className="px-2 py-1.5">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="1"
+                        max={images.length}
+                        placeholder="Custom #"
+                        className="h-7 w-20 px-2 text-sm border border-input rounded-md bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => {
+                          e.stopPropagation();
+                          if (e.key === 'Enter') {
+                            const count = parseInt((e.target as HTMLInputElement).value);
+                            if (count > 0) {
+                              onAutoGroupUnassigned(count);
+                            }
+                          }
+                        }}
+                      />
+                      <span className="text-xs text-muted-foreground">Enter</span>
+                    </div>
+                  </div>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
         </div>
 
