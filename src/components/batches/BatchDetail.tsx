@@ -67,6 +67,7 @@ interface BatchDetailProps {
   onToggleGroupManager: () => void;
   onAddToUnassigned: (urls: string[]) => void;
   onMoveImageBetweenProducts?: (imageUrl: string, fromProductId: string, toProductId: string) => void;
+  onReorderProductImages?: (productId: string, imageIds: string[]) => void;
 }
 
 export function BatchDetail({
@@ -109,6 +110,7 @@ export function BatchDetail({
   onToggleGroupManager,
   onAddToUnassigned,
   onMoveImageBetweenProducts,
+  onReorderProductImages,
 }: BatchDetailProps) {
   const { settings, isShopifyConfigured } = useSettings();
   const [imagesPerProduct, setImagesPerProduct] = useState(settings?.default_images_per_product || 9);
@@ -508,7 +510,34 @@ export function BatchDetail({
                 <span className="text-sm text-muted-foreground">
                   {selectedProductIds.size} selected
                 </span>
-                <div className="flex gap-1">
+                <div className="flex gap-1 items-center">
+                  {/* Bulk select dropdown */}
+                  <select
+                    className="h-8 px-2 text-sm rounded-md border border-input bg-background text-foreground"
+                    onChange={(e) => {
+                      const count = parseInt(e.target.value);
+                      if (count > 0) {
+                        const productIdsToSelect = filteredProducts.slice(0, count).map(p => p.id);
+                        productIdsToSelect.forEach(id => {
+                          if (!selectedProductIds.has(id)) {
+                            onToggleProductSelection(id);
+                          }
+                        });
+                      }
+                      e.target.value = '';
+                    }}
+                    defaultValue=""
+                  >
+                    <option value="" disabled>Bulk select...</option>
+                    <option value="5">Select 5</option>
+                    <option value="10">Select 10</option>
+                    <option value="20">Select 20</option>
+                    <option value="50">Select 50</option>
+                    <option value="75">Select 75</option>
+                    <option value="100">Select 100</option>
+                    <option value="125">Select 125</option>
+                    <option value="150">Select 150</option>
+                  </select>
                   <Button variant="ghost" size="sm" onClick={onSelectAllProducts} type="button">
                     Select all
                   </Button>
@@ -610,6 +639,7 @@ export function BatchDetail({
                   onReceiveImage={(imageUrl, fromProductId) => 
                     onMoveImageBetweenProducts?.(imageUrl, fromProductId, product.id)
                   }
+                  onReorderImages={(imageIds) => onReorderProductImages?.(product.id, imageIds)}
                 />
               ))}
               {!imagesLoading && products.length > 0 && Object.keys(productImages).length === 0 && (
