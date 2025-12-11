@@ -114,6 +114,8 @@ export function BatchDetail({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const shopifyConfigured = isShopifyConfigured();
   
+  // Track last fetched batch to prevent unnecessary refetches
+  const lastFetchedRef = useRef<string>('');
 
   // Update imagesPerProduct when settings load
   useEffect(() => {
@@ -122,16 +124,28 @@ export function BatchDetail({
     }
   }, [settings?.default_images_per_product]);
 
-  // Fetch images for all products when batch changes or products list changes
+  // Fetch images for all products when batch or product list changes
+  // Use a stable key based on batch.id and product IDs to prevent over-fetching
   useEffect(() => {
+    // Create a stable key from batch ID and sorted product IDs
+    const productIds = products.map(p => p.id).sort().join(',');
+    const fetchKey = `${batch.id}:${productIds}`;
+    
+    // Skip if we already fetched for this exact combination
+    if (lastFetchedRef.current === fetchKey) {
+      return;
+    }
+    
+    // Handle empty products case
+    if (products.length === 0) {
+      setProductImages({});
+      lastFetchedRef.current = fetchKey;
+      return;
+    }
+    
     let cancelled = false;
     
     const fetchAllImages = async () => {
-      if (products.length === 0) {
-        setProductImages({});
-        return;
-      }
-      
       setImagesLoading(true);
       
       try {
@@ -148,6 +162,7 @@ export function BatchDetail({
             imagesMap[productId] = images;
           }
           setProductImages(imagesMap);
+          lastFetchedRef.current = fetchKey;
         }
       } catch (error) {
         console.error('Error fetching images:', error);
@@ -164,6 +179,36 @@ export function BatchDetail({
       cancelled = true;
     };
   }, [batch.id, products, getProductImages]);
+
+  // Manual refresh function to force reload images
+  const handleRefreshImages = async () => {
+    if (products.length === 0) return;
+    
+    setImagesLoading(true);
+    lastFetchedRef.current = ''; // Clear cache to force refetch
+    
+    try {
+      const results = await Promise.all(
+        products.map(async (product) => {
+          const images = await getProductImages(product.id);
+          return { productId: product.id, images };
+        })
+      );
+      
+      const imagesMap: Record<string, ProductImage[]> = {};
+      for (const { productId, images } of results) {
+        imagesMap[productId] = images;
+      }
+      setProductImages(imagesMap);
+      
+      const productIds = products.map(p => p.id).sort().join(',');
+      lastFetchedRef.current = `${batch.id}:${productIds}`;
+    } catch (error) {
+      console.error('Error refreshing images:', error);
+    } finally {
+      setImagesLoading(false);
+    }
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, addToUnassigned: boolean = false) => {
     const files = e.target.files;
@@ -501,6 +546,12 @@ export function BatchDetail({
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {imagesLoading && (
+              <div className="col-span-full flex items-center justify-center py-4 text-muted-foreground">
+                <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                Loading images...
+              </div>
+            )}
             {products.map((product) => (
               <ProductCard
                 key={product.id}
@@ -512,6 +563,15 @@ export function BatchDetail({
                 onDelete={() => onDeleteProduct(product.id)}
               />
             ))}
+            {!imagesLoading && products.length > 0 && Object.keys(productImages).length === 0 && (
+              <div className="col-span-full flex flex-col items-center justify-center py-4 text-muted-foreground">
+                <p className="mb-2">Images not loading?</p>
+                <Button variant="outline" size="sm" onClick={handleRefreshImages}>
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Refresh Images
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </div>
