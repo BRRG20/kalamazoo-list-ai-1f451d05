@@ -16,7 +16,9 @@ import {
   Plus,
   RefreshCw,
   Search,
-  LayoutGrid
+  LayoutGrid,
+  MoreVertical,
+  Layers
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,6 +29,17 @@ import { ProductCard } from './ProductCard';
 import { ImageGroupManager, ImageGroup } from './ImageGroupManager';
 import { BirdsEyeView } from './BirdsEyeView';
 import { useSettings } from '@/hooks/use-database';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+} from '@/components/ui/dropdown-menu';
 import type { Batch, Product, ProductImage } from '@/types';
 
 interface BatchDetailProps {
@@ -73,6 +86,7 @@ interface BatchDetailProps {
   onMoveImagesById?: (imageIds: string[], targetProductId: string) => void;
   onReorderProductImages?: (productId: string, imageIds: string[]) => void;
   onLoadAllImagesIntoGroups?: () => void;
+  onRegroupSelectedProducts?: (productIds: string[], imagesPerProduct: number) => void;
 }
 
 export function BatchDetail({
@@ -118,6 +132,7 @@ export function BatchDetail({
   onMoveImagesById,
   onReorderProductImages,
   onLoadAllImagesIntoGroups,
+  onRegroupSelectedProducts,
 }: BatchDetailProps) {
   const { settings, isShopifyConfigured } = useSettings();
   const [imagesPerProduct, setImagesPerProduct] = useState(settings?.default_images_per_product || 9);
@@ -587,6 +602,39 @@ export function BatchDetail({
                   <Button variant="ghost" size="sm" onClick={onDeselectAllProducts} type="button">
                     Clear
                   </Button>
+                  
+                  {/* Three-dots menu with actions for selected products */}
+                  {selectedProductIds.size > 0 && onRegroupSelectedProducts && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                          <MoreVertical className="w-4 h-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuSub>
+                          <DropdownMenuSubTrigger>
+                            <Layers className="w-4 h-4 mr-2" />
+                            Regroup Selected ({selectedProductIds.size})
+                          </DropdownMenuSubTrigger>
+                          <DropdownMenuSubContent>
+                            <DropdownMenuLabel>Images per product</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            {[2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15].map((num) => (
+                              <DropdownMenuItem
+                                key={num}
+                                onClick={() => onRegroupSelectedProducts(Array.from(selectedProductIds), num)}
+                              >
+                                {num} images per product
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuSubContent>
+                        </DropdownMenuSub>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
                 </div>
               </div>
               <Button
