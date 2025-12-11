@@ -521,6 +521,27 @@ export default function BatchesPage() {
     setEditingProductImages(images);
   }, [editingProductId, editingProductImages, updateImage, clearCache, fetchImagesForProduct]);
 
+  const handleDeleteImageFromProduct = useCallback(async (imageId: string) => {
+    if (!editingProductId) return;
+    
+    const success = await deleteImage(imageId);
+    if (success) {
+      // Refresh images and recalculate positions
+      const images = await fetchImagesForProduct(editingProductId);
+      // Update positions to be sequential
+      for (let i = 0; i < images.length; i++) {
+        if (images[i].position !== i + 1) {
+          await updateImage(images[i].id, editingProductId, { position: i + 1 });
+        }
+      }
+      const updatedImages = await fetchImagesForProduct(editingProductId);
+      setEditingProductImages(updatedImages);
+      toast.success('Image deleted');
+    } else {
+      toast.error('Failed to delete image');
+    }
+  }, [editingProductId, deleteImage, fetchImagesForProduct, updateImage]);
+
   const handleGenerateProductAI = useCallback(async (regenerateOnly?: 'title' | 'style_a' | 'style_b' | 'all') => {
     if (!editingProductId) return;
     
@@ -846,6 +867,7 @@ export default function BatchesPage() {
           onSave={handleSaveProduct}
           onUpdateImage={handleUpdateImage}
           onReorderImages={handleReorderImages}
+          onDeleteImage={handleDeleteImageFromProduct}
           onGenerateAI={handleGenerateProductAI}
           onCreateInShopify={handleCreateSingleProductInShopify}
           onPrevious={() => navigateProduct('prev')}
