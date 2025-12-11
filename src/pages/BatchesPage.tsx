@@ -25,7 +25,7 @@ export default function BatchesPage() {
   const { batches, createBatch, updateBatch, deleteBatch, getProductCount } = useBatches();
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const { products, createProduct, updateProduct, deleteProduct, refetch: refetchProducts } = useProducts(selectedBatchId);
-  const { fetchImagesForProduct, addImageToBatch, updateImage, excludeLastNImages, clearCache, deleteImage, updateImageProductIdByUrl } = useImages();
+  const { fetchImagesForProduct, fetchImagesForBatch, addImageToBatch, updateImage, excludeLastNImages, clearCache, deleteImage, updateImageProductIdByUrl } = useImages();
   const { settings } = useSettings();
   const { uploadImages, uploading, progress, uploadStartTime, uploadTotal, uploadCompleted } = useImageUpload();
   const { getMatchingTags } = useDefaultTags();
@@ -71,11 +71,40 @@ export default function BatchesPage() {
     loadImages();
   }, [editingProductId, fetchImagesForProduct]);
 
-  const handleSelectBatch = useCallback((id: string) => {
+const handleSelectBatch = useCallback((id: string) => {
     setSelectedBatchId(id);
     setSelectedProductIds(new Set());
     setPendingImageUrls([]);
+    // Reset image groups when switching batches
+    setImageGroups([]);
+    setUnassignedImages([]);
   }, []);
+
+  // Load unassigned images when batch is selected
+  useEffect(() => {
+    const loadUnassignedImages = async () => {
+      if (!selectedBatchId) {
+        setUnassignedImages([]);
+        return;
+      }
+      
+      // Fetch all images for the batch
+      const allBatchImages = await fetchImagesForBatch(selectedBatchId);
+      
+      // Filter to only unassigned images (product_id is null/empty)
+      const unassigned = allBatchImages
+        .filter(img => !img.product_id || img.product_id === '')
+        .map(img => img.url);
+      
+      if (unassigned.length > 0) {
+        setUnassignedImages(unassigned);
+        // Show group manager if there are unassigned images
+        setShowGroupManager(true);
+      }
+    };
+    
+    loadUnassignedImages();
+  }, [selectedBatchId, fetchImagesForBatch]);
 
   const handleCreateBatch = useCallback(async (name: string, notes: string) => {
     const batch = await createBatch(name, notes);
