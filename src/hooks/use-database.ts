@@ -41,7 +41,7 @@ function mapProduct(row: any): Product {
     currency: row.currency || 'GBP',
     era: (row.era || '') as Era,
     garment_type: row.garment_type || '',
-    department: (row.department || 'Women') as Department,
+    department: (row.department || '') as Department,
     brand: row.brand || '',
     colour_main: row.colour_main || '',
     colour_secondary: row.colour_secondary || '',
@@ -259,7 +259,6 @@ export function useProducts(batchId: string | null) {
         sku,
         status: 'new',
         currency: 'GBP',
-        department: 'Women',
         user_id: userId,
       })
       .select()
