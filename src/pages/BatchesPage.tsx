@@ -205,11 +205,11 @@ export default function BatchesPage() {
       return;
     }
     
-    // If products are selected, only generate for those; otherwise generate for all
+    // If products are selected, only generate for those; otherwise generate for NEW products only
     const hasSelection = selectedProductIds.size > 0;
     const productsToGenerate = hasSelection 
       ? products.filter(p => selectedProductIds.has(p.id))
-      : [...products];
+      : products.filter(p => p.status === 'new'); // Skip already generated products
     
     // Deduplicate products by ID to prevent processing the same product twice
     const uniqueProducts = Array.from(
@@ -222,7 +222,13 @@ export default function BatchesPage() {
     const totalProducts = validProducts.length;
     
     if (totalProducts === 0) {
-      toast.error('No valid products to generate.');
+      // Check if all products are already generated
+      const alreadyGenerated = products.filter(p => p.status !== 'new').length;
+      if (alreadyGenerated > 0 && !hasSelection) {
+        toast.info(`All ${alreadyGenerated} products already generated. Select specific products to re-generate.`);
+      } else {
+        toast.error('No valid products to generate.');
+      }
       return;
     }
     
