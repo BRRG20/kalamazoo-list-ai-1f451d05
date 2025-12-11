@@ -13,7 +13,8 @@ import {
   Trash2,
   Settings2,
   Plus,
-  RefreshCw
+  RefreshCw,
+  Search
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -111,11 +112,26 @@ export function BatchDetail({
   const [imagesPerProduct, setImagesPerProduct] = useState(settings?.default_images_per_product || 9);
   const [productImages, setProductImages] = useState<Record<string, ProductImage[]>>({});
   const [imagesLoading, setImagesLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const shopifyConfigured = isShopifyConfigured();
   
   // Track last fetched batch to prevent unnecessary refetches
   const lastFetchedRef = useRef<string>('');
+
+  // Filter products based on search query
+  const filteredProducts = products.filter(product => {
+    if (!searchQuery.trim()) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      product.title?.toLowerCase().includes(query) ||
+      product.sku?.toLowerCase().includes(query) ||
+      product.brand?.toLowerCase().includes(query) ||
+      product.garment_type?.toLowerCase().includes(query) ||
+      product.department?.toLowerCase().includes(query) ||
+      product.colour_main?.toLowerCase().includes(query)
+    );
+  });
 
   // Update imagesPerProduct when settings load
   useEffect(() => {
@@ -545,33 +561,68 @@ export function BatchDetail({
             </Button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {imagesLoading && (
-              <div className="col-span-full flex items-center justify-center py-4 text-muted-foreground">
-                <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                Loading images...
-              </div>
-            )}
-            {products.map((product) => (
-              <ProductCard
-                key={product.id}
-                product={product}
-                images={productImages[product.id] || []}
-                isSelected={selectedProductIds.has(product.id)}
-                onToggleSelect={() => onToggleProductSelection(product.id)}
-                onEdit={() => onEditProduct(product.id)}
-                onDelete={() => onDeleteProduct(product.id)}
+          <div className="space-y-4">
+            {/* Search bar */}
+            <div className="relative max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="Search products..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 h-9"
               />
-            ))}
-            {!imagesLoading && products.length > 0 && Object.keys(productImages).length === 0 && (
-              <div className="col-span-full flex flex-col items-center justify-center py-4 text-muted-foreground">
-                <p className="mb-2">Images not loading?</p>
-                <Button variant="outline" size="sm" onClick={handleRefreshImages}>
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  Refresh Images
-                </Button>
-              </div>
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+            
+            {/* Product count */}
+            {searchQuery && (
+              <p className="text-sm text-muted-foreground">
+                Showing {filteredProducts.length} of {products.length} products
+              </p>
             )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {imagesLoading && (
+                <div className="col-span-full flex items-center justify-center py-4 text-muted-foreground">
+                  <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                  Loading images...
+                </div>
+              )}
+              {filteredProducts.map((product) => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  images={productImages[product.id] || []}
+                  isSelected={selectedProductIds.has(product.id)}
+                  onToggleSelect={() => onToggleProductSelection(product.id)}
+                  onEdit={() => onEditProduct(product.id)}
+                  onDelete={() => onDeleteProduct(product.id)}
+                />
+              ))}
+              {!imagesLoading && products.length > 0 && Object.keys(productImages).length === 0 && (
+                <div className="col-span-full flex flex-col items-center justify-center py-4 text-muted-foreground">
+                  <p className="mb-2">Images not loading?</p>
+                  <Button variant="outline" size="sm" onClick={handleRefreshImages}>
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Refresh Images
+                  </Button>
+                </div>
+              )}
+              {filteredProducts.length === 0 && searchQuery && (
+                <div className="col-span-full text-center py-8 text-muted-foreground">
+                  <Search className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                  <p>No products match "{searchQuery}"</p>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
