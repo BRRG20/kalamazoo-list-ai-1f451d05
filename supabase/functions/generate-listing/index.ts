@@ -250,15 +250,32 @@ Product Details:
     const data = await response.json();
     const rawContent = data.choices?.[0]?.message?.content || "";
     
-    // Extract JSON from response
+    console.log("Raw AI response:", rawContent.substring(0, 500));
+    
+    // Extract JSON from response - handle markdown code blocks
     let generated;
     try {
       generated = JSON.parse(rawContent);
     } catch {
-      const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        generated = JSON.parse(jsonMatch[0]);
+      // Try to extract JSON from markdown code blocks
+      let jsonString = rawContent;
+      
+      // Remove markdown code block markers
+      const codeBlockMatch = rawContent.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (codeBlockMatch) {
+        jsonString = codeBlockMatch[1].trim();
       } else {
+        // Try to find raw JSON object
+        const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          jsonString = jsonMatch[0];
+        }
+      }
+      
+      try {
+        generated = JSON.parse(jsonString);
+      } catch (parseError) {
+        console.error("Failed to parse JSON:", jsonString.substring(0, 300));
         throw new Error("Could not parse AI response");
       }
     }
