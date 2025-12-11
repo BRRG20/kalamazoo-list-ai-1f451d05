@@ -82,31 +82,64 @@ const handleSelectBatch = useCallback((id: string) => {
     setUnassignedImages([]);
   }, []);
 
-  // Load unassigned images when batch is selected
+  // Load all images (both assigned and unassigned) when batch is selected
+  // Use products.length as dependency to avoid infinite re-renders from array reference changes
+  const productIds = products.map(p => p.id).join(',');
+  
   useEffect(() => {
-    const loadUnassignedImages = async () => {
+    const loadBatchImages = async () => {
       if (!selectedBatchId) {
         setUnassignedImages([]);
+        setImageGroups([]);
         return;
       }
       
       // Fetch all images for the batch
       const allBatchImages = await fetchImagesForBatch(selectedBatchId);
       
-      // Filter to only unassigned images (product_id is null/empty)
-      const unassigned = allBatchImages
-        .filter(img => !img.product_id || img.product_id === '')
-        .map(img => img.url);
+      if (allBatchImages.length === 0) {
+        setUnassignedImages([]);
+        setImageGroups([]);
+        return;
+      }
       
+      // Group images by product_id
+      const imagesByProduct: Record<string, string[]> = {};
+      const unassigned: string[] = [];
+      
+      for (const img of allBatchImages) {
+        if (img.product_id && img.product_id !== '') {
+          if (!imagesByProduct[img.product_id]) {
+            imagesByProduct[img.product_id] = [];
+          }
+          imagesByProduct[img.product_id].push(img.url);
+        } else {
+          unassigned.push(img.url);
+        }
+      }
+      
+      // Create groups from existing products that have images
+      const groups: ImageGroup[] = products
+        .filter(p => imagesByProduct[p.id] && imagesByProduct[p.id].length > 0)
+        .map((product, index) => ({
+          productId: product.id,
+          productNumber: index + 1,
+          images: imagesByProduct[product.id] || [],
+          selectedImages: new Set<string>(),
+        }));
+      
+      setImageGroups(groups);
+      setUnassignedImages(unassigned);
+      
+      // Show group manager if there are unassigned images
       if (unassigned.length > 0) {
-        setUnassignedImages(unassigned);
-        // Show group manager if there are unassigned images
         setShowGroupManager(true);
       }
     };
     
-    loadUnassignedImages();
-  }, [selectedBatchId, fetchImagesForBatch]);
+    loadBatchImages();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedBatchId, fetchImagesForBatch, productIds]);
 
   const handleCreateBatch = useCallback(async (name: string, notes: string) => {
     const batch = await createBatch(name, notes);

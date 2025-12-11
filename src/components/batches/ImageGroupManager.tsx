@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -53,6 +53,37 @@ export interface MatchingProgress {
   currentBatch: number;
   totalBatches: number;
 }
+
+// Drop zone component for creating new groups - defined outside to avoid recreation
+const NewGroupDropZoneContent = React.forwardRef<HTMLDivElement, { isOver: boolean }>(
+  ({ isOver }, ref) => (
+    <div
+      ref={ref}
+      className={`
+        border-2 border-dashed rounded-lg p-6 transition-all
+        flex items-center justify-center gap-2
+        ${isOver 
+          ? 'border-primary bg-primary/10 text-primary' 
+          : 'border-muted-foreground/30 text-muted-foreground hover:border-muted-foreground/50'
+        }
+      `}
+    >
+      <Plus className="w-5 h-5" />
+      <span className="text-sm font-medium">
+        {isOver ? 'Drop to create new product' : 'Drag image here to create new product'}
+      </span>
+    </div>
+  )
+);
+NewGroupDropZoneContent.displayName = 'NewGroupDropZoneContent';
+
+const NewGroupDropZone = () => {
+  const { isOver, setNodeRef } = useDroppable({
+    id: 'new-group-dropzone',
+  });
+
+  return <NewGroupDropZoneContent ref={setNodeRef} isOver={isOver} />;
+};
 
 interface ImageGroupManagerProps {
   groups: ImageGroup[];
@@ -442,32 +473,6 @@ export function ImageGroupManager({
   };
 
   const activeImageUrl = activeId;
-
-  // Drop zone component for creating new groups
-  const NewGroupDropZone = () => {
-    const { isOver, setNodeRef } = useDroppable({
-      id: 'new-group-dropzone',
-    });
-
-    return (
-      <div
-        ref={setNodeRef}
-        className={`
-          border-2 border-dashed rounded-lg p-6 transition-all
-          flex items-center justify-center gap-2
-          ${isOver 
-            ? 'border-primary bg-primary/10 text-primary' 
-            : 'border-muted-foreground/30 text-muted-foreground hover:border-muted-foreground/50'
-          }
-        `}
-      >
-        <Plus className="w-5 h-5" />
-        <span className="text-sm font-medium">
-          {isOver ? 'Drop to create new product' : 'Drag image here to create new product'}
-        </span>
-      </div>
-    );
-  };
 
   return (
     <DndContext
