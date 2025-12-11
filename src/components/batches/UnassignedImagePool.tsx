@@ -121,7 +121,7 @@ export function UnassignedImagePool({
                 e.target.value = '';
               }}
             >
-              <option value="" disabled>Bulk select...</option>
+              <option value="" disabled>Quick select...</option>
               <option value="5">Select 5</option>
               <option value="10">Select 10</option>
               <option value="15">Select 15</option>
@@ -129,6 +129,26 @@ export function UnassignedImagePool({
               <option value="50">Select 50</option>
               <option value="100">Select 100</option>
             </select>
+            <div className="flex items-center gap-1">
+              <input
+                type="number"
+                min="1"
+                max={images.length}
+                placeholder="#"
+                className="h-8 w-14 px-2 text-sm border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const count = parseInt((e.target as HTMLInputElement).value);
+                    if (count > 0 && count <= images.length) {
+                      const imagesToSelect = images.slice(0, count);
+                      setSelectedImages(new Set(imagesToSelect));
+                      (e.target as HTMLInputElement).value = '';
+                    }
+                  }
+                }}
+              />
+              <span className="text-xs text-muted-foreground">+ Enter</span>
+            </div>
             <Button variant="ghost" size="sm" onClick={selectAll}>
               <Check className="w-4 h-4 mr-1" />
               All
