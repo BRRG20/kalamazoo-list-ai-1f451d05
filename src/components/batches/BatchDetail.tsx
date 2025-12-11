@@ -183,7 +183,7 @@ export function BatchDetail({
   useEffect(() => {
     // Create a stable key from batch ID and sorted product IDs
     const productIds = products.map(p => p.id).sort().join(',');
-    const fetchKey = `${batch.id}:${productIds}`;
+    const fetchKey = `${batch.id}:${productIds}:${products.length}`;
     
     // Skip if we already fetched for this exact combination
     if (lastFetchedRef.current === fetchKey) {
@@ -233,6 +233,11 @@ export function BatchDetail({
       cancelled = true;
     };
   }, [batch.id, products, getProductImages]);
+
+  // Reset lastFetchedRef when batch changes to ensure fresh data
+  useEffect(() => {
+    lastFetchedRef.current = '';
+  }, [batch.id]);
 
   // Manual refresh function to force reload images
   const handleRefreshImages = async () => {

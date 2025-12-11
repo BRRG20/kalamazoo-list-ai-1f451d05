@@ -1186,6 +1186,9 @@ const handleSelectBatch = useCallback((id: string) => {
                 setPendingImageUrls([]);
                 setShowGroupManager(false);
                 
+                // Clear image cache to force refresh
+                clearCache();
+                
                 // Refresh products
                 await refetchProducts();
                 
