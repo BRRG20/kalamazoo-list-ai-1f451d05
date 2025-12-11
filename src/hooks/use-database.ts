@@ -283,6 +283,8 @@ export function useProducts(batchId: string | null) {
     if (updates.raw_input_text !== undefined) dbUpdates.raw_input_text = updates.raw_input_text;
     if (updates.title !== undefined) dbUpdates.title = updates.title;
     if (updates.description !== undefined) dbUpdates.description = updates.description;
+    if (updates.description_style_a !== undefined) dbUpdates.description_style_a = updates.description_style_a;
+    if (updates.description_style_b !== undefined) dbUpdates.description_style_b = updates.description_style_b;
     if (updates.price !== undefined) dbUpdates.price = updates.price;
     if (updates.currency !== undefined) dbUpdates.currency = updates.currency;
     if (updates.era !== undefined) dbUpdates.era = updates.era || null;
