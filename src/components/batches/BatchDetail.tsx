@@ -66,6 +66,7 @@ interface BatchDetailProps {
   showGroupManager: boolean;
   onToggleGroupManager: () => void;
   onAddToUnassigned: (urls: string[]) => void;
+  onMoveImageBetweenProducts?: (imageUrl: string, fromProductId: string, toProductId: string) => void;
 }
 
 export function BatchDetail({
@@ -107,6 +108,7 @@ export function BatchDetail({
   showGroupManager,
   onToggleGroupManager,
   onAddToUnassigned,
+  onMoveImageBetweenProducts,
 }: BatchDetailProps) {
   const { settings, isShopifyConfigured } = useSettings();
   const [imagesPerProduct, setImagesPerProduct] = useState(settings?.default_images_per_product || 9);
@@ -605,6 +607,9 @@ export function BatchDetail({
                   onToggleSelect={() => onToggleProductSelection(product.id)}
                   onEdit={() => onEditProduct(product.id)}
                   onDelete={() => onDeleteProduct(product.id)}
+                  onReceiveImage={(imageUrl, fromProductId) => 
+                    onMoveImageBetweenProducts?.(imageUrl, fromProductId, product.id)
+                  }
                 />
               ))}
               {!imagesLoading && products.length > 0 && Object.keys(productImages).length === 0 && (

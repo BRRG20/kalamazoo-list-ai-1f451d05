@@ -557,6 +557,39 @@ export default function BatchesPage() {
     await handleCreateInShopify([editingProductId]);
   }, [editingProductId, handleCreateInShopify]);
 
+  const handleMoveImageBetweenProducts = useCallback(async (imageUrl: string, fromProductId: string, toProductId: string) => {
+    // Find the image in the database by URL and update its product_id
+    const { data: imageData, error: fetchError } = await supabase
+      .from('images')
+      .select('id, position')
+      .eq('url', imageUrl)
+      .single();
+
+    if (fetchError || !imageData) {
+      toast.error('Failed to find image');
+      return;
+    }
+
+    // Get the count of images in the target product to set position
+    const targetImages = await fetchImagesForProduct(toProductId);
+    const newPosition = targetImages.length;
+
+    const { error } = await supabase
+      .from('images')
+      .update({ product_id: toProductId, position: newPosition })
+      .eq('id', imageData.id);
+
+    if (error) {
+      toast.error('Failed to move image');
+      return;
+    }
+
+    // Clear cache and refetch
+    clearCache();
+    await refetchProducts();
+    toast.success('Image moved successfully');
+  }, [fetchImagesForProduct, clearCache, refetchProducts]);
+
   const isShopifyConfigured = !!settings?.shopify_store_url;
 
   const editingProduct = editingProductId ? products.find(p => p.id === editingProductId) : null;
@@ -714,6 +747,7 @@ export default function BatchesPage() {
                 setUnassignedImages(prev => [...prev, ...urls]);
                 setShowGroupManager(true);
               }}
+              onMoveImageBetweenProducts={handleMoveImageBetweenProducts}
             />
           ) : (
             <EmptyState />
