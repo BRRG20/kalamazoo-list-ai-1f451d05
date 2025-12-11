@@ -199,9 +199,18 @@ export default function BatchesPage() {
   const handleGenerateAll = useCallback(async () => {
     if (!selectedBatchId || products.length === 0) return;
     
-    // Get a stable copy of products at the start to prevent issues during generation
-    const productsToGenerate = [...products];
+    // If products are selected, only generate for those; otherwise generate for all
+    const hasSelection = selectedProductIds.size > 0;
+    const productsToGenerate = hasSelection 
+      ? products.filter(p => selectedProductIds.has(p.id))
+      : [...products];
+    
     const totalProducts = productsToGenerate.length;
+    
+    if (totalProducts === 0) {
+      toast.error('No products to generate.');
+      return;
+    }
     
     // Show warning for large product counts (20 is the recommended limit)
     if (totalProducts > UPLOAD_LIMITS.RECOMMENDED_PRODUCTS_FOR_AI) {
@@ -317,7 +326,7 @@ export default function BatchesPage() {
     } else {
       toast.success(`AI generated details for ${successCount} product(s)`);
     }
-  }, [selectedBatchId, products, updateProduct, fetchImagesForProduct, getMatchingTags]);
+  }, [selectedBatchId, products, selectedProductIds, updateProduct, fetchImagesForProduct, getMatchingTags]);
 
   const handleExcludeLast2All = useCallback(async () => {
     if (!selectedBatchId) return;
