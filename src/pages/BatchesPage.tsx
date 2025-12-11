@@ -252,7 +252,7 @@ const handleSelectBatch = useCallback((id: string) => {
       }
     }
     
-    // Create groups from existing products
+    // Create groups from existing products that have images
     const groups: ImageGroup[] = products
       .filter(p => imagesByProduct[p.id] && imagesByProduct[p.id].length > 0)
       .map((product, index) => ({
@@ -265,7 +265,10 @@ const handleSelectBatch = useCallback((id: string) => {
     setImageGroups(groups);
     setUnassignedImages(unassigned);
     setShowGroupManager(true);
-    toast.success(`Loaded ${allBatchImages.length} images (${groups.length} products, ${unassigned.length} unassigned)`);
+    
+    const totalImages = allBatchImages.length;
+    const assignedCount = totalImages - unassigned.length;
+    toast.success(`Loaded ${totalImages} images (${assignedCount} assigned, ${unassigned.length} unassigned)`);
   }, [selectedBatchId, fetchImagesForBatch, products]);
 
   // Regroup selected products - collect their images and re-chunk them
@@ -313,6 +316,32 @@ const handleSelectBatch = useCallback((id: string) => {
     setShowGroupManager(true);
     toast.success(`Re-grouped ${allImages.length} images into ${chunks.length} product(s). Review and confirm.`);
   }, [fetchImagesForProduct, deleteProduct]);
+
+  // Regroup unassigned images in the group manager view
+  const handleRegroupUnassigned = useCallback((imagesPerProduct: number) => {
+    if (unassignedImages.length === 0) {
+      toast.error('No unassigned images to group.');
+      return;
+    }
+
+    // Chunk unassigned images into groups
+    const chunks: string[][] = [];
+    for (let i = 0; i < unassignedImages.length; i += imagesPerProduct) {
+      chunks.push(unassignedImages.slice(i, i + imagesPerProduct));
+    }
+
+    const newGroups: ImageGroup[] = chunks.map((chunk, index) => ({
+      productId: `temp-${Date.now()}-${index}`,
+      productNumber: imageGroups.length + index + 1,
+      images: chunk,
+      selectedImages: new Set<string>(),
+    }));
+
+    // Add new groups to existing groups
+    setImageGroups(prev => [...prev, ...newGroups]);
+    setUnassignedImages([]);
+    toast.success(`Grouped ${unassignedImages.length} images into ${chunks.length} new product(s).`);
+  }, [unassignedImages, imageGroups.length]);
 
   const handleGenerateAll = useCallback(async () => {
     if (!selectedBatchId || products.length === 0) return;
@@ -1051,6 +1080,7 @@ const handleSelectBatch = useCallback((id: string) => {
               onReorderProductImages={handleReorderProductImages}
               onLoadAllImagesIntoGroups={handleLoadAllImagesIntoGroups}
               onRegroupSelectedProducts={handleRegroupSelectedProducts}
+              onRegroupUnassigned={handleRegroupUnassigned}
             />
           ) : (
             <EmptyState />
