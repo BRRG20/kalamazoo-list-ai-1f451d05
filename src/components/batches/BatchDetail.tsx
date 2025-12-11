@@ -88,6 +88,8 @@ interface BatchDetailProps {
   onLoadAllImagesIntoGroups?: () => void;
   onRegroupSelectedProducts?: (productIds: string[], imagesPerProduct: number) => void;
   onRegroupUnassigned?: (imagesPerProduct: number) => void;
+  onSmartMatch?: () => Promise<void>;
+  isMatching?: boolean;
 }
 
 export function BatchDetail({
@@ -135,6 +137,8 @@ export function BatchDetail({
   onLoadAllImagesIntoGroups,
   onRegroupSelectedProducts,
   onRegroupUnassigned,
+  onSmartMatch,
+  isMatching,
 }: BatchDetailProps) {
   const { settings, isShopifyConfigured } = useSettings();
   const [imagesPerProduct, setImagesPerProduct] = useState(settings?.default_images_per_product || 9);
@@ -672,6 +676,8 @@ export function BatchDetail({
             onSaveGroups={onSaveGroups}
             imagesPerProduct={imagesPerProduct}
             onRegroupUnassigned={onRegroupUnassigned}
+            onSmartMatch={onSmartMatch}
+            isMatching={isMatching}
           />
         ) : products.length === 0 ? (
           <div className="text-center py-16">

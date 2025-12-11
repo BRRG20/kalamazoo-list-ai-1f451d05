@@ -17,7 +17,7 @@ import {
   sortableKeyboardCoordinates,
   rectSortingStrategy,
 } from '@dnd-kit/sortable';
-import { Plus, Images, Layers, Grid3X3 } from 'lucide-react';
+import { Plus, Images, Layers, Grid3X3, Sparkles, Undo2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -30,6 +30,13 @@ import {
 import { ImageGroupCard } from './ImageGroupCard';
 import { UnassignedImagePool } from './UnassignedImagePool';
 import type { Product, ProductImage } from '@/types';
+
+// History state for undo functionality
+interface HistoryState {
+  groups: ImageGroup[];
+  unassignedImages: string[];
+  label: string;
+}
 
 export interface ImageGroup {
   productId: string;
@@ -49,6 +56,8 @@ interface ImageGroupManagerProps {
   onSaveGroups: () => void;
   imagesPerProduct: number;
   onRegroupUnassigned?: (imagesPerProduct: number) => void;
+  onSmartMatch?: () => Promise<void>;
+  isMatching?: boolean;
 }
 
 export function ImageGroupManager({
@@ -62,9 +71,30 @@ export function ImageGroupManager({
   onSaveGroups,
   imagesPerProduct,
   onRegroupUnassigned,
+  onSmartMatch,
+  isMatching,
 }: ImageGroupManagerProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeSource, setActiveSource] = useState<{ type: 'group' | 'unassigned'; groupId?: string } | null>(null);
+  const [history, setHistory] = useState<HistoryState[]>([]);
+
+  // Save current state to history before making changes
+  const saveToHistory = useCallback((label: string) => {
+    setHistory(prev => [...prev.slice(-9), {
+      groups: groups.map(g => ({ ...g, selectedImages: new Set(g.selectedImages) })),
+      unassignedImages: [...unassignedImages],
+      label
+    }]);
+  }, [groups, unassignedImages]);
+
+  // Undo last action
+  const handleUndo = useCallback(() => {
+    if (history.length === 0) return;
+    const lastState = history[history.length - 1];
+    setHistory(prev => prev.slice(0, -1));
+    onUpdateGroups(lastState.groups);
+    onUpdateUnassigned(lastState.unassignedImages);
+  }, [history, onUpdateGroups, onUpdateUnassigned]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -449,7 +479,41 @@ export function ImageGroupManager({
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Undo button */}
+            {history.length > 0 && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleUndo}
+                className="text-amber-600 hover:text-amber-700 border-amber-300 hover:border-amber-400"
+              >
+                <Undo2 className="w-4 h-4 mr-2" />
+                Undo
+              </Button>
+            )}
+
+            {/* AI Smart Match button */}
+            {unassignedImages.length > 0 && onSmartMatch && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => {
+                  saveToHistory('Before AI match');
+                  onSmartMatch();
+                }}
+                disabled={isMatching}
+                className="bg-primary/10 hover:bg-primary/20 text-primary border-primary/30"
+              >
+                {isMatching ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Sparkles className="w-4 h-4 mr-2" />
+                )}
+                AI Smart Match
+              </Button>
+            )}
+
             {/* Regroup unassigned dropdown */}
             {unassignedImages.length > 0 && onRegroupUnassigned && (
               <DropdownMenu>
@@ -465,7 +529,10 @@ export function ImageGroupManager({
                   {[2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15].map((num) => (
                     <DropdownMenuItem
                       key={num}
-                      onClick={() => onRegroupUnassigned(num)}
+                      onClick={() => {
+                        saveToHistory('Before auto-group');
+                        onRegroupUnassigned(num);
+                      }}
                     >
                       {num} images per product
                     </DropdownMenuItem>
