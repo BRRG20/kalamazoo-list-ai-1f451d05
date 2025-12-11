@@ -17,8 +17,16 @@ import {
   sortableKeyboardCoordinates,
   rectSortingStrategy,
 } from '@dnd-kit/sortable';
-import { Plus, Images } from 'lucide-react';
+import { Plus, Images, Layers, Grid3X3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { ImageGroupCard } from './ImageGroupCard';
 import { UnassignedImagePool } from './UnassignedImagePool';
 import type { Product, ProductImage } from '@/types';
@@ -40,6 +48,7 @@ interface ImageGroupManagerProps {
   onDeleteImage: (url: string) => void;
   onSaveGroups: () => void;
   imagesPerProduct: number;
+  onRegroupUnassigned?: (imagesPerProduct: number) => void;
 }
 
 export function ImageGroupManager({
@@ -52,6 +61,7 @@ export function ImageGroupManager({
   onDeleteImage,
   onSaveGroups,
   imagesPerProduct,
+  onRegroupUnassigned,
 }: ImageGroupManagerProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeSource, setActiveSource] = useState<{ type: 'group' | 'unassigned'; groupId?: string } | null>(null);
@@ -427,7 +437,7 @@ export function ImageGroupManager({
     >
       <div className="space-y-4">
         {/* Summary bar */}
-        <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+        <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg flex-wrap gap-2">
           <div className="flex items-center gap-4 text-sm">
             <span className="flex items-center gap-1.5">
               <Images className="w-4 h-4 text-primary" />
@@ -439,9 +449,34 @@ export function ImageGroupManager({
               </span>
             )}
           </div>
-          <Button size="sm" onClick={onSaveGroups}>
-            Confirm Grouping
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* Regroup unassigned dropdown */}
+            {unassignedImages.length > 0 && onRegroupUnassigned && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Grid3X3 className="w-4 h-4 mr-2" />
+                    Auto-group ({unassignedImages.length})
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>Images per product</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {[2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15].map((num) => (
+                    <DropdownMenuItem
+                      key={num}
+                      onClick={() => onRegroupUnassigned(num)}
+                    >
+                      {num} images per product
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+            <Button size="sm" onClick={onSaveGroups}>
+              Confirm Grouping
+            </Button>
+          </div>
         </div>
 
         {/* Unassigned Images Pool */}
