@@ -587,8 +587,10 @@ export function BatchDetail({
                     defaultValue=""
                     onChange={(e) => {
                       const count = parseInt(e.target.value);
+                      console.log('Bulk select triggered:', count, 'filteredProducts:', filteredProducts.length);
                       if (count > 0 && onBulkSelectProducts) {
                         const productIdsToSelect = filteredProducts.slice(0, count).map(p => p.id);
+                        console.log('Selecting products:', productIdsToSelect.length);
                         onBulkSelectProducts(productIdsToSelect);
                         // Reset dropdown by incrementing key
                         setBulkSelectKey(k => k + 1);
@@ -605,10 +607,26 @@ export function BatchDetail({
                     <option value="125">Select 125</option>
                     <option value="150">Select 150</option>
                   </select>
-                  <Button variant="ghost" size="sm" onClick={onSelectAllProducts} type="button">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => {
+                      console.log('Select all clicked, products:', products.length);
+                      onSelectAllProducts();
+                    }} 
+                    type="button"
+                  >
                     Select all
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={onDeselectAllProducts} type="button">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => {
+                      console.log('Clear clicked');
+                      onDeselectAllProducts();
+                    }} 
+                    type="button"
+                  >
                     Clear
                   </Button>
                   
