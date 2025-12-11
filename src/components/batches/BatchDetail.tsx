@@ -150,6 +150,7 @@ export function BatchDetail({
   const [imagesLoading, setImagesLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showBirdsEyeView, setShowBirdsEyeView] = useState(false);
+  const [bulkSelectKey, setBulkSelectKey] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const shopifyConfigured = isShopifyConfigured();
   
@@ -581,17 +582,18 @@ export function BatchDetail({
                 <div className="flex gap-1 items-center">
                   {/* Bulk select dropdown */}
                   <select
+                    key={bulkSelectKey}
                     className="h-8 px-2 text-sm rounded-md border border-input bg-background text-foreground cursor-pointer"
+                    defaultValue=""
                     onChange={(e) => {
                       const count = parseInt(e.target.value);
                       if (count > 0 && onBulkSelectProducts) {
                         const productIdsToSelect = filteredProducts.slice(0, count).map(p => p.id);
                         onBulkSelectProducts(productIdsToSelect);
+                        // Reset dropdown by incrementing key
+                        setBulkSelectKey(k => k + 1);
                       }
-                      // Reset to placeholder
-                      e.target.value = '';
                     }}
-                    value=""
                   >
                     <option value="" disabled>Bulk select...</option>
                     <option value="5">Select 5</option>
