@@ -39,7 +39,7 @@ interface BirdsEyeViewProps {
   onMoveImages: (imageIds: string[], fromProductId: string, toProductId: string) => void;
   onDeleteImage?: (imageId: string) => Promise<void>;
   onDeleteEmptyProducts?: (productIds: string[]) => Promise<void>;
-  onCreateNewProduct?: (imageIds: string[]) => void;
+  onCreateNewProduct?: (imageIds: string[]) => void | Promise<void>;
   onMergeProducts?: (productIds: string[]) => void;
   isLoading?: boolean;
   // Product selection props
@@ -1007,12 +1007,15 @@ export function BirdsEyeView({
                 <Button 
                   variant="default" 
                   size="sm" 
-                  onClick={() => {
+                  onClick={async () => {
                     const imageIds = Array.from(selectedImages.keys());
                     if (imageIds.length > 0) {
-                      onCreateNewProduct(imageIds);
-                      toast.success(`Created new product with ${imageIds.length} image${imageIds.length > 1 ? 's' : ''}`);
+                      // Clear selection immediately for UX
+                      const count = imageIds.length;
                       setSelectedImages(new Map());
+                      // Call the handler (async)
+                      await onCreateNewProduct(imageIds);
+                      toast.success(`Created new product with ${count} image${count > 1 ? 's' : ''}`);
                     }
                   }}
                   className="bg-green-600 hover:bg-green-700 text-white gap-1.5"
