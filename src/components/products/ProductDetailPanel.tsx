@@ -856,17 +856,12 @@ export function ProductDetailPanel({
           </div>
         </div>
 
-        {/* Content - Description first, then attributes, then images */}
-        <div 
-          ref={contentRef}
-          className="flex-1 overflow-y-auto scrollbar-thin p-3 md:p-4"
-          onScroll={handleManualScroll}
-        >
-          <div className="max-w-4xl mx-auto space-y-6">
-            
+        {/* Static Voice Recording Section */}
+        <div className="flex-shrink-0 border-b border-border p-3 md:p-4 bg-background">
+          <div className="max-w-4xl mx-auto">
             {/* Auto-scroll control */}
             {autoScrollReview && (
-              <div className="flex items-center justify-between gap-2 bg-muted/50 rounded-lg p-2 border border-border">
+              <div className="flex items-center justify-between gap-2 bg-muted/50 rounded-lg p-2 border border-border mb-3">
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">Speed:</span>
                   <div className="flex items-center gap-1 border border-border rounded-md p-0.5 bg-background">
@@ -1016,8 +1011,16 @@ export function ProductDetailPanel({
                 </p>
               )}
             </section>
+          </div>
+        </div>
 
-            {/* DESCRIPTIONS FIRST */}
+        {/* Scrollable Content - Description first, then attributes, then images */}
+        <div 
+          ref={contentRef}
+          className="flex-1 overflow-y-auto scrollbar-thin p-3 md:p-4"
+          onScroll={handleManualScroll}
+        >
+          <div className="max-w-4xl mx-auto space-y-6">
             <section>
               <h3 className="font-semibold text-foreground mb-3">Generated Description</h3>
               <div className="space-y-4">
