@@ -289,9 +289,23 @@ export function BirdsEyeView({
   onBulkSelectProducts,
   onDeselectAllProducts,
 }: BirdsEyeViewProps) {
-  // Ensure products and productImages are never undefined
-  const safeProducts = products ?? [];
-  const safeProductImages = productImages ?? {};
+  // Ensure products and productImages are never undefined - use stable empty defaults
+  const safeProducts = useMemo(() => {
+    if (!Array.isArray(products)) return [];
+    return products.filter(p => p && typeof p.id === 'string');
+  }, [products]);
+  
+  const safeProductImages = useMemo(() => {
+    if (!productImages || typeof productImages !== 'object') return {};
+    return productImages;
+  }, [productImages]);
+  
+  // Ensure selectedProductIds is always a valid Set
+  const safeSelectedProductIds = useMemo(() => {
+    if (selectedProductIds instanceof Set) return selectedProductIds;
+    return new Set<string>();
+  }, [selectedProductIds]);
+  
   const [selectedImages, setSelectedImages] = useState<Map<string, { imageId: string; productId: string }>>(new Map());
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [dropTargetProductId, setDropTargetProductId] = useState<string | null>(null);
@@ -306,6 +320,7 @@ export function BirdsEyeView({
   const [isDeletingEmpty, setIsDeletingEmpty] = useState(false);
   const [isCreateNewDropTarget, setIsCreateNewDropTarget] = useState(false);
   const [isMergingProducts, setIsMergingProducts] = useState(false);
+  const [hasError, setHasError] = useState(false);
   
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
@@ -314,16 +329,30 @@ export function BirdsEyeView({
   useEffect(() => {
     const updateSize = () => {
       if (containerRef.current) {
-        setContainerSize({
-          width: containerRef.current.clientWidth,
-          height: containerRef.current.clientHeight,
-        });
+        const width = containerRef.current.clientWidth;
+        const height = containerRef.current.clientHeight;
+        // Only update if values are valid and changed
+        if (width > 0 && height > 0) {
+          setContainerSize(prev => {
+            if (prev.width !== width || prev.height !== height) {
+              return { width, height };
+            }
+            return prev;
+          });
+        }
       }
     };
     
     updateSize();
     window.addEventListener('resize', updateSize);
-    return () => window.removeEventListener('resize', updateSize);
+    
+    // Also measure on next frame to catch delayed layout
+    const raf = requestAnimationFrame(updateSize);
+    
+    return () => {
+      window.removeEventListener('resize', updateSize);
+      cancelAnimationFrame(raf);
+    };
   }, []);
 
   // Count empty and populated products
@@ -333,7 +362,9 @@ export function BirdsEyeView({
     let totalImageCount = 0;
     
     safeProducts.forEach(p => {
-      const count = safeProductImages[p.id]?.length || 0;
+      if (!p || !p.id) return;
+      const images = safeProductImages[p.id];
+      const count = Array.isArray(images) ? images.length : 0;
       totalImageCount += count;
       if (count > 0) {
         withImages++;
@@ -348,38 +379,61 @@ export function BirdsEyeView({
   // Get empty product IDs for cleanup
   const emptyProductIds = useMemo(() => {
     return safeProducts
-      .filter(p => (safeProductImages[p.id]?.length || 0) === 0)
+      .filter(p => p && p.id && (safeProductImages[p.id]?.length || 0) === 0)
       .map(p => p.id);
   }, [safeProducts, safeProductImages]);
 
   // Filter products based on search query AND filter mode
   const filteredProducts = useMemo(() => {
-    let result = safeProducts;
-    
-    // Apply filter mode
-    if (filterMode === 'with-images') {
-      result = result.filter(p => (safeProductImages[p.id]?.length || 0) > 0);
-    } else if (filterMode === 'empty') {
-      result = result.filter(p => (safeProductImages[p.id]?.length || 0) === 0);
+    try {
+      let result = safeProducts.filter(p => p && p.id);
+      
+      // Apply filter mode
+      if (filterMode === 'with-images') {
+        result = result.filter(p => {
+          const images = safeProductImages[p.id];
+          return Array.isArray(images) && images.length > 0;
+        });
+      } else if (filterMode === 'empty') {
+        result = result.filter(p => {
+          const images = safeProductImages[p.id];
+          return !Array.isArray(images) || images.length === 0;
+        });
+      }
+      
+      // Apply search
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        result = result.filter(product => {
+          if (!product) return false;
+          return (
+            product.title?.toLowerCase().includes(query) ||
+            product.sku?.toLowerCase().includes(query) ||
+            product.brand?.toLowerCase().includes(query) ||
+            product.garment_type?.toLowerCase().includes(query)
+          );
+        });
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Error filtering products:', error);
+      return [];
     }
-    
-    // Apply search
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      result = result.filter(product =>
-        product.title?.toLowerCase().includes(query) ||
-        product.sku?.toLowerCase().includes(query) ||
-        product.brand?.toLowerCase().includes(query) ||
-        product.garment_type?.toLowerCase().includes(query)
-      );
-    }
-    
-    return result;
   }, [safeProducts, safeProductImages, searchQuery, filterMode]);
 
   // Count total images (for filtered products)
   const totalImages = useMemo(() => {
-    return filteredProducts.reduce((sum, p) => sum + (safeProductImages[p.id]?.length || 0), 0);
+    try {
+      return filteredProducts.reduce((sum, p) => {
+        if (!p || !p.id) return sum;
+        const images = safeProductImages[p.id];
+        return sum + (Array.isArray(images) ? images.length : 0);
+      }, 0);
+    } catch (error) {
+      console.error('Error counting images:', error);
+      return 0;
+    }
   }, [filteredProducts, safeProductImages]);
 
   // Calculate grid dimensions for virtualization
@@ -430,7 +484,7 @@ export function BirdsEyeView({
 
   // Handle merging selected products
   const handleMergeProducts = useCallback(async () => {
-    if (!selectedProductIds || selectedProductIds.size < 2) {
+    if (safeSelectedProductIds.size < 2) {
       toast.error('Select at least 2 products to merge');
       return;
     }
@@ -445,13 +499,15 @@ export function BirdsEyeView({
     try {
       // Collect all image IDs from selected products
       const allImageIds: string[] = [];
-      selectedProductIds.forEach(productId => {
-        const images = safeProductImages[productId] || [];
-        images.forEach(img => {
-          if (img && img.id) {
-            allImageIds.push(img.id);
-          }
-        });
+      safeSelectedProductIds.forEach(productId => {
+        const images = safeProductImages[productId];
+        if (Array.isArray(images)) {
+          images.forEach(img => {
+            if (img && img.id) {
+              allImageIds.push(img.id);
+            }
+          });
+        }
       });
       
       if (allImageIds.length === 0) {
@@ -462,13 +518,13 @@ export function BirdsEyeView({
       
       // Use the merge handler if available, otherwise create new product with all images
       if (onMergeProducts) {
-        await onMergeProducts(Array.from(selectedProductIds));
+        await onMergeProducts(Array.from(safeSelectedProductIds));
       } else {
         // Create a new product with all the images
-        onCreateNewProduct(allImageIds);
+        await onCreateNewProduct(allImageIds);
       }
       
-      toast.success(`Merged ${selectedProductIds.size} products (${allImageIds.length} images)`);
+      toast.success(`Merged ${safeSelectedProductIds.size} products (${allImageIds.length} images)`);
       
       // Clear selection
       if (onDeselectAllProducts) {
@@ -479,7 +535,7 @@ export function BirdsEyeView({
     } finally {
       setIsMergingProducts(false);
     }
-  }, [selectedProductIds, safeProductImages, onCreateNewProduct, onMergeProducts, onDeselectAllProducts]);
+  }, [safeSelectedProductIds, safeProductImages, onCreateNewProduct, onMergeProducts, onDeselectAllProducts]);
 
   const toggleImageSelection = useCallback((imageId: string, productId: string) => {
     setSelectedImages(prev => {
@@ -817,14 +873,16 @@ export function BirdsEyeView({
       // Guard against undefined product (safety check)
       if (!product || !product.id) return null;
       
-      const images = safeProductImages[product.id] || [];
+      const productId = product.id;
+      const rawImages = safeProductImages[productId];
+      const images = Array.isArray(rawImages) ? rawImages.filter(img => img && img.id) : [];
       const hasSelectedImages = Array.from(selectedImages.values()).some(
-        s => s && s.productId === product.id
+        s => s && s.productId === productId
       );
-      const isDropTarget = dropTargetProductId === product.id;
+      const isDropTarget = dropTargetProductId === productId;
       const canReceive = (selectedImages.size > 0 || draggedImageData) && !hasSelectedImages;
-      const justReceived = recentlyReceivedProduct === product.id;
-      const isProductSelected = selectedProductIds?.has(product.id) ?? false;
+      const justReceived = recentlyReceivedProduct === productId;
+      const isProductSelected = safeSelectedProductIds.has(productId);
       
       return (
         <div
@@ -880,7 +938,7 @@ export function BirdsEyeView({
     recentlyMovedImages,
     recentlyReceivedProduct,
     deletingImages,
-    selectedProductIds,
+    safeSelectedProductIds,
     gridConfig,
     isCreateNewDropTarget,
     onToggleProductSelection,
@@ -896,6 +954,27 @@ export function BirdsEyeView({
     handleDeleteSingle,
   ]);
 
+  // Show error state if something went wrong
+  if (hasError) {
+    return (
+      <div className="fixed inset-0 z-50 bg-background flex flex-col items-center justify-center">
+        <div className="text-center p-8">
+          <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
+          <h2 className="text-lg font-semibold mb-2">Something went wrong</h2>
+          <p className="text-muted-foreground mb-4">Bird's Eye View encountered an error.</p>
+          <div className="flex gap-2 justify-center">
+            <Button variant="outline" onClick={() => setHasError(false)}>
+              Try Again
+            </Button>
+            <Button variant="default" onClick={onClose}>
+              Close
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <TooltipProvider delayDuration={300}>
     <div className="fixed inset-0 z-50 bg-background flex flex-col">
@@ -909,11 +988,11 @@ export function BirdsEyeView({
           </span>
           
           {/* Product selection counter and controls */}
-          {selectedProductIds && selectedProductIds.size > 0 && (
+          {safeSelectedProductIds.size > 0 && (
             <div className="flex items-center gap-2 px-3 py-1.5 bg-green-500/20 rounded-lg border border-green-500/30">
               <CheckSquare className="w-4 h-4 text-green-600 dark:text-green-400" />
               <span className="text-sm font-medium text-green-700 dark:text-green-300">
-                {selectedProductIds.size} product{selectedProductIds.size > 1 ? 's' : ''} selected
+                {safeSelectedProductIds.size} product{safeSelectedProductIds.size > 1 ? 's' : ''} selected
               </span>
               {onDeselectAllProducts && (
                 <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-green-700 dark:text-green-300 hover:bg-green-500/20" onClick={onDeselectAllProducts}>
@@ -924,7 +1003,7 @@ export function BirdsEyeView({
           )}
           
           {/* Merge Products button - NEW */}
-          {selectedProductIds && selectedProductIds.size >= 2 && onCreateNewProduct && (
+          {safeSelectedProductIds.size >= 2 && onCreateNewProduct && (
             <Button
               variant="default"
               size="sm"
