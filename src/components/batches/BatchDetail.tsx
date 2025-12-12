@@ -1176,6 +1176,21 @@ export function BatchDetail({
               handleRefreshImages();
             }
           }}
+          onMergeProducts={async (productIds) => {
+            // Collect all images from selected products
+            const allImageUrls: string[] = [];
+            for (const productId of productIds) {
+              const images = productImages[productId] || [];
+              images.forEach(img => allImageUrls.push(img.url));
+            }
+            
+            if (allImageUrls.length > 0) {
+              // Create new product with all images
+              onCreateNewGroup(allImageUrls);
+              // Refresh images to reflect the change
+              await handleRefreshImages();
+            }
+          }}
         />
       )}
 
