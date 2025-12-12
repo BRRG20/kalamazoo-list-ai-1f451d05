@@ -218,6 +218,13 @@ export function ProductDetailPanel({
   }, [isAutoScrolling, isScrollPaused]);
 
   const toggleScrollPause = useCallback(() => {
+    // If not currently auto-scrolling, start it from the current position
+    if (!isAutoScrolling) {
+      setIsScrollPaused(false);
+      startAutoScroll();
+      return;
+    }
+
     if (isScrollPaused) {
       setIsScrollPaused(false);
       startAutoScroll();
@@ -228,7 +235,7 @@ export function ProductDetailPanel({
         autoScrollIntervalRef.current = null;
       }
     }
-  }, [isScrollPaused, startAutoScroll]);
+  }, [isAutoScrolling, isScrollPaused, startAutoScroll]);
 
   // Update scroll speed and restart if scrolling
   const changeScrollSpeed = useCallback((newSpeed: 'slow' | 'medium' | 'fast') => {
