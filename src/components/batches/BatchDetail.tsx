@@ -206,6 +206,23 @@ export function BatchDetail({
   onDeleteEmptyProducts,
   onCreateProductFromImageIds,
 }: BatchDetailProps) {
+  // Early return if batch is missing (defensive guard)
+  if (!batch || !batch.id) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-8">
+        <div className="text-center">
+          <p className="text-muted-foreground">No batch selected or batch not found.</p>
+          {onBack && (
+            <Button variant="outline" onClick={onBack} className="mt-4">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to batches
+            </Button>
+          )}
+        </div>
+      </div>
+    );
+  }
+  
   const { settings, isShopifyConfigured } = useSettings();
   const [imagesPerProduct, setImagesPerProduct] = useState(settings?.default_images_per_product || 9);
   const [productImages, setProductImages] = useState<Record<string, ProductImage[]>>({});

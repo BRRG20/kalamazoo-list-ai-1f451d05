@@ -310,7 +310,7 @@ export function UnassignedImagePool({
             </Button>
           )}
 
-          {groups.length > 0 && (
+          {groups.filter(g => g.productId && g.productId !== '').length > 0 && (
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">or add to:</span>
               <Select value={targetGroupId} onValueChange={setTargetGroupId}>
@@ -318,11 +318,13 @@ export function UnassignedImagePool({
                   <SelectValue placeholder="Select group" />
                 </SelectTrigger>
                 <SelectContent className="bg-popover">
-                  {groups.map((group) => (
-                    <SelectItem key={group.productId} value={group.productId}>
-                      Product {String(group.productNumber).padStart(3, '0')}
-                    </SelectItem>
-                  ))}
+                  {groups
+                    .filter(group => group.productId && group.productId !== '')
+                    .map((group) => (
+                      <SelectItem key={group.productId} value={group.productId}>
+                        Product {String(group.productNumber).padStart(3, '0')}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
               <Button 
