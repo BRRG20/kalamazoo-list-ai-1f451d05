@@ -165,7 +165,23 @@ serve(async (req) => {
     const cleaned: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(parsed)) {
       if (value !== null && value !== undefined && value !== "") {
-        cleaned[key] = value;
+        // Map condition values to match the exact database enum values
+        if (key === 'condition' && typeof value === 'string') {
+          const conditionValue = value.toLowerCase();
+          if (conditionValue.startsWith('excellent')) {
+            cleaned[key] = 'Excellent';
+          } else if (conditionValue.startsWith('very good')) {
+            cleaned[key] = 'Very good';
+          } else if (conditionValue.startsWith('good')) {
+            cleaned[key] = 'Good';
+          } else if (conditionValue.startsWith('fair')) {
+            cleaned[key] = 'Fair';
+          } else {
+            cleaned[key] = value;
+          }
+        } else {
+          cleaned[key] = value;
+        }
       }
     }
 

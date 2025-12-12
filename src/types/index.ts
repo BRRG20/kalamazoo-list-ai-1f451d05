@@ -12,8 +12,8 @@ export type Era = "80s" | "90s" | "Y2K" | "Modern" | "";
 export type Condition = 
   | "Excellent" 
   | "Very good" 
-  | "Good – light wear" 
-  | "Fair – visible wear" 
+  | "Good" 
+  | "Fair" 
   | "";
 
 export interface Batch {

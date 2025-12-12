@@ -48,7 +48,7 @@ interface ProductDetailPanelProps {
 const UNSET_VALUE = '__unset__';
 const departments: Department[] = ['Women', 'Men', 'Unisex', 'Kids'];
 const eras: Era[] = ['80s', '90s', 'Y2K', 'Modern'];
-const conditions: Condition[] = ['Excellent', 'Very good', 'Good – light wear', 'Fair – visible wear'];
+const conditions: Condition[] = ['Excellent', 'Very good', 'Good', 'Fair'];
 const garmentTypes = ['sweater', 'jumper', 'hoodie', 't-shirt', 'shirt', 'blouse', 'jeans', 'trousers', 'dress', 'skirt', 'jacket', 'coat', 'fleece', 'cardigan', 'vest', 'shorts'];
 const fits = ['oversized', 'boxy', 'regular', 'slim', 'cropped', 'relaxed', 'fitted'];
 const patterns = ['plain', 'striped', 'graphic', 'fair isle', 'cable knit', 'argyle', 'floral', 'abstract', 'checked', 'plaid'];
