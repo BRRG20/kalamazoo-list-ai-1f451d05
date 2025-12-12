@@ -1589,6 +1589,7 @@ const handleSelectBatch = useCallback((id: string) => {
             regeneratingField={regeneratingField}
             isCreatingShopify={isCreatingShopify}
             isShopifyConfigured={!!isShopifyConfigured}
+            settings={settings}
           />
         </ErrorBoundary>
       )}
