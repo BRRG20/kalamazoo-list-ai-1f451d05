@@ -27,7 +27,7 @@ import type { Product, ProductImage } from '@/types';
 export default function BatchesPage() {
   const { batches, createBatch, updateBatch, deleteBatch, getProductCount } = useBatches();
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
-  const { products, createProduct, updateProduct, deleteProduct, refetch: refetchProducts } = useProducts(selectedBatchId);
+  const { products, createProduct, createProductWithImages, updateProduct, deleteProduct, deleteEmptyProducts, refetch: refetchProducts } = useProducts(selectedBatchId);
   const { deletedProducts, recoverProduct, permanentlyDelete: permanentlyDeleteProduct, emptyTrash, refetch: refetchDeletedProducts } = useDeletedProducts(selectedBatchId);
   const { fetchImagesForProduct, fetchImagesForBatch, addImageToBatch, updateImage, excludeLastNImages, clearCache, deleteImage, updateImageProductIdByUrl } = useImages();
   const { settings } = useSettings();
@@ -987,8 +987,12 @@ const handleSelectBatch = useCallback((id: string) => {
     // Clear cache and refetch
     clearCache();
     await refetchProducts();
+    
+    // AUTO-CLEANUP: Delete the source product if it became empty
+    await deleteEmptyProducts();
+    
     toast.success('Image moved successfully');
-  }, [fetchImagesForProduct, clearCache, refetchProducts]);
+  }, [fetchImagesForProduct, clearCache, refetchProducts, deleteEmptyProducts]);
 
   // Handler for moving multiple images by ID from detail panel
   const handleMoveImagesById = useCallback(async (imageIds: string[], targetProductId: string) => {
@@ -1018,12 +1022,15 @@ const handleSelectBatch = useCallback((id: string) => {
       setEditingProductImages(updatedImages);
       await refetchProducts();
       
+      // AUTO-CLEANUP: Delete the source product if it became empty
+      await deleteEmptyProducts();
+      
       toast.success(`${imageIds.length} image(s) moved successfully`);
     } catch (error) {
       console.error('Error moving images:', error);
       toast.error('Failed to move images');
     }
-  }, [editingProductId, fetchImagesForProduct, clearCache, refetchProducts]);
+  }, [editingProductId, fetchImagesForProduct, clearCache, refetchProducts, deleteEmptyProducts]);
 
   // Standalone handler for moving images by ID (used in birds eye view)
   const handleMoveImagesByIdStandalone = useCallback(async (imageIds: string[], targetProductId: string) => {
@@ -1051,12 +1058,16 @@ const handleSelectBatch = useCallback((id: string) => {
       clearCache();
       await refetchProducts();
       
+      // AUTO-CLEANUP: Delete any source products that became empty
+      await deleteEmptyProducts();
+      
       toast.success(`${imageIds.length} image(s) moved`);
     } catch (error) {
       console.error('Error moving images:', error);
       toast.error('Failed to move images');
     }
-  }, [fetchImagesForProduct, clearCache, refetchProducts]);
+  }, [fetchImagesForProduct, clearCache, refetchProducts, deleteEmptyProducts]);
+  
   const handleReorderProductImages = useCallback(async (productId: string, imageIds: string[]) => {
     // Update positions for all images in the new order
     const updates = imageIds.map((id, index) => 
@@ -1248,20 +1259,18 @@ const handleSelectBatch = useCallback((id: string) => {
                     continue;
                   }
                   
-                  // Create product with unique SKU
-                  const timestamp = Date.now();
-                  const sku = `SKU-${timestamp}-${savedCount + 1}-${Math.random().toString(36).substr(2, 4)}`;
-                  const product = await createProduct(sku);
-                  
-                  if (product && !createdProductIds.has(product.id)) {
-                    createdProductIds.add(product.id);
+                  try {
+                    // USE THE ENFORCED SINGLE FUNCTION: createProductWithImages
+                    // This ensures product + images are created atomically
+                    const product = await createProductWithImages(validImages);
                     
-                    // Update images to link to this product by URL
-                    for (let i = 0; i < validImages.length; i++) {
-                      const imageUrl = validImages[i];
-                      await updateImageProductIdByUrl(imageUrl, product.id, i);
+                    if (product && !createdProductIds.has(product.id)) {
+                      createdProductIds.add(product.id);
+                      savedCount++;
                     }
-                    savedCount++;
+                  } catch (error) {
+                    console.error('Error creating product with images:', error);
+                    // Continue to next group even if one fails
                   }
                 }
                 
