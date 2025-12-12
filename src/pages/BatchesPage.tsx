@@ -295,6 +295,18 @@ const handleSelectBatch = useCallback((id: string) => {
       selectedImages: new Set<string>(),
     }));
 
+    // For new pending images, set initial assignment to null (unassigned)
+    // This ensures they'll be correctly tracked as "new" temp groups
+    setInitialImageAssignments(prev => {
+      const updated = new Map(prev);
+      for (const url of pendingImageUrls) {
+        if (!updated.has(url)) {
+          updated.set(url, null); // Mark as initially unassigned
+        }
+      }
+      return updated;
+    });
+
     setImageGroups(newGroups);
     setUnassignedImages([]);
     setPendingImageUrls([]);
@@ -348,6 +360,13 @@ const handleSelectBatch = useCallback((id: string) => {
   const handleLoadAllImagesIntoGroups = useCallback(async () => {
     if (!selectedBatchId) return;
     
+    // ONE-TIME CLEANUP: Delete any ghost/empty products before loading
+    // This silently cleans up products with 0 images that may have been created by bugs
+    const cleanedCount = await deleteEmptyProducts();
+    if (cleanedCount > 0) {
+      console.log(`Cleaned up ${cleanedCount} empty product(s) before loading All Images view`);
+    }
+    
     // Fetch all images for the batch
     const allBatchImages = await fetchImagesForBatch(selectedBatchId);
     
@@ -356,11 +375,15 @@ const handleSelectBatch = useCallback((id: string) => {
       return;
     }
     
-    // Group images by product_id
+    // Group images by product_id and track initial assignments
     const imagesByProduct: Record<string, string[]> = {};
     const unassigned: string[] = [];
+    const initialAssignments = new Map<string, string | null>();
     
     for (const img of allBatchImages) {
+      // Track initial assignment for change detection
+      initialAssignments.set(img.url, img.product_id || null);
+      
       if (img.product_id && img.product_id !== '') {
         if (!imagesByProduct[img.product_id]) {
           imagesByProduct[img.product_id] = [];
@@ -371,7 +394,8 @@ const handleSelectBatch = useCallback((id: string) => {
       }
     }
     
-    // Create groups from existing products that have images
+    // Create groups ONLY from existing products that have at least 1 image
+    // This prevents empty product boxes from ever appearing
     const groups: ImageGroup[] = products
       .filter(p => imagesByProduct[p.id] && imagesByProduct[p.id].length > 0)
       .map((product, index) => ({
@@ -383,12 +407,13 @@ const handleSelectBatch = useCallback((id: string) => {
     
     setImageGroups(groups);
     setUnassignedImages(unassigned);
+    setInitialImageAssignments(initialAssignments); // CRITICAL: Set initial state for change detection
     setShowGroupManager(true);
     
     const totalImages = allBatchImages.length;
     const assignedCount = totalImages - unassigned.length;
     toast.success(`Loaded ${totalImages} images (${assignedCount} assigned, ${unassigned.length} unassigned)`);
-  }, [selectedBatchId, fetchImagesForBatch, products]);
+  }, [selectedBatchId, fetchImagesForBatch, products, deleteEmptyProducts]);
 
   // Regroup selected products - collect their images and re-chunk them
   const handleRegroupSelectedProducts = useCallback(async (productIds: string[], imagesPerProduct: number) => {
@@ -399,9 +424,15 @@ const handleSelectBatch = useCallback((id: string) => {
 
     // Fetch images for all selected products
     const allImages: string[] = [];
+    const newInitialAssignments = new Map<string, string | null>();
+    
     for (const productId of productIds) {
       const images = await fetchImagesForProduct(productId);
-      allImages.push(...images.map(img => img.url));
+      for (const img of images) {
+        allImages.push(img.url);
+        // Mark these images with their current product ID as initial state
+        newInitialAssignments.set(img.url, productId);
+      }
     }
 
     if (allImages.length === 0) {
@@ -432,6 +463,15 @@ const handleSelectBatch = useCallback((id: string) => {
 
     setImageGroups(newGroups);
     setUnassignedImages([]);
+    // Update initial assignments so new temp groups are correctly tracked as "new"
+    setInitialImageAssignments(prev => {
+      const updated = new Map(prev);
+      // Clear out old assignments for these images and mark them as needing creation
+      for (const url of allImages) {
+        updated.delete(url); // These are now in temp groups, will be created fresh
+      }
+      return updated;
+    });
     setShowGroupManager(true);
     toast.success(`Re-grouped ${allImages.length} images into ${chunks.length} product(s). Review and confirm.`);
   }, [fetchImagesForProduct, deleteProduct]);
