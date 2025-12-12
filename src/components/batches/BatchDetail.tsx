@@ -1142,6 +1142,14 @@ export function BatchDetail({
               }
             }
           }}
+          onDeleteEmptyProducts={async (productIds) => {
+            // Delete empty products one by one
+            for (const productId of productIds) {
+              await onDeleteGroup(productId);
+            }
+            // Refresh images after cleanup
+            await handleRefreshImages();
+          }}
         />
       )}
 

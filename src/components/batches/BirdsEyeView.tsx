@@ -1,10 +1,24 @@
-import { useState, useEffect, useMemo } from 'react';
-import { X, ZoomIn, Check, Undo2, Trash2, Loader2, Search } from 'lucide-react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { X, ZoomIn, Check, Undo2, Trash2, Loader2, Search, Filter, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogHeader, DialogFooter } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 import type { Product, ProductImage } from '@/types';
 import { cn } from '@/lib/utils';
@@ -15,12 +29,15 @@ interface MoveHistory {
   toProductId: string;
 }
 
+type FilterMode = 'all' | 'with-images' | 'empty';
+
 interface BirdsEyeViewProps {
   products: Product[];
   productImages: Record<string, ProductImage[]>;
   onClose: () => void;
   onMoveImages: (imageIds: string[], fromProductId: string, toProductId: string) => void;
   onDeleteImage?: (imageId: string) => Promise<void>;
+  onDeleteEmptyProducts?: (productIds: string[]) => Promise<void>;
   isLoading?: boolean;
 }
 
@@ -30,6 +47,7 @@ export function BirdsEyeView({
   onClose,
   onMoveImages,
   onDeleteImage,
+  onDeleteEmptyProducts,
   isLoading = false,
 }: BirdsEyeViewProps) {
   const [selectedImages, setSelectedImages] = useState<Map<string, { imageId: string; productId: string }>>(new Map());
@@ -41,23 +59,81 @@ export function BirdsEyeView({
   const [draggedImageData, setDraggedImageData] = useState<{ imageId: string; productId: string } | null>(null);
   const [deletingImages, setDeletingImages] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterMode, setFilterMode] = useState<FilterMode>('all');
+  const [showCleanupDialog, setShowCleanupDialog] = useState(false);
+  const [isDeletingEmpty, setIsDeletingEmpty] = useState(false);
 
-  // Filter products based on search query
+  // Count empty and populated products
+  const productStats = useMemo(() => {
+    let withImages = 0;
+    let empty = 0;
+    let totalImageCount = 0;
+    
+    products.forEach(p => {
+      const count = productImages[p.id]?.length || 0;
+      totalImageCount += count;
+      if (count > 0) {
+        withImages++;
+      } else {
+        empty++;
+      }
+    });
+    
+    return { withImages, empty, totalImageCount };
+  }, [products, productImages]);
+
+  // Get empty product IDs for cleanup
+  const emptyProductIds = useMemo(() => {
+    return products
+      .filter(p => (productImages[p.id]?.length || 0) === 0)
+      .map(p => p.id);
+  }, [products, productImages]);
+
+  // Filter products based on search query AND filter mode
   const filteredProducts = useMemo(() => {
-    if (!searchQuery.trim()) return products;
-    const query = searchQuery.toLowerCase();
-    return products.filter(product =>
-      product.title?.toLowerCase().includes(query) ||
-      product.sku?.toLowerCase().includes(query) ||
-      product.brand?.toLowerCase().includes(query) ||
-      product.garment_type?.toLowerCase().includes(query)
-    );
-  }, [products, searchQuery]);
+    let result = products;
+    
+    // Apply filter mode
+    if (filterMode === 'with-images') {
+      result = result.filter(p => (productImages[p.id]?.length || 0) > 0);
+    } else if (filterMode === 'empty') {
+      result = result.filter(p => (productImages[p.id]?.length || 0) === 0);
+    }
+    
+    // Apply search
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(product =>
+        product.title?.toLowerCase().includes(query) ||
+        product.sku?.toLowerCase().includes(query) ||
+        product.brand?.toLowerCase().includes(query) ||
+        product.garment_type?.toLowerCase().includes(query)
+      );
+    }
+    
+    return result;
+  }, [products, productImages, searchQuery, filterMode]);
 
   // Count total images (for filtered products)
   const totalImages = useMemo(() => {
     return filteredProducts.reduce((sum, p) => sum + (productImages[p.id]?.length || 0), 0);
   }, [filteredProducts, productImages]);
+
+  // Handle cleanup of empty products
+  const handleCleanupEmptyProducts = useCallback(async () => {
+    if (!onDeleteEmptyProducts || emptyProductIds.length === 0) return;
+    
+    setIsDeletingEmpty(true);
+    try {
+      await onDeleteEmptyProducts(emptyProductIds);
+      toast.success(`Deleted ${emptyProductIds.length} empty product(s)`);
+      setShowCleanupDialog(false);
+    } catch (error) {
+      toast.error('Failed to delete empty products');
+    } finally {
+      setIsDeletingEmpty(false);
+    }
+  }, [onDeleteEmptyProducts, emptyProductIds]);
 
   const toggleImageSelection = (imageId: string, productId: string) => {
     setSelectedImages(prev => {
@@ -253,6 +329,7 @@ export function BirdsEyeView({
   };
 
   return (
+    <TooltipProvider delayDuration={300}>
     <div className="fixed inset-0 z-50 bg-background flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-border bg-card">
@@ -260,8 +337,20 @@ export function BirdsEyeView({
           <h2 className="text-lg font-semibold">Birds Eye View</h2>
           <span className="text-sm text-muted-foreground">
             {filteredProducts.length} products • {totalImages} images
-            {searchQuery && ` (filtered from ${products.length})`}
+            {filterMode !== 'all' && ` (${filterMode === 'empty' ? 'showing empty' : 'showing with images'})`}
           </span>
+          
+          {/* Stats badges */}
+          <div className="flex items-center gap-2 text-xs">
+            <span className="px-2 py-1 rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+              {productStats.withImages} with images
+            </span>
+            {productStats.empty > 0 && (
+              <span className="px-2 py-1 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+                {productStats.empty} empty
+              </span>
+            )}
+          </div>
           
           {/* Search input */}
           <div className="relative flex-shrink-0">
@@ -282,6 +371,49 @@ export function BirdsEyeView({
               </button>
             )}
           </div>
+          
+          {/* Filter dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 gap-1.5">
+                <Filter className="w-4 h-4" />
+                {filterMode === 'all' ? 'All' : filterMode === 'empty' ? 'Empty only' : 'With images'}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuLabel>Filter Products</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setFilterMode('all')} className={filterMode === 'all' ? 'bg-accent' : ''}>
+                All products ({products.length})
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setFilterMode('with-images')} className={filterMode === 'with-images' ? 'bg-accent' : ''}>
+                With images ({productStats.withImages})
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setFilterMode('empty')} className={filterMode === 'empty' ? 'bg-accent' : ''}>
+                Empty groups ({productStats.empty})
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          
+          {/* Cleanup empty products button */}
+          {productStats.empty > 0 && onDeleteEmptyProducts && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1.5 text-amber-600 border-amber-300 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-950"
+                  onClick={() => setShowCleanupDialog(true)}
+                >
+                  <AlertTriangle className="w-4 h-4" />
+                  Clean up ({productStats.empty})
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Delete all empty product groups (no images)</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
           
           {isLoading && (
             <div className="flex items-center gap-2 text-muted-foreground">
@@ -378,15 +510,29 @@ export function BirdsEyeView({
                     <span className="text-xs font-medium text-muted-foreground truncate">
                       #{productIndex + 1}
                     </span>
-                    <span className="text-xs text-muted-foreground">
+                    <span className={cn(
+                      "text-xs px-1.5 py-0.5 rounded",
+                      images.length === 0 
+                        ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                        : "bg-muted text-muted-foreground"
+                    )}>
                       {images.length} img
                     </span>
                   </div>
 
-                  {/* Product title */}
-                  <p className="text-xs font-medium truncate mb-2" title={product.title || product.sku || 'Untitled'}>
-                    {product.title || product.sku || 'Untitled'}
-                  </p>
+                  {/* Product title with tooltip */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <p className="text-xs font-medium truncate mb-2 cursor-help">
+                        {product.title || product.sku || 'Untitled'}
+                      </p>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="max-w-xs">
+                      <p>{product.title || product.sku || 'Untitled'}</p>
+                      {product.brand && <p className="text-xs text-muted-foreground">Brand: {product.brand}</p>}
+                      {product.garment_type && <p className="text-xs text-muted-foreground">Type: {product.garment_type}</p>}
+                    </TooltipContent>
+                  </Tooltip>
 
                   {/* Images grid */}
                   <div className="grid grid-cols-3 gap-1">
@@ -466,8 +612,10 @@ export function BirdsEyeView({
 
                     {/* Empty state */}
                     {images.length === 0 && (
-                      <div className="col-span-3 aspect-video flex items-center justify-center bg-muted rounded">
-                        <span className="text-xs text-muted-foreground">No images</span>
+                      <div className="col-span-3 aspect-video flex flex-col items-center justify-center bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded">
+                        <AlertTriangle className="w-4 h-4 text-amber-500 mb-1" />
+                        <span className="text-xs text-amber-700 dark:text-amber-400 font-medium">Empty group</span>
+                        <span className="text-xs text-amber-600 dark:text-amber-500">0 images</span>
                       </div>
                     )}
                   </div>
@@ -493,6 +641,38 @@ export function BirdsEyeView({
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Cleanup Confirmation Dialog */}
+      <Dialog open={showCleanupDialog} onOpenChange={setShowCleanupDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-500" />
+              Delete Empty Products
+            </DialogTitle>
+            <DialogDescription>
+              This will permanently delete {emptyProductIds.length} product group(s) that have no images assigned.
+              This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCleanupDialog(false)} disabled={isDeletingEmpty}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleCleanupEmptyProducts} disabled={isDeletingEmpty}>
+              {isDeletingEmpty ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                `Delete ${emptyProductIds.length} Empty Product(s)`
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+    </TooltipProvider>
   );
 }
