@@ -58,6 +58,7 @@ export default function BatchesPage() {
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [editingProductImages, setEditingProductImages] = useState<ProductImage[]>([]);
   const [regeneratingField, setRegeneratingField] = useState<string | null>(null);
+  const [isGeneratingDetailPanel, setIsGeneratingDetailPanel] = useState(false);
   const [isCreatingShopify, setIsCreatingShopify] = useState(false);
   const [pendingImageUrls, setPendingImageUrls] = useState<string[]>([]);
   const [productCounts, setProductCounts] = useState<Record<string, number>>({});
@@ -885,9 +886,17 @@ const handleSelectBatch = useCallback((id: string) => {
   const handleGenerateProductAI = useCallback(async (regenerateOnly?: 'title' | 'style_a' | 'style_b' | 'all') => {
     if (!editingProductId) return;
     
+    // Prevent double-clicks
+    if (isGeneratingDetailPanel) {
+      console.warn('[AI Detail] Already generating, ignoring request');
+      return;
+    }
+    
     const product = products.find(p => p.id === editingProductId);
     if (!product) return;
     
+    // Set loading states
+    setIsGeneratingDetailPanel(true);
     if (regenerateOnly && regenerateOnly !== 'all') {
       setRegeneratingField(regenerateOnly);
     }
@@ -895,7 +904,15 @@ const handleSelectBatch = useCallback((id: string) => {
     try {
       // Get product images for AI context
       const images = await fetchImagesForProduct(editingProductId);
+      
+      if (images.length === 0) {
+        toast.error('This product has no images to analyze.');
+        return;
+      }
+      
       const imageUrls = images.slice(0, 2).map(img => img.url);
+      
+      console.log(`[AI Detail] Generating for product ${editingProductId} (regenerateOnly: ${regenerateOnly})`);
       
       // Call the edge function
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-listing`, {
@@ -912,14 +929,14 @@ const handleSelectBatch = useCallback((id: string) => {
       });
       
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
         throw new Error(errorData.error || 'Generation failed');
       }
       
       const data = await response.json();
       const generated = data.generated;
       
-      // Update product with generated content
+      // Update product with generated content (ONLY for this specific product)
       const updates: Partial<Product> = { status: 'generated' };
       
       if (!regenerateOnly || regenerateOnly === 'all' || regenerateOnly === 'title') {
@@ -937,16 +954,19 @@ const handleSelectBatch = useCallback((id: string) => {
         if (generated.collections_tags) updates.collections_tags = generated.collections_tags;
       }
       
+      // updateProduct uses the specific product ID - never affects other products
       await updateProduct(editingProductId, updates);
+      console.log(`[AI Detail] Successfully updated product ${editingProductId}`);
       toast.success(regenerateOnly && regenerateOnly !== 'all' ? `${regenerateOnly.replace('_', ' ')} regenerated` : 'AI generation complete');
       
     } catch (error) {
-      console.error('Generation error:', error);
-      toast.error(error instanceof Error ? error.message : 'Generation failed');
+      console.error('[AI Detail] Generation error:', error);
+      toast.error(error instanceof Error ? error.message : 'Generation failed. Please try again.');
     } finally {
+      setIsGeneratingDetailPanel(false);
       setRegeneratingField(null);
     }
-  }, [editingProductId, products, updateProduct, fetchImagesForProduct]);
+  }, [editingProductId, products, updateProduct, fetchImagesForProduct, isGeneratingDetailPanel]);
 
   const getProductImagesCallback = useCallback(async (productId: string) => {
     return await fetchImagesForProduct(productId);
@@ -1560,7 +1580,7 @@ const handleSelectBatch = useCallback((id: string) => {
           onNext={() => navigateProduct('next')}
           hasPrevious={hasPrevious}
           hasNext={hasNext}
-          isGenerating={isGenerating}
+          isGenerating={isGenerating || isGeneratingDetailPanel}
           regeneratingField={regeneratingField}
           isCreatingShopify={isCreatingShopify}
           isShopifyConfigured={!!isShopifyConfigured}

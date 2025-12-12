@@ -5,7 +5,7 @@ export type ProductStatus =
   | "created_in_shopify" 
   | "error";
 
-export type Department = "Women" | "Men" | "Unisex" | "Kids";
+export type Department = "Women" | "Men" | "Unisex" | "Kids" | "";
 
 export type Era = "80s" | "90s" | "Y2K" | "Modern" | "";
 
