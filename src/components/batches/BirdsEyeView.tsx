@@ -97,6 +97,14 @@ const ProductCard = memo(function ProductCard({
   onDeleteImage?: (imageId: string) => Promise<void>;
   onDeleteSingle: (e: React.MouseEvent, imageId: string) => void;
 }) {
+  // Guard against undefined product
+  if (!product || !product.id) {
+    return null;
+  }
+  
+  // Guard images to always be an array
+  const safeImages = images ?? [];
+  
   return (
     <div
       className={cn(
@@ -153,11 +161,11 @@ const ProductCard = memo(function ProductCard({
         </div>
         <span className={cn(
           "text-xs px-1.5 py-0.5 rounded",
-          images.length === 0
+          safeImages.length === 0
             ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
             : "bg-muted text-muted-foreground"
         )}>
-          {images.length} img
+          {safeImages.length} img
         </span>
       </div>
 
@@ -177,7 +185,9 @@ const ProductCard = memo(function ProductCard({
 
       {/* Images grid */}
       <div className="grid grid-cols-3 gap-1 relative z-20">
-        {images.map((image, imgIndex) => {
+        {safeImages.map((image, imgIndex) => {
+          // Guard against undefined image
+          if (!image || !image.id) return null;
           const isSelected = selectedImages.has(image.id);
           const justMoved = recentlyMovedImages.has(image.id);
           const isDeleting = deletingImages.has(image.id);
@@ -252,7 +262,7 @@ const ProductCard = memo(function ProductCard({
         })}
 
         {/* Empty state */}
-        {images.length === 0 && (
+        {safeImages.length === 0 && (
           <div className="col-span-3 aspect-video flex flex-col items-center justify-center bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded">
             <AlertTriangle className="w-4 h-4 text-amber-500 mb-1" />
             <span className="text-xs text-amber-700 dark:text-amber-400 font-medium">Empty group</span>
@@ -432,7 +442,11 @@ export function BirdsEyeView({
       const allImageIds: string[] = [];
       selectedProductIds.forEach(productId => {
         const images = safeProductImages[productId] || [];
-        images.forEach(img => allImageIds.push(img.id));
+        images.forEach(img => {
+          if (img && img.id) {
+            allImageIds.push(img.id);
+          }
+        });
       });
       
       if (allImageIds.length === 0) {
@@ -460,7 +474,7 @@ export function BirdsEyeView({
     } finally {
       setIsMergingProducts(false);
     }
-  }, [selectedProductIds, productImages, onCreateNewProduct, onMergeProducts, onDeselectAllProducts]);
+  }, [selectedProductIds, safeProductImages, onCreateNewProduct, onMergeProducts, onDeselectAllProducts]);
 
   const toggleImageSelection = useCallback((imageId: string, productId: string) => {
     setSelectedImages(prev => {
@@ -515,8 +529,8 @@ export function BirdsEyeView({
     setRecentlyReceivedProduct(targetProductId);
     
     // Find target product name for toast
-    const targetProduct = products.find(p => p.id === targetProductId);
-    const targetName = targetProduct?.title || `Product #${products.findIndex(p => p.id === targetProductId) + 1}`;
+    const targetProduct = safeProducts.find(p => p.id === targetProductId);
+    const targetName = targetProduct?.title || `Product #${safeProducts.findIndex(p => p.id === targetProductId) + 1}`;
     
     toast.success(
       isUndo 
@@ -532,7 +546,7 @@ export function BirdsEyeView({
 
     setSelectedImages(new Map());
     setDropTargetProductId(null);
-  }, [selectedImages, onMoveImages, products]);
+  }, [selectedImages, onMoveImages, safeProducts]);
 
   const handleUndo = useCallback(() => {
     if (!lastMove) return;
@@ -544,8 +558,8 @@ export function BirdsEyeView({
     setRecentlyMovedImages(new Set(lastMove.imageIds));
     setRecentlyReceivedProduct(lastMove.fromProductId);
     
-    const fromProduct = products.find(p => p.id === lastMove.fromProductId);
-    const fromName = fromProduct?.title || `Product #${products.findIndex(p => p.id === lastMove.fromProductId) + 1}`;
+    const fromProduct = safeProducts.find(p => p.id === lastMove.fromProductId);
+    const fromName = fromProduct?.title || `Product #${safeProducts.findIndex(p => p.id === lastMove.fromProductId) + 1}`;
     
     toast.success(`Undone: ${lastMove.imageIds.length} image${lastMove.imageIds.length > 1 ? 's' : ''} returned to ${fromName}`);
     
@@ -557,7 +571,7 @@ export function BirdsEyeView({
     
     setSelectedImages(new Map());
     setLastMove(null);
-  }, [lastMove, onMoveImages, products]);
+  }, [lastMove, onMoveImages, safeProducts]);
 
   const handleDeleteSelected = useCallback(async () => {
     if (!onDeleteImage || selectedImages.size === 0) return;
@@ -705,23 +719,35 @@ export function BirdsEyeView({
                 setIsCreateNewDropTarget(false);
               }
             }}
-            onDrop={(e) => {
+            onDrop={async (e) => {
               e.preventDefault();
               if (selectedImages.size > 0 && onCreateNewProduct) {
                 const imageIds = Array.from(selectedImages.keys());
-                onCreateNewProduct(imageIds);
-                toast.success(`Created new product with ${imageIds.length} image${imageIds.length > 1 ? 's' : ''}`);
+                const count = imageIds.length;
                 setSelectedImages(new Map());
+                try {
+                  await onCreateNewProduct(imageIds);
+                  toast.success(`Created new product with ${count} image${count > 1 ? 's' : ''}`);
+                } catch (error) {
+                  console.error('Failed to create product from drop:', error);
+                  toast.error('Failed to create product');
+                }
               }
               setIsCreateNewDropTarget(false);
               setDraggedImageData(null);
             }}
-            onClick={() => {
+            onClick={async () => {
               if (selectedImages.size > 0 && onCreateNewProduct) {
                 const imageIds = Array.from(selectedImages.keys());
-                onCreateNewProduct(imageIds);
-                toast.success(`Created new product with ${imageIds.length} image${imageIds.length > 1 ? 's' : ''}`);
+                const count = imageIds.length;
                 setSelectedImages(new Map());
+                try {
+                  await onCreateNewProduct(imageIds);
+                  toast.success(`Created new product with ${count} image${count > 1 ? 's' : ''}`);
+                } catch (error) {
+                  console.error('Failed to create product from click:', error);
+                  toast.error('Failed to create product');
+                }
               }
             }}
           >
@@ -747,9 +773,14 @@ export function BirdsEyeView({
       );
     }
     
-    if (index >= filteredProducts.length) return null;
+    // Check bounds BEFORE accessing the array
+    if (index < 0 || index >= filteredProducts.length) return null;
     
     const product = filteredProducts[index];
+    
+    // Guard against undefined product (safety check)
+    if (!product || !product.id) return null;
+    
     const images = safeProductImages[product.id] || [];
     const hasSelectedImages = Array.from(selectedImages.values()).some(
       s => s.productId === product.id
@@ -801,7 +832,7 @@ export function BirdsEyeView({
     );
   }, [
     filteredProducts,
-    productImages,
+    safeProductImages,
     selectedImages,
     dropTargetProductId,
     draggedImageData,
@@ -948,7 +979,7 @@ export function BirdsEyeView({
               <DropdownMenuLabel>Filter Products</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => setFilterMode('all')} className={filterMode === 'all' ? 'bg-accent' : ''}>
-                All products ({products.length})
+                All products ({safeProducts.length})
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setFilterMode('with-images')} className={filterMode === 'with-images' ? 'bg-accent' : ''}>
                 With images ({productStats.withImages})
@@ -1016,9 +1047,14 @@ export function BirdsEyeView({
                       // Clear selection immediately for UX
                       const count = imageIds.length;
                       setSelectedImages(new Map());
-                      // Call the handler (async)
-                      await onCreateNewProduct(imageIds);
-                      toast.success(`Created new product with ${count} image${count > 1 ? 's' : ''}`);
+                      try {
+                        // Call the handler (async)
+                        await onCreateNewProduct(imageIds);
+                        toast.success(`Created new product with ${count} image${count > 1 ? 's' : ''}`);
+                      } catch (error) {
+                        console.error('Failed to create product from selection:', error);
+                        toast.error('Failed to create product');
+                      }
                     }
                   }}
                   className="bg-green-600 hover:bg-green-700 text-white gap-1.5"
