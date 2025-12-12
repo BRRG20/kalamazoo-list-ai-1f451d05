@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronUp, ChevronDown, ImageIcon, Trash2, GripVertical, ZoomIn, Check, ChevronsUpDown } from 'lucide-react';
+import { ChevronUp, ChevronDown, ImageIcon, Trash2, GripVertical, ZoomIn, Check, ChevronsUpDown, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
@@ -34,6 +34,7 @@ export function ImageGallery({
   const [selectedImageIds, setSelectedImageIds] = useState<Set<string>>(new Set());
   const [moveTargetProductId, setMoveTargetProductId] = useState<string>('');
   const [moveDropdownOpen, setMoveDropdownOpen] = useState(false);
+  const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
 
   const moveImage = (imageId: string, direction: 'up' | 'down') => {
     const image = images.find(i => i.id === imageId);
@@ -224,7 +225,6 @@ export function ImageGallery({
               onDragEnd={handleDragEnd}
               className={cn(
                 "flex gap-3 p-2 rounded-lg border border-border bg-card cursor-grab active:cursor-grabbing transition-all",
-                !image.include_in_shopify && "opacity-60",
                 draggedImageId === image.id && "opacity-40 scale-95",
                 dragOverIndex === index && draggedImageId !== image.id && "border-primary border-2 bg-primary/5",
                 selectedImageIds.has(image.id) && "ring-2 ring-primary bg-primary/5"
@@ -249,17 +249,27 @@ export function ImageGallery({
               {/* Thumbnail with expand */}
               <div 
                 className="w-20 h-20 flex-shrink-0 rounded overflow-hidden bg-muted relative group cursor-pointer"
-                onClick={() => setPreviewImage(image)}
+                onClick={() => !failedImages.has(image.id) && setPreviewImage(image)}
               >
-                <img
-                  src={image.url}
-                  alt={`Product image ${index + 1}`}
-                  className="w-full h-full object-cover"
-                  draggable={false}
-                />
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                  <ZoomIn className="w-5 h-5 text-white" />
-                </div>
+                {failedImages.has(image.id) ? (
+                  <div className="w-full h-full flex flex-col items-center justify-center bg-destructive/10 text-destructive">
+                    <AlertTriangle className="w-5 h-5 mb-1" />
+                    <span className="text-[10px] font-medium">Error</span>
+                  </div>
+                ) : (
+                  <>
+                    <img
+                      src={image.url}
+                      alt={`Product image ${index + 1}`}
+                      className="w-full h-full object-cover"
+                      draggable={false}
+                      onError={() => setFailedImages(prev => new Set(prev).add(image.id))}
+                    />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <ZoomIn className="w-5 h-5 text-white" />
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Controls */}
