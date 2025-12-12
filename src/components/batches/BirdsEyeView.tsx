@@ -515,10 +515,7 @@ export function BirdsEyeView({
       console.error('Failed to create product:', error);
       toast.error('Failed to create product');
     } finally {
-      // Small delay to allow parent to finish refetching before unlocking
-      setTimeout(() => {
-        setIsMutating(false);
-      }, 100);
+      setIsMutating(false);
     }
   }, [isMutating, onCreateNewProduct]);
 

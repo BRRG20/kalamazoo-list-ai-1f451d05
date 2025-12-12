@@ -1151,21 +1151,16 @@ const handleSelectBatch = useCallback((id: string) => {
 
       const newProductId = productData.id;
 
-      // Step 3: Move all selected images to the new product
-      // Use a single batch update for efficiency
-      let movedCount = 0;
-      for (let i = 0; i < validImageIds.length; i++) {
-        const { error } = await supabase
+      // Step 3: Move all selected images to the new product in PARALLEL
+      const updatePromises = validImageIds.map((imageId, index) =>
+        supabase
           .from('images')
-          .update({ product_id: newProductId, position: i })
-          .eq('id', validImageIds[i]);
-
-        if (!error) {
-          movedCount++;
-        } else {
-          console.error('Error moving image:', validImageIds[i], error);
-        }
-      }
+          .update({ product_id: newProductId, position: index })
+          .eq('id', imageId)
+      );
+      
+      const results = await Promise.all(updatePromises);
+      const movedCount = results.filter(r => !r.error).length;
 
       // Step 4: Safety check - delete product if no images were moved
       if (movedCount === 0) {
@@ -1175,21 +1170,13 @@ const handleSelectBatch = useCallback((id: string) => {
         return null;
       }
 
-      // Step 5: Clear cache first
+      // Step 5: Clear cache and refetch products
       clearCache();
-      
-      // Step 6: Refetch products to update UI
       await refetchProducts();
       
-      // Step 7: Clean up empty source products AFTER refetch completes
-      try {
-        await deleteEmptyProducts();
-      } catch (cleanupError) {
-        console.error('Error during empty product cleanup:', cleanupError);
-        // Don't fail the whole operation if cleanup fails
-      }
+      // Step 6: Clean up empty source products in background (don't await)
+      deleteEmptyProducts().catch(err => console.error('Cleanup error:', err));
 
-      console.log(`Created product ${newProductId} with ${movedCount} images from Birds Eye View`);
       return newProductId;
     } catch (error) {
       console.error('Error creating product from images:', error);
