@@ -45,9 +45,10 @@ interface ProductDetailPanelProps {
   isShopifyConfigured?: boolean;
 }
 
-const departments: (Department | '')[] = ['', 'Women', 'Men', 'Unisex', 'Kids'];
-const eras: Era[] = ['80s', '90s', 'Y2K', 'Modern', ''];
-const conditions: Condition[] = ['Excellent', 'Very good', 'Good – light wear', 'Fair – visible wear', ''];
+const UNSET_VALUE = '__unset__';
+const departments: Department[] = ['Women', 'Men', 'Unisex', 'Kids'];
+const eras: Era[] = ['80s', '90s', 'Y2K', 'Modern'];
+const conditions: Condition[] = ['Excellent', 'Very good', 'Good – light wear', 'Fair – visible wear'];
 const garmentTypes = ['sweater', 'jumper', 'hoodie', 't-shirt', 'shirt', 'blouse', 'jeans', 'trousers', 'dress', 'skirt', 'jacket', 'coat', 'fleece', 'cardigan', 'vest', 'shorts'];
 const fits = ['oversized', 'boxy', 'regular', 'slim', 'cropped', 'relaxed', 'fitted'];
 const patterns = ['plain', 'striped', 'graphic', 'fair isle', 'cable knit', 'argyle', 'floral', 'abstract', 'checked', 'plaid'];
@@ -734,15 +735,16 @@ export function ProductDetailPanel({
                     <div>
                       <Label>Department</Label>
                       <Select
-                        value={formData.department || ''}
-                        onValueChange={(v) => updateField('department', v as Department)}
+                        value={formData.department || UNSET_VALUE}
+                        onValueChange={(v) => updateField('department', v === UNSET_VALUE ? '' as Department : v as Department)}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select department" />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectItem value={UNSET_VALUE}>(Not set)</SelectItem>
                           {departments.map(d => (
-                            <SelectItem key={d || 'empty'} value={d}>{d || '(Not set)'}</SelectItem>
+                            <SelectItem key={d} value={d}>{d}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -750,14 +752,15 @@ export function ProductDetailPanel({
                     <div>
                       <Label>Era</Label>
                       <Select
-                        value={formData.era || ''}
-                        onValueChange={(v) => updateField('era', v as Era)}
+                        value={formData.era || UNSET_VALUE}
+                        onValueChange={(v) => updateField('era', v === UNSET_VALUE ? '' as Era : v as Era)}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select era" />
                         </SelectTrigger>
                         <SelectContent>
-                          {eras.filter(Boolean).map(e => (
+                          <SelectItem value={UNSET_VALUE}>(Not set)</SelectItem>
+                          {eras.map(e => (
                             <SelectItem key={e} value={e}>{e}</SelectItem>
                           ))}
                         </SelectContent>
@@ -829,14 +832,15 @@ export function ProductDetailPanel({
                     <div>
                       <Label>Condition</Label>
                       <Select
-                        value={formData.condition || ''}
-                        onValueChange={(v) => updateField('condition', v as Condition)}
+                        value={formData.condition || UNSET_VALUE}
+                        onValueChange={(v) => updateField('condition', v === UNSET_VALUE ? '' as Condition : v as Condition)}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select condition" />
                         </SelectTrigger>
                         <SelectContent>
-                          {conditions.filter(Boolean).map(c => (
+                          <SelectItem value={UNSET_VALUE}>(Not set)</SelectItem>
+                          {conditions.map(c => (
                             <SelectItem key={c} value={c}>{c}</SelectItem>
                           ))}
                         </SelectContent>
