@@ -1067,6 +1067,82 @@ const handleSelectBatch = useCallback((id: string) => {
       toast.error('Failed to move images');
     }
   }, [fetchImagesForProduct, clearCache, refetchProducts, deleteEmptyProducts]);
+
+  // Handler for creating a new product from selected image IDs (used in Birds Eye View)
+  // This creates a REAL product in the database and moves images to it
+  const handleCreateProductFromImageIds = useCallback(async (imageIds: string[]): Promise<string | null> => {
+    if (!selectedBatchId || imageIds.length === 0) {
+      toast.warning('No images selected');
+      return null;
+    }
+
+    try {
+      // Step 1: Fetch current user ID
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error('You must be logged in');
+        return null;
+      }
+
+      // Step 2: Create a new product
+      const timestamp = Date.now();
+      const sku = `SKU-${timestamp}-${Math.random().toString(36).substr(2, 6)}`;
+
+      const { data: productData, error: productError } = await supabase
+        .from('products')
+        .insert({
+          batch_id: selectedBatchId,
+          sku,
+          status: 'new',
+          currency: 'GBP',
+          user_id: user.id,
+        })
+        .select()
+        .single();
+
+      if (productError || !productData) {
+        console.error('Error creating product:', productError);
+        toast.error('Failed to create product');
+        return null;
+      }
+
+      const newProductId = productData.id;
+
+      // Step 3: Move all selected images to the new product
+      let movedCount = 0;
+      for (let i = 0; i < imageIds.length; i++) {
+        const { error } = await supabase
+          .from('images')
+          .update({ product_id: newProductId, position: i })
+          .eq('id', imageIds[i]);
+
+        if (!error) {
+          movedCount++;
+        } else {
+          console.error('Error moving image:', error);
+        }
+      }
+
+      // Step 4: Safety check - delete product if no images were moved
+      if (movedCount === 0) {
+        await supabase.from('products').delete().eq('id', newProductId);
+        toast.error('Failed to move images to new product');
+        return null;
+      }
+
+      // Step 5: Clean up empty source products
+      clearCache();
+      await refetchProducts();
+      await deleteEmptyProducts();
+
+      console.log(`Created product ${newProductId} with ${movedCount} images from Birds Eye View`);
+      return newProductId;
+    } catch (error) {
+      console.error('Error creating product from images:', error);
+      toast.error('Failed to create product');
+      return null;
+    }
+  }, [selectedBatchId, clearCache, refetchProducts, deleteEmptyProducts]);
   
   const handleReorderProductImages = useCallback(async (productId: string, imageIds: string[]) => {
     // Update positions for all images in the new order
@@ -1312,6 +1388,7 @@ const handleSelectBatch = useCallback((id: string) => {
               deletedProductsCount={deletedProducts.length}
               onOpenDeletedProducts={() => setShowDeletedProducts(true)}
               onDeleteEmptyProducts={handleDeleteEmptyProducts}
+              onCreateProductFromImageIds={handleCreateProductFromImageIds}
             />
           ) : (
             <EmptyState />

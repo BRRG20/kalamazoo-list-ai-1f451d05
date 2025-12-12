@@ -226,7 +226,7 @@ export function useProducts(batchId: string | null) {
       .from('products')
       .select('*')
       .eq('batch_id', batchId)
-      .order('created_at', { ascending: true });
+      .order('created_at', { ascending: false });
     
     if (error) {
       console.error('Error fetching products:', error);

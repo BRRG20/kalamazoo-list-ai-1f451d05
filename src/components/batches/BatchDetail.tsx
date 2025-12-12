@@ -131,6 +131,8 @@ interface BatchDetailProps {
   onOpenDeletedProducts?: () => void;
   // Empty products cleanup
   onDeleteEmptyProducts?: (productIds: string[]) => Promise<void>;
+  // Create product from image IDs (for Birds Eye View)
+  onCreateProductFromImageIds?: (imageIds: string[]) => Promise<string | null>;
 }
 
 export function BatchDetail({
@@ -199,6 +201,7 @@ export function BatchDetail({
   deletedProductsCount = 0,
   onOpenDeletedProducts,
   onDeleteEmptyProducts,
+  onCreateProductFromImageIds,
 }: BatchDetailProps) {
   const { settings, isShopifyConfigured } = useSettings();
   const [imagesPerProduct, setImagesPerProduct] = useState(settings?.default_images_per_product || 9);
@@ -1160,34 +1163,53 @@ export function BatchDetail({
             }
             await handleRefreshImages();
           }}
-          onCreateNewProduct={(imageIds) => {
-            // Convert image IDs to URLs
-            const imageUrls: string[] = [];
-            for (const [productId, images] of Object.entries(productImages)) {
-              for (const image of images) {
-                if (imageIds.includes(image.id)) {
-                  imageUrls.push(image.url);
+          onCreateNewProduct={async (imageIds) => {
+            if (onCreateProductFromImageIds) {
+              // Use database-backed product creation
+              const newProductId = await onCreateProductFromImageIds(imageIds);
+              if (newProductId) {
+                // Refresh images to reflect the change
+                await handleRefreshImages();
+              }
+            } else {
+              // Fallback: Convert image IDs to URLs and use group manager
+              const imageUrls: string[] = [];
+              for (const [productId, images] of Object.entries(productImages)) {
+                for (const image of images) {
+                  if (imageIds.includes(image.id)) {
+                    imageUrls.push(image.url);
+                  }
                 }
               }
-            }
-            if (imageUrls.length > 0) {
-              onCreateNewGroup(imageUrls);
-              // Refresh images to reflect the change
-              handleRefreshImages();
+              if (imageUrls.length > 0) {
+                onCreateNewGroup(imageUrls);
+                // Refresh images to reflect the change
+                handleRefreshImages();
+              }
             }
           }}
           onMergeProducts={async (productIds) => {
-            // Collect all images from selected products
-            const allImageUrls: string[] = [];
+            // Collect all image IDs from selected products
+            const allImageIds: string[] = [];
             for (const productId of productIds) {
               const images = productImages[productId] || [];
-              images.forEach(img => allImageUrls.push(img.url));
+              images.forEach(img => allImageIds.push(img.id));
             }
             
-            if (allImageUrls.length > 0) {
-              // Create new product with all images
+            if (allImageIds.length > 0 && onCreateProductFromImageIds) {
+              // Use database-backed product creation
+              const newProductId = await onCreateProductFromImageIds(allImageIds);
+              if (newProductId) {
+                await handleRefreshImages();
+              }
+            } else if (allImageIds.length > 0) {
+              // Fallback: Convert to URLs and use group manager
+              const allImageUrls: string[] = [];
+              for (const productId of productIds) {
+                const images = productImages[productId] || [];
+                images.forEach(img => allImageUrls.push(img.url));
+              }
               onCreateNewGroup(allImageUrls);
-              // Refresh images to reflect the change
               await handleRefreshImages();
             }
           }}
