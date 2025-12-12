@@ -80,8 +80,6 @@ function mapSettings(row: any): Settings {
     shopify_store_url: row.shopify_store_url || '',
     default_images_per_product: row.default_images_per_product || 9,
     default_currency: row.default_currency || 'GBP',
-    auto_start_recording: row.auto_start_recording ?? true,
-    auto_scroll_review: row.auto_scroll_review ?? false,
   };
 }
 
@@ -876,8 +874,6 @@ export function useSettings() {
     if (updates.shopify_store_url !== undefined) dbUpdates.shopify_store_url = updates.shopify_store_url;
     if (updates.default_images_per_product !== undefined) dbUpdates.default_images_per_product = updates.default_images_per_product;
     if (updates.default_currency !== undefined) dbUpdates.default_currency = updates.default_currency;
-    if (updates.auto_start_recording !== undefined) dbUpdates.auto_start_recording = updates.auto_start_recording;
-    if (updates.auto_scroll_review !== undefined) dbUpdates.auto_scroll_review = updates.auto_scroll_review;
 
     const { error } = await supabase
       .from('settings')

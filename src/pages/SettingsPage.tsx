@@ -9,7 +9,6 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Switch } from '@/components/ui/switch';
 import { useSettings } from '@/hooks/use-database';
 import { useAuth } from '@/hooks/use-auth';
 import DefaultTagsManager from '@/components/settings/DefaultTagsManager';
@@ -21,8 +20,6 @@ export default function SettingsPage() {
     shopify_store_url: '',
     default_images_per_product: 9,
     default_currency: 'GBP',
-    auto_start_recording: true,
-    auto_scroll_review: false,
   });
   const [isSaving, setIsSaving] = useState(false);
 
@@ -32,8 +29,6 @@ export default function SettingsPage() {
         shopify_store_url: settings.shopify_store_url,
         default_images_per_product: settings.default_images_per_product,
         default_currency: settings.default_currency,
-        auto_start_recording: settings.auto_start_recording,
-        auto_scroll_review: settings.auto_scroll_review,
       });
     }
   }, [settings]);
@@ -58,8 +53,6 @@ export default function SettingsPage() {
       shopify_store_url: formData.shopify_store_url.trim(),
       default_images_per_product: formData.default_images_per_product,
       default_currency: formData.default_currency.trim() || 'GBP',
-      auto_start_recording: formData.auto_start_recording,
-      auto_scroll_review: formData.auto_scroll_review,
     });
 
     setIsSaving(false);
@@ -228,42 +221,6 @@ export default function SettingsPage() {
                         Currency code (e.g., GBP, USD, EUR).
                       </p>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Review Mode Settings */}
-              <Card>
-                <CardHeader className="p-4 md:p-6">
-                  <CardTitle className="text-base md:text-lg">Review Mode</CardTitle>
-                  <CardDescription className="text-sm">
-                    Settings for the product Edit/Review screen.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4 p-4 md:p-6 pt-0 md:pt-0">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium">Auto-start recording on open</p>
-                      <p className="text-xs text-muted-foreground">
-                        Start voice recording automatically when opening Edit
-                      </p>
-                    </div>
-                    <Switch
-                      checked={formData.auto_start_recording}
-                      onCheckedChange={(checked) => handleChange('auto_start_recording', checked)}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium">Slow auto-scroll during review</p>
-                      <p className="text-xs text-muted-foreground">
-                        Slowly scroll through all fields when Edit opens
-                      </p>
-                    </div>
-                    <Switch
-                      checked={formData.auto_scroll_review}
-                      onCheckedChange={(checked) => handleChange('auto_scroll_review', checked)}
-                    />
                   </div>
                 </CardContent>
               </Card>

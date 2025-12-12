@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   X, 
   ChevronLeft, 
@@ -18,11 +18,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { ImageGallery } from './ImageGallery';
 import { generateListingBlock } from '@/hooks/use-database';
-import type { Product, ProductImage, Department, Era, Condition, Settings } from '@/types';
+import type { Product, ProductImage, Department, Era, Condition } from '@/types';
 
 interface ProductDetailPanelProps {
   product: Product;
@@ -44,7 +43,6 @@ interface ProductDetailPanelProps {
   regeneratingField?: string | null;
   isCreatingShopify?: boolean;
   isShopifyConfigured?: boolean;
-  settings?: Settings | null;
 }
 
 const UNSET_VALUE = '__unset__';
@@ -75,7 +73,6 @@ export function ProductDetailPanel({
   regeneratingField,
   isCreatingShopify,
   isShopifyConfigured,
-  settings,
 }: ProductDetailPanelProps) {
   const [formData, setFormData] = useState<Partial<Product>>({});
   const [isListening, setIsListening] = useState(false);
@@ -85,13 +82,7 @@ export function ProductDetailPanel({
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [descriptionStyle, setDescriptionStyle] = useState<'A' | 'B'>('A');
-  const [isApplyingFixes, setIsApplyingFixes] = useState(false);
   const recognitionRef = useRef<any>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
-  const hasAutoStartedRef = useRef(false);
-
-  // Settings with defaults
-  const autoStartRecording = settings?.auto_start_recording ?? true;
 
   useEffect(() => {
     setFormData({
@@ -122,21 +113,7 @@ export function ProductDetailPanel({
       raw_input_text: product.raw_input_text,
       notes: product.notes,
     });
-    
-    // Reset auto-start flag when product changes
-    hasAutoStartedRef.current = false;
   }, [product]);
-
-  // Auto-start recording when Edit opens (with toggle)
-  useEffect(() => {
-    if (autoStartRecording && !hasAutoStartedRef.current && !isListening && !isParsingVoice) {
-      hasAutoStartedRef.current = true;
-      const timer = setTimeout(() => {
-        startVoiceInput();
-      }, 400);
-      return () => clearTimeout(timer);
-    }
-  }, [autoStartRecording, product.id]);
 
   const updateField = <K extends keyof Product>(field: K, value: Product[K]) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -145,6 +122,7 @@ export function ProductDetailPanel({
   const handleSave = async () => {
     setIsSaving(true);
     try {
+      // Generate listing block
       const updatedProduct = { ...product, ...formData };
       const listingBlock = generateListingBlock(updatedProduct as Product);
       onSave({ ...formData, listing_block: listingBlock });
@@ -163,19 +141,22 @@ export function ProductDetailPanel({
 
   const startVoiceInput = async () => {
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      toast.error('Voice input not supported in this browser.');
+      toast.error('Voice input not supported in this browser. Please type in the Raw Input Text box instead.');
       return;
     }
 
+    // Request microphone permission first
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Stop the stream immediately - we just needed to request permission
       stream.getTracks().forEach(track => track.stop());
     } catch (err) {
       console.error('Microphone permission error:', err);
-      toast.error('Microphone access denied.');
+      toast.error('Microphone access denied. Please allow microphone access and try again.');
       return;
     }
 
+    // Clear previous transcript when starting new recording
     setVoiceTranscript('');
 
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -183,15 +164,18 @@ export function ProductDetailPanel({
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = 'en-GB';
-    recognition.maxAlternatives = 5;
+    recognition.maxAlternatives = 5; // More alternatives for better number recognition
 
     let finalTranscript = '';
     let interimTranscript = '';
 
+    // Post-process transcript to fix common speech recognition errors with numbers
     const fixNumberTranscript = (text: string): string => {
       return text
+        // Fix "five" when user likely said "25" etc
         .replace(/\bfastest\s*£?(\d+)/gi, '£$1')
         .replace(/\bthe\s+fastest\s+/gi, '')
+        // Common misheard numbers
         .replace(/\bfive\b/gi, '5')
         .replace(/\btwenty five\b/gi, '25')
         .replace(/\btwenty-five\b/gi, '25')
@@ -199,6 +183,7 @@ export function ProductDetailPanel({
         .replace(/\bthirty five\b/gi, '35')
         .replace(/\bforty five\b/gi, '45')
         .replace(/\bfifty five\b/gi, '55')
+        // Ensure pound symbols are kept
         .replace(/(\d+)\s*pounds?\b/gi, '£$1')
         .replace(/(\d+)\s*quid\b/gi, '£$1');
     };
@@ -208,6 +193,7 @@ export function ProductDetailPanel({
       setIsListening(true);
       finalTranscript = '';
       interimTranscript = '';
+      toast.success('Listening... Speak now');
     };
     
     recognition.onend = () => {
@@ -222,15 +208,15 @@ export function ProductDetailPanel({
       console.error('Voice recognition error:', event.error);
       setIsListening(false);
       if (event.error === 'not-allowed') {
-        toast.error('Microphone access denied.');
+        toast.error('Microphone access denied. Please allow microphone access in your browser settings.');
       } else if (event.error === 'no-speech') {
-        toast.info('No speech detected.');
+        toast.info('No speech detected. Speak closer to the microphone.');
       } else if (event.error === 'audio-capture') {
-        toast.error('No microphone found.');
+        toast.error('No microphone found. Please connect a microphone.');
       } else if (event.error === 'network') {
-        toast.error('Network error.');
+        toast.error('Network error. Check your internet connection.');
       } else if (event.error !== 'aborted') {
-        toast.error(`Voice error: ${event.error}`);
+        toast.error(`Voice error: ${event.error}. Please try again.`);
       }
     };
 
@@ -239,10 +225,13 @@ export function ProductDetailPanel({
       
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
+        // Check all alternatives for better number recognition
         let bestTranscript = result[0].transcript;
         
+        // Look through alternatives for one with clearer numbers
         for (let j = 0; j < result.length; j++) {
           const alt = result[j].transcript;
+          // Prefer alternatives that contain pound signs or clear numbers
           if (/£\d+|\b\d{2,}\b/.test(alt)) {
             bestTranscript = alt;
             break;
@@ -251,16 +240,26 @@ export function ProductDetailPanel({
         
         if (result.isFinal) {
           const fixedTranscript = fixNumberTranscript(bestTranscript);
+          console.log('Final result:', bestTranscript, '-> fixed:', fixedTranscript, 'confidence:', result[0].confidence);
           finalTranscript += fixedTranscript + ' ';
         } else {
           interimTranscript += bestTranscript;
         }
       }
       
+      // Show both final and interim results so user sees real-time feedback
       const displayText = fixNumberTranscript((finalTranscript + interimTranscript).trim());
       if (displayText) {
         setVoiceTranscript(displayText);
       }
+    };
+
+    recognition.onsoundstart = () => {
+      console.log('Sound detected');
+    };
+
+    recognition.onsoundend = () => {
+      console.log('Sound ended');
     };
 
     recognitionRef.current = recognition;
@@ -269,12 +268,12 @@ export function ProductDetailPanel({
       recognition.start();
     } catch (error) {
       console.error('Failed to start recognition:', error);
-      toast.error('Failed to start voice input.');
+      toast.error('Failed to start voice input. Please try again.');
       setIsListening(false);
     }
   };
 
-  const stopVoiceInput = useCallback(() => {
+  const stopVoiceInput = () => {
     console.log('Stopping voice input');
     if (recognitionRef.current) {
       try {
@@ -284,35 +283,31 @@ export function ProductDetailPanel({
       }
     }
     setIsListening(false);
-  }, []);
+  };
 
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (recognitionRef.current) {
         try {
           recognitionRef.current.stop();
-        } catch (e) {}
+        } catch (e) {
+          // Ignore
+        }
       }
     };
   }, []);
 
-  const applyVoiceToFields = async (): Promise<boolean> => {
+  const applyVoiceToFields = async () => {
     if (!voiceTranscript.trim()) {
       toast.error('No voice transcript to apply');
-      return false;
-    }
-
-    // Guard: transcript too short
-    const wordCount = voiceTranscript.trim().split(/\s+/).length;
-    if (wordCount < 3) {
-      toast.info('Transcript too short to apply changes.');
-      return false;
+      return;
     }
     
     setIsParsingVoice(true);
-    setIsApplyingFixes(true);
     
     try {
+      // Call the parse-voice edge function
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-voice`, {
         method: 'POST',
         headers: {
@@ -334,11 +329,11 @@ export function ProductDetailPanel({
       const parsed = data.parsed;
       
       if (Object.keys(parsed).length === 0) {
-        toast.info('No fields detected in voice input.');
-        return false;
+        toast.info('No fields detected in voice input. Try speaking more clearly.');
+        return;
       }
       
-      // Apply parsed fields - only update if parsed value exists (preserve existing)
+      // Apply parsed fields to form
       const fieldUpdates: Partial<Product> = {};
       const updatedFields: string[] = [];
       
@@ -419,17 +414,18 @@ export function ProductDetailPanel({
         updatedFields.push('Etsy tags');
       }
       if (parsed.notes) {
-        // Append to existing notes
-        fieldUpdates.notes = (formData.notes || '') + (formData.notes ? '\n' : '') + parsed.notes;
+        fieldUpdates.notes = (formData.notes || '') + '\n' + parsed.notes;
         updatedFields.push('notes');
       }
       
+      // Handle style preference change
       if (parsed.preferred_style) {
         const newStyle = parsed.preferred_style === 'B' ? 'B' : 'A';
         setDescriptionStyle(newStyle);
         updatedFields.push(`style ${newStyle}`);
       }
       
+      // Handle description text - append to currently selected style
       if (parsed.description_text) {
         const activeStyle = parsed.preferred_style === 'B' ? 'B' : (parsed.preferred_style === 'A' ? 'A' : descriptionStyle);
         if (activeStyle === 'A') {
@@ -445,13 +441,14 @@ export function ProductDetailPanel({
         }
       }
       
+      // Update form data first
       const updatedFormData = { ...formData, ...fieldUpdates };
       setFormData(updatedFormData);
       
-      // Append transcript to raw input
-      updatedFormData.raw_input_text = (formData.raw_input_text || '') + (formData.raw_input_text ? '\n' : '') + voiceTranscript;
+      // Also add transcript to raw input for reference
+      updatedFormData.raw_input_text = (formData.raw_input_text || '') + '\n' + voiceTranscript;
 
-      // Auto-regenerate descriptions with updated product data
+      // Auto-regenerate descriptions with the updated product data
       if (updatedFields.length > 0) {
         try {
           toast.info('Regenerating descriptions...');
@@ -482,6 +479,8 @@ export function ProductDetailPanel({
               }));
               updatedFields.push('descriptions regenerated');
             }
+          } else {
+            console.error('Failed to regenerate descriptions');
           }
         } catch (descError) {
           console.error('Error regenerating descriptions:', descError);
@@ -490,46 +489,12 @@ export function ProductDetailPanel({
       
       toast.success(`Updated: ${updatedFields.join(', ')}`);
       setVoiceTranscript('');
-      return true;
       
     } catch (error) {
       console.error('Voice parsing error:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to parse voice input');
-      return false;
     } finally {
       setIsParsingVoice(false);
-      setIsApplyingFixes(false);
-    }
-  };
-
-  // Navigation with auto-stop/save/apply
-  const handleNavigate = async (direction: 'prev' | 'next') => {
-    if (isApplyingFixes) return; // Prevent double-submits
-    
-    // If recording is active, stop and apply
-    if (isListening) {
-      stopVoiceInput();
-      // Wait a moment for transcript to finalize
-      await new Promise(resolve => setTimeout(resolve, 200));
-    }
-    
-    // If there's a transcript, apply it
-    if (voiceTranscript.trim()) {
-      setIsApplyingFixes(true);
-      await applyVoiceToFields();
-      // Save after applying
-      await handleSave();
-      setIsApplyingFixes(false);
-    }
-    
-    // Clear transcript for next item
-    setVoiceTranscript('');
-    
-    // Navigate
-    if (direction === 'prev' && onPrevious) {
-      onPrevious();
-    } else if (direction === 'next' && onNext) {
-      onNext();
     }
   };
 
@@ -566,6 +531,7 @@ export function ProductDetailPanel({
         return;
       }
       
+      // Apply extracted fields to form
       const fieldUpdates: Partial<Product> = {};
       const updatedFields: string[] = [];
       
@@ -652,14 +618,14 @@ export function ProductDetailPanel({
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-start justify-center p-0 md:p-4 overflow-y-auto">
       <div className="bg-card border border-border rounded-none md:rounded-lg shadow-lg w-full max-w-6xl min-h-screen md:min-h-0 md:h-[90vh] flex flex-col md:overflow-hidden animate-fade-in">
-        {/* Header */}
+        {/* Header - sticky on mobile */}
         <div className="sticky top-0 z-10 bg-card flex items-center justify-between p-2 md:p-4 border-b border-border gap-2">
           <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => handleNavigate('prev')}
-              disabled={!hasPrevious || isApplyingFixes}
+              onClick={onPrevious}
+              disabled={!hasPrevious}
               className="h-8 w-8"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -667,8 +633,8 @@ export function ProductDetailPanel({
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => handleNavigate('next')}
-              disabled={!hasNext || isApplyingFixes}
+              onClick={onNext}
+              disabled={!hasNext}
               className="h-8 w-8"
             >
               <ChevronRight className="w-4 h-4" />
@@ -676,12 +642,6 @@ export function ProductDetailPanel({
             <span className="text-xs md:text-sm text-muted-foreground ml-1 truncate max-w-[80px] md:max-w-none">
               {product.sku}
             </span>
-            {isApplyingFixes && (
-              <span className="text-xs text-primary flex items-center gap-1 ml-2">
-                <Loader2 className="w-3 h-3 animate-spin" />
-                Applying...
-              </span>
-            )}
           </div>
           
           <div className="flex items-center gap-2 flex-shrink-0">
@@ -754,323 +714,271 @@ export function ProductDetailPanel({
           </div>
         </div>
 
-        {/* Static Voice Recording Section */}
-        <div className="flex-shrink-0 border-b border-border p-3 md:p-4 bg-background">
-          <div className="max-w-4xl mx-auto">
-
-            {/* Voice Recording Section */}
-            <section className="bg-muted/30 rounded-lg p-4 border border-border">
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="flex items-center gap-1 border border-border rounded-md p-1 bg-background">
-                  <Button
-                    variant={descriptionStyle === 'A' ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => setDescriptionStyle('A')}
-                    className="h-7 px-2 text-xs"
-                    type="button"
-                  >
-                    Style A
-                  </Button>
-                  <Button
-                    variant={descriptionStyle === 'B' ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => setDescriptionStyle('B')}
-                    className="h-7 px-2 text-xs"
-                    type="button"
-                  >
-                    Style B
-                  </Button>
-                </div>
-                
-                {!isListening ? (
-                  <Button
-                    variant="outline"
-                    onClick={startVoiceInput}
-                    disabled={isParsingVoice}
-                    className="flex-1 md:flex-none"
-                  >
-                    <Mic className="w-4 h-4 mr-2" />
-                    Start Recording
-                  </Button>
+        {/* Voice Recording - Always visible at top */}
+        <div className="border-b border-border p-3 md:p-4 bg-muted/30">
+          <div className="flex flex-wrap items-center gap-2 max-w-6xl">
+            {/* Description Style Toggle */}
+            <div className="flex items-center gap-1 border border-border rounded-md p-1 bg-background">
+              <Button
+                variant={descriptionStyle === 'A' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setDescriptionStyle('A')}
+                className="h-7 px-2 text-xs"
+                type="button"
+              >
+                Style A
+              </Button>
+              <Button
+                variant={descriptionStyle === 'B' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setDescriptionStyle('B')}
+                className="h-7 px-2 text-xs"
+                type="button"
+              >
+                Style B
+              </Button>
+            </div>
+            
+            {!isListening ? (
+              <Button
+                variant="outline"
+                onClick={startVoiceInput}
+                disabled={isParsingVoice}
+                className="flex-1 md:flex-none"
+              >
+                <Mic className="w-4 h-4 mr-2" />
+                Start Recording
+              </Button>
+            ) : (
+              <Button
+                variant="destructive"
+                onClick={stopVoiceInput}
+                className="flex-1 md:flex-none"
+              >
+                <Square className="w-4 h-4 mr-2" />
+                Stop Recording
+              </Button>
+            )}
+            
+            {isListening && (
+              <span className="text-sm text-destructive animate-pulse flex items-center gap-2">
+                <span className="w-2 h-2 bg-destructive rounded-full animate-pulse" />
+                Recording...
+              </span>
+            )}
+            
+            {voiceTranscript && !isListening && (
+              <Button 
+                variant="default" 
+                onClick={applyVoiceToFields}
+                disabled={isParsingVoice}
+              >
+                {isParsingVoice ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Parsing...
+                  </>
                 ) : (
-                  <Button
-                    variant="destructive"
-                    onClick={stopVoiceInput}
-                    className="flex-1 md:flex-none"
-                  >
-                    <Square className="w-4 h-4 mr-2" />
-                    Stop Recording
-                  </Button>
+                  <>
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    Apply to Fields
+                  </>
                 )}
-                
-                {isListening && (
-                  <span className="text-sm text-destructive animate-pulse flex items-center gap-2">
-                    <span className="w-2 h-2 bg-destructive rounded-full animate-pulse" />
-                    Recording...
-                  </span>
-                )}
-                
-                {voiceTranscript && !isListening && (
-                  <Button 
-                    variant="default" 
-                    onClick={applyVoiceToFields}
-                    disabled={isParsingVoice}
-                  >
-                    {isParsingVoice ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Parsing...
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="w-4 h-4 mr-2" />
-                        Apply to Fields
-                      </>
-                    )}
-                  </Button>
-                )}
-                
-                {voiceTranscript && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setVoiceTranscript('')}
-                  >
-                    Clear
-                  </Button>
-                )}
-              </div>
-              
-              {voiceTranscript && (
-                <div className="mt-2 p-3 bg-muted/50 rounded-lg border border-border">
-                  <Label className="text-xs text-muted-foreground">Voice Transcript:</Label>
-                  <p className="text-sm mt-1 text-foreground">{voiceTranscript}</p>
-                </div>
-              )}
-              
-              {!voiceTranscript && !isListening && (
-                <p className="text-xs text-muted-foreground mt-2">
-                  Speak product details. All attributes mentioned will auto-populate and descriptions will regenerate.
-                </p>
-              )}
-            </section>
+              </Button>
+            )}
+            
+            {voiceTranscript && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setVoiceTranscript('')}
+              >
+                Clear
+              </Button>
+            )}
           </div>
+          
+          {voiceTranscript && (
+            <div className="mt-2 p-3 bg-muted/50 rounded-lg border border-border max-w-6xl">
+              <Label className="text-xs text-muted-foreground">Voice Transcript:</Label>
+              <p className="text-sm mt-1 text-foreground">{voiceTranscript}</p>
+            </div>
+          )}
+          
+          {!voiceTranscript && !isListening && (
+            <p className="text-xs text-muted-foreground mt-2">
+              Speak product details or description. Say "for the description..." to add text to Style {descriptionStyle}.
+            </p>
+          )}
         </div>
 
-        {/* Scrollable Content - Description first, then attributes, then images */}
-        <div 
-          ref={contentRef}
-          className="flex-1 overflow-y-auto scrollbar-thin p-3 md:p-4"
-        >
-          <div className="max-w-4xl mx-auto space-y-6">
-            <section>
-              <h3 className="font-semibold text-foreground mb-3">Generated Description</h3>
-              <div className="space-y-4">
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <Label>Style A – Ultra Minimal (~55-65 words)</Label>
-                    <div className="flex gap-1">
+        {/* Content */}
+        <div className="flex-1 flex flex-col md:flex-row md:overflow-hidden">
+          {/* Left: Images */}
+          <div className="md:h-auto md:w-1/3 border-b md:border-b-0 md:border-r border-border p-2 md:p-4 md:overflow-y-auto scrollbar-thin flex-shrink-0">
+            <ImageGallery
+              images={images}
+              onUpdateImage={onUpdateImage}
+              onReorderImages={onReorderImages}
+              onDeleteImage={onDeleteImage}
+              onMoveImages={onMoveImages}
+              otherProducts={otherProducts}
+              currentProductId={product.id}
+            />
+          </div>
+
+          {/* Right: Fields */}
+          <div className="flex-1 overflow-y-auto scrollbar-thin p-3 md:p-4">
+            <div className="space-y-4 md:space-y-6 max-w-2xl">
+              {/* Core Section */}
+              <section>
+                <h3 className="font-semibold text-foreground mb-3">Core</h3>
+                <div className="grid gap-4">
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1">
+                      <Label>Title (max 80 chars)</Label>
+                      <Input
+                        value={formData.title || ''}
+                        onChange={(e) => updateField('title', e.target.value)}
+                        placeholder="Vintage 90s Brand Womens Grey Hoodie Size L"
+                        maxLength={80}
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {(formData.title || '').length}/80 characters
+                      </p>
+                    </div>
+                    <div className="flex flex-col gap-1">
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => onGenerateAI('style_a')}
+                        onClick={() => onGenerateAI('title')}
                         disabled={isGenerating}
-                        title="Regenerate Style A only"
+                        title="Regenerate title only"
                       >
-                        {regeneratingField === 'style_a' ? (
+                        {regeneratingField === 'title' ? (
                           <Loader2 className="w-3 h-3 animate-spin" />
                         ) : (
                           <Sparkles className="w-3 h-3" />
                         )}
                       </Button>
-                      <CopyButton text={formData.description_style_a || ''} field="Style A" />
+                      <CopyButton text={formData.title || ''} field="Title" />
                     </div>
                   </div>
-                  <Textarea
-                    value={formData.description_style_a || ''}
-                    onChange={(e) => updateField('description_style_a', e.target.value)}
-                    placeholder="Ultra minimal description..."
-                    rows={6}
-                    className="text-sm"
-                  />
-                </div>
-                
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <Label>Style B – Natural Minimal SEO (~70-80 words)</Label>
-                    <div className="flex gap-1">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => onGenerateAI('style_b')}
-                        disabled={isGenerating}
-                        title="Regenerate Style B only"
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>Price (£)</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        value={formData.price || ''}
+                        onChange={(e) => updateField('price', parseFloat(e.target.value) || 0)}
+                      />
+                    </div>
+                    <div>
+                      <Label>Garment Type</Label>
+                      <Select
+                        value={formData.garment_type || UNSET_VALUE}
+                        onValueChange={(v) => updateField('garment_type', v === UNSET_VALUE ? '' : v)}
                       >
-                        {regeneratingField === 'style_b' ? (
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                        ) : (
-                          <Sparkles className="w-3 h-3" />
-                        )}
-                      </Button>
-                      <CopyButton text={formData.description_style_b || ''} field="Style B" />
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={UNSET_VALUE}>(Not set)</SelectItem>
+                          {garmentTypes.map(t => (
+                            <SelectItem key={t} value={t}>{t}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
-                  <Textarea
-                    value={formData.description_style_b || ''}
-                    onChange={(e) => updateField('description_style_b', e.target.value)}
-                    placeholder="Natural minimal SEO description..."
-                    rows={6}
-                    className="text-sm"
-                  />
-                </div>
-              </div>
-            </section>
 
-            {/* ATTRIBUTES SECTION */}
-            <section>
-              <h3 className="font-semibold text-foreground mb-3">Attributes</h3>
-              <div className="grid gap-4">
-                {/* Title */}
-                <div className="flex items-center gap-2">
-                  <div className="flex-1">
-                    <Label>Title (max 80 chars)</Label>
-                    <Input
-                      value={formData.title || ''}
-                      onChange={(e) => updateField('title', e.target.value)}
-                      placeholder="Vintage 90s Brand Womens Grey Hoodie Size L"
-                      maxLength={80}
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {(formData.title || '').length}/80 characters
-                    </p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>Department</Label>
+                      <Select
+                        value={formData.department || UNSET_VALUE}
+                        onValueChange={(v) => updateField('department', v === UNSET_VALUE ? '' as Department : v as Department)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select department" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={UNSET_VALUE}>(Not set)</SelectItem>
+                          {departments.map(d => (
+                            <SelectItem key={d} value={d}>{d}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Era</Label>
+                      <Select
+                        value={formData.era || UNSET_VALUE}
+                        onValueChange={(v) => updateField('era', v === UNSET_VALUE ? '' as Era : v as Era)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select era" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={UNSET_VALUE}>(Not set)</SelectItem>
+                          {eras.map(e => (
+                            <SelectItem key={e} value={e}>{e}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
-                  <div className="flex flex-col gap-1">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => onGenerateAI('title')}
-                      disabled={isGenerating}
-                      title="Regenerate title only"
-                    >
-                      {regeneratingField === 'title' ? (
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                      ) : (
-                        <Sparkles className="w-3 h-3" />
-                      )}
-                    </Button>
-                    <CopyButton text={formData.title || ''} field="Title" />
-                  </div>
-                </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div>
-                    <Label>Price (£)</Label>
-                    <Input
-                      type="number"
-                      min={0}
-                      step={0.01}
-                      value={formData.price || ''}
-                      onChange={(e) => updateField('price', parseFloat(e.target.value) || 0)}
-                    />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>Brand</Label>
+                      <Input
+                        value={formData.brand || ''}
+                        onChange={(e) => updateField('brand', e.target.value)}
+                        placeholder="e.g. Gap, Levi's"
+                      />
+                    </div>
+                    <div>
+                      <Label>Fit</Label>
+                      <Select
+                        value={formData.fit || UNSET_VALUE}
+                        onValueChange={(v) => updateField('fit', v === UNSET_VALUE ? '' : v)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select fit" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={UNSET_VALUE}>(Not set)</SelectItem>
+                          {fits.map(f => (
+                            <SelectItem key={f} value={f}>{f}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
-                  <div>
-                    <Label>Garment Type</Label>
-                    <Select
-                      value={formData.garment_type || UNSET_VALUE}
-                      onValueChange={(v) => updateField('garment_type', v === UNSET_VALUE ? '' : v)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={UNSET_VALUE}>(Not set)</SelectItem>
-                        {garmentTypes.map(t => (
-                          <SelectItem key={t} value={t}>{t}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Department</Label>
-                    <Select
-                      value={formData.department || UNSET_VALUE}
-                      onValueChange={(v) => updateField('department', v === UNSET_VALUE ? '' as Department : v as Department)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select department" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={UNSET_VALUE}>(Not set)</SelectItem>
-                        {departments.map(d => (
-                          <SelectItem key={d} value={d}>{d}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Era</Label>
-                    <Select
-                      value={formData.era || UNSET_VALUE}
-                      onValueChange={(v) => updateField('era', v === UNSET_VALUE ? '' as Era : v as Era)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select era" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={UNSET_VALUE}>(Not set)</SelectItem>
-                        {eras.map(e => (
-                          <SelectItem key={e} value={e}>{e}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div>
-                    <Label>Brand</Label>
-                    <Input
-                      value={formData.brand || ''}
-                      onChange={(e) => updateField('brand', e.target.value)}
-                      placeholder="e.g. Gap, Levi's"
-                    />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>Size (Label)</Label>
+                      <Input
+                        value={formData.size_label || ''}
+                        onChange={(e) => updateField('size_label', e.target.value)}
+                        placeholder="e.g. L, UK 14"
+                      />
+                    </div>
+                    <div>
+                      <Label>Size (Recommended)</Label>
+                      <Input
+                        value={formData.size_recommended || ''}
+                        onChange={(e) => updateField('size_recommended', e.target.value)}
+                        placeholder="e.g. Best for UK 12–14"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <Label>Fit</Label>
-                    <Select
-                      value={formData.fit || UNSET_VALUE}
-                      onValueChange={(v) => updateField('fit', v === UNSET_VALUE ? '' : v)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select fit" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={UNSET_VALUE}>(Not set)</SelectItem>
-                        {fits.map(f => (
-                          <SelectItem key={f} value={f}>{f}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Size (Label)</Label>
-                    <Input
-                      value={formData.size_label || ''}
-                      onChange={(e) => updateField('size_label', e.target.value)}
-                      placeholder="e.g. L, UK 14"
-                    />
-                  </div>
-                  <div>
-                    <Label>Size (Recommended)</Label>
-                    <Input
-                      value={formData.size_recommended || ''}
-                      onChange={(e) => updateField('size_recommended', e.target.value)}
-                      placeholder="e.g. Best for UK 12–14"
-                    />
-                  </div>
-                </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div>
                     <Label>Pit to Pit</Label>
                     <Input
@@ -1079,50 +987,65 @@ export function ProductDetailPanel({
                       placeholder="e.g. 23 inches"
                     />
                   </div>
-                  <div>
-                    <Label>Material</Label>
-                    <Input
-                      value={formData.material || ''}
-                      onChange={(e) => updateField('material', e.target.value)}
-                      placeholder="e.g. 100% wool"
-                    />
+                </div>
+              </section>
+
+              {/* Material & Condition */}
+              <section>
+                <h3 className="font-semibold text-foreground mb-3">Material & Condition</h3>
+                <div className="grid gap-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>Material</Label>
+                      <Input
+                        value={formData.material || ''}
+                        onChange={(e) => updateField('material', e.target.value)}
+                        placeholder="e.g. 100% wool"
+                      />
+                    </div>
+                    <div>
+                      <Label>Condition</Label>
+                      <Select
+                        value={formData.condition || UNSET_VALUE}
+                        onValueChange={(v) => updateField('condition', v === UNSET_VALUE ? '' as Condition : v as Condition)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select condition" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={UNSET_VALUE}>(Not set)</SelectItem>
+                          {conditions.map(c => (
+                            <SelectItem key={c} value={c}>{c}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
-                  <div>
-                    <Label>Condition</Label>
-                    <Select
-                      value={formData.condition || UNSET_VALUE}
-                      onValueChange={(v) => updateField('condition', v === UNSET_VALUE ? '' as Condition : v as Condition)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select condition" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={UNSET_VALUE}>(Not set)</SelectItem>
-                        {conditions.map(c => (
-                          <SelectItem key={c} value={c}>{c}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Made In</Label>
-                    <Input
-                      value={formData.made_in || ''}
-                      onChange={(e) => updateField('made_in', e.target.value)}
-                      placeholder="e.g. Ecuador"
-                    />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>Flaws</Label>
+                      <Input
+                        value={formData.flaws || ''}
+                        onChange={(e) => updateField('flaws', e.target.value)}
+                        placeholder="e.g. Minor pilling on cuffs"
+                      />
+                    </div>
+                    <div>
+                      <Label>Made In</Label>
+                      <Input
+                        value={formData.made_in || ''}
+                        onChange={(e) => updateField('made_in', e.target.value)}
+                        placeholder="e.g. Ecuador"
+                      />
+                    </div>
                   </div>
                 </div>
+              </section>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div>
-                    <Label>Flaws</Label>
-                    <Input
-                      value={formData.flaws || ''}
-                      onChange={(e) => updateField('flaws', e.target.value)}
-                      placeholder="e.g. Minor pilling"
-                    />
-                  </div>
+              {/* Colours & Pattern */}
+              <section>
+                <h3 className="font-semibold text-foreground mb-3">Colours & Pattern</h3>
+                <div className="grid grid-cols-3 gap-4">
                   <div>
                     <Label>Main Colour</Label>
                     <Input
@@ -1157,85 +1080,156 @@ export function ProductDetailPanel({
                     </Select>
                   </div>
                 </div>
-              </div>
-            </section>
+              </section>
 
-            {/* Tags Section */}
-            <section>
-              <h3 className="font-semibold text-foreground mb-3">Tags & Collections</h3>
-              <div className="space-y-4">
-                <div className="flex items-start gap-2">
-                  <div className="flex-1">
-                    <Label>Shopify Tags</Label>
+              {/* Tags & Collections */}
+              <section>
+                <h3 className="font-semibold text-foreground mb-3">Tags & Collections</h3>
+                <div className="space-y-4">
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1">
+                      <Label>Shopify Tags</Label>
+                      <Textarea
+                        value={formData.shopify_tags || ''}
+                        onChange={(e) => updateField('shopify_tags', e.target.value)}
+                        placeholder="vintage, retro, knitwear"
+                        rows={2}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1">
+                      <Label>Collections Tags</Label>
+                      <Textarea
+                        value={formData.collections_tags || ''}
+                        onChange={(e) => updateField('collections_tags', e.target.value)}
+                        placeholder="spring-edit, knitwear, 80s90s-graphics"
+                        rows={2}
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Tags used for Shopify automatic collections
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1">
+                      <Label>Etsy Tags (up to 13)</Label>
+                      <Textarea
+                        value={formData.etsy_tags || ''}
+                        onChange={(e) => updateField('etsy_tags', e.target.value)}
+                        placeholder="vintage sweater, retro knitwear, 90s fashion"
+                        rows={2}
+                      />
+                    </div>
+                    <CopyButton text={formData.etsy_tags || ''} field="Etsy tags" />
+                  </div>
+                </div>
+              </section>
+
+              {/* Description Styles */}
+              <section>
+                <h3 className="font-semibold text-foreground mb-3">Descriptions</h3>
+                <div className="space-y-4">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <Label>Style A – Ultra Minimal (~55-65 words)</Label>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onGenerateAI('style_a')}
+                          disabled={isGenerating}
+                          title="Regenerate Style A only"
+                        >
+                          {regeneratingField === 'style_a' ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Sparkles className="w-3 h-3" />
+                          )}
+                        </Button>
+                        <CopyButton text={formData.description_style_a || ''} field="Style A" />
+                      </div>
+                    </div>
                     <Textarea
-                      value={formData.shopify_tags || ''}
-                      onChange={(e) => updateField('shopify_tags', e.target.value)}
-                      placeholder="vintage, retro, knitwear"
+                      value={formData.description_style_a || ''}
+                      onChange={(e) => updateField('description_style_a', e.target.value)}
+                      placeholder="Ultra minimal description..."
+                      rows={6}
+                    />
+                  </div>
+                  
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <Label>Style B – Natural Minimal SEO (~70-80 words)</Label>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onGenerateAI('style_b')}
+                          disabled={isGenerating}
+                          title="Regenerate Style B only"
+                        >
+                          {regeneratingField === 'style_b' ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Sparkles className="w-3 h-3" />
+                          )}
+                        </Button>
+                        <CopyButton text={formData.description_style_b || ''} field="Style B" />
+                      </div>
+                    </div>
+                    <Textarea
+                      value={formData.description_style_b || ''}
+                      onChange={(e) => updateField('description_style_b', e.target.value)}
+                      placeholder="Natural minimal SEO description..."
+                      rows={6}
+                    />
+                  </div>
+
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1">
+                      <Label>Legacy Description (for Shopify)</Label>
+                      <Textarea
+                        value={formData.description || ''}
+                        onChange={(e) => updateField('description', e.target.value)}
+                        placeholder="Description used for Shopify..."
+                        rows={4}
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Tip: Copy Style A or B above to use as your Shopify description
+                      </p>
+                    </div>
+                    <CopyButton text={formData.description || ''} field="Description" />
+                  </div>
+                </div>
+              </section>
+
+              {/* Notes */}
+              <section>
+                <h3 className="font-semibold text-foreground mb-3">Notes</h3>
+                <div className="space-y-4">
+                  <div>
+                    <Label>Raw Input Text</Label>
+                    <Textarea
+                      value={formData.raw_input_text || ''}
+                      onChange={(e) => updateField('raw_input_text', e.target.value)}
+                      placeholder="Paste or type notes here..."
+                      rows={3}
+                    />
+                  </div>
+
+                  <div>
+                    <Label>Notes</Label>
+                    <Textarea
+                      value={formData.notes || ''}
+                      onChange={(e) => updateField('notes', e.target.value)}
+                      placeholder="Any additional notes..."
                       rows={2}
                     />
                   </div>
                 </div>
-                <div className="flex items-start gap-2">
-                  <div className="flex-1">
-                    <Label>Collections Tags</Label>
-                    <Textarea
-                      value={formData.collections_tags || ''}
-                      onChange={(e) => updateField('collections_tags', e.target.value)}
-                      placeholder="spring-edit, knitwear"
-                      rows={2}
-                    />
-                  </div>
-                </div>
-                <div className="flex items-start gap-2">
-                  <div className="flex-1">
-                    <Label>Etsy Tags (up to 13)</Label>
-                    <Textarea
-                      value={formData.etsy_tags || ''}
-                      onChange={(e) => updateField('etsy_tags', e.target.value)}
-                      placeholder="vintage sweater, retro knitwear"
-                      rows={2}
-                    />
-                  </div>
-                  <CopyButton text={formData.etsy_tags || ''} field="Etsy tags" />
-                </div>
-              </div>
-            </section>
-
-            {/* Images Section */}
-            <section>
-              <h3 className="font-semibold text-foreground mb-3">Images</h3>
-              <ImageGallery
-                images={images}
-                onUpdateImage={onUpdateImage}
-                onReorderImages={onReorderImages}
-                onDeleteImage={onDeleteImage}
-                onMoveImages={onMoveImages}
-                otherProducts={otherProducts}
-                currentProductId={product.id}
-              />
-            </section>
-
-            {/* Notes Section */}
-            <section>
-              <h3 className="font-semibold text-foreground mb-3">Notes</h3>
-              <Textarea
-                value={formData.notes || ''}
-                onChange={(e) => updateField('notes', e.target.value)}
-                placeholder="Internal notes..."
-                rows={3}
-              />
-            </section>
-
-            {/* Legacy Description */}
-            <section>
-              <h3 className="font-semibold text-foreground mb-3">Legacy Description (for Shopify)</h3>
-              <Textarea
-                value={formData.description || ''}
-                onChange={(e) => updateField('description', e.target.value)}
-                placeholder="Legacy description used for Shopify export..."
-                rows={4}
-              />
-            </section>
+              </section>
+            </div>
           </div>
         </div>
       </div>
