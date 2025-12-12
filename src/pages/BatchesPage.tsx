@@ -907,14 +907,35 @@ const handleSelectBatch = useCallback((id: string) => {
   }, [editingProductId, handleCreateInShopify]);
 
   // Delete empty products (products with 0 images) - used in Birds Eye View cleanup
+  // SAFETY: Only deletes product records that have NO images in the database
   const handleDeleteEmptyProducts = useCallback(async (productIds: string[]) => {
     if (productIds.length === 0) return;
     
     let deletedCount = 0;
+    let skippedCount = 0;
+    
     for (const productId of productIds) {
-      const success = await deleteProduct(productId);
-      if (success) {
-        deletedCount++;
+      // SAFETY CHECK: Verify product has no images before deleting
+      const { count, error: countError } = await supabase
+        .from('images')
+        .select('id', { count: 'exact', head: true })
+        .eq('product_id', productId);
+      
+      if (countError) {
+        console.error('Error checking images for product:', productId, countError);
+        skippedCount++;
+        continue;
+      }
+      
+      // Only delete if product truly has 0 images
+      if (count === 0) {
+        const success = await deleteProduct(productId);
+        if (success) {
+          deletedCount++;
+        }
+      } else {
+        console.warn(`Skipped deleting product ${productId} - has ${count} images`);
+        skippedCount++;
       }
     }
     
@@ -930,6 +951,9 @@ const handleSelectBatch = useCallback((id: string) => {
     
     if (deletedCount > 0) {
       toast.success(`Deleted ${deletedCount} empty product(s)`);
+    }
+    if (skippedCount > 0) {
+      toast.info(`Skipped ${skippedCount} product(s) that still have images`);
     }
   }, [deleteProduct, refetchProducts]);
 
