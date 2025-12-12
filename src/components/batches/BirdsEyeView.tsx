@@ -383,12 +383,13 @@ export function BirdsEyeView({
   }, [filteredProducts, safeProductImages]);
 
   // Calculate grid dimensions for virtualization
+  // Calculate grid dimensions for virtualization (with safety bounds)
   const gridConfig = useMemo(() => {
     const gap = 16;
     const padding = 16;
-    const availableWidth = containerSize.width - padding * 2;
+    const availableWidth = Math.max(0, (containerSize.width || 0) - padding * 2);
     
-    // Responsive column count
+    // Responsive column count (minimum 1)
     let columnCount = 2;
     if (availableWidth >= 1536) columnCount = 8;
     else if (availableWidth >= 1280) columnCount = 6;
@@ -396,16 +397,20 @@ export function BirdsEyeView({
     else if (availableWidth >= 768) columnCount = 4;
     else if (availableWidth >= 640) columnCount = 3;
     
-    const columnWidth = (availableWidth - (columnCount - 1) * gap) / columnCount;
-    const rowHeight = columnWidth * 1.2; // Aspect ratio for cards
+    // Ensure columnCount is always at least 1
+    columnCount = Math.max(1, columnCount);
+    
+    const columnWidth = Math.max(50, (availableWidth - (columnCount - 1) * gap) / columnCount);
+    const rowHeight = Math.max(50, columnWidth * 1.2); // Aspect ratio for cards
     
     // Add extra row for "Create new product" drop zone when images are selected
     const showCreateDropZone = (selectedImages.size > 0 || draggedImageData) && onCreateNewProduct;
-    const totalItems = filteredProducts.length + (showCreateDropZone ? 1 : 0);
-    const rowCount = Math.ceil(totalItems / columnCount);
+    const productCount = Array.isArray(filteredProducts) ? filteredProducts.length : 0;
+    const totalItems = productCount + (showCreateDropZone ? 1 : 0);
+    const rowCount = Math.max(0, Math.ceil(totalItems / columnCount));
     
     return { columnCount, columnWidth, rowHeight, rowCount, gap, padding, showCreateDropZone };
-  }, [containerSize.width, filteredProducts.length, selectedImages.size, draggedImageData, onCreateNewProduct]);
+  }, [containerSize.width, filteredProducts, selectedImages.size, draggedImageData, onCreateNewProduct]);
 
   // Handle cleanup of empty products
   const handleCleanupEmptyProducts = useCallback(async () => {
@@ -489,13 +494,19 @@ export function BirdsEyeView({
   }, []);
 
   const handleMoveToProduct = useCallback((targetProductId: string, isUndo = false) => {
+    // Guard against invalid targetProductId
+    if (!targetProductId) {
+      console.warn('handleMoveToProduct called with invalid targetProductId');
+      return;
+    }
+    
     // Group selected images by source product
     const imagesByProduct = new Map<string, string[]>();
     const movedImageIds: string[] = [];
     let fromProductId = '';
     
     selectedImages.forEach(({ imageId, productId }) => {
-      if (productId !== targetProductId) {
+      if (productId && productId !== targetProductId && imageId) {
         if (!imagesByProduct.has(productId)) {
           imagesByProduct.set(productId, []);
         }
@@ -508,10 +519,16 @@ export function BirdsEyeView({
     if (movedImageIds.length === 0) return;
 
     // Move images from each source product
-    imagesByProduct.forEach((imageIds, sourceProductId) => {
-      onMoveImages(imageIds, sourceProductId, targetProductId);
-      fromProductId = sourceProductId;
-    });
+    try {
+      imagesByProduct.forEach((imageIds, sourceProductId) => {
+        onMoveImages(imageIds, sourceProductId, targetProductId);
+        fromProductId = sourceProductId;
+      });
+    } catch (error) {
+      console.error('Error moving images:', error);
+      toast.error('Failed to move images');
+      return;
+    }
 
     // Save move history for undo (only if not already undoing)
     if (!isUndo) {
@@ -528,9 +545,10 @@ export function BirdsEyeView({
     setRecentlyMovedImages(new Set(movedImageIds));
     setRecentlyReceivedProduct(targetProductId);
     
-    // Find target product name for toast
-    const targetProduct = safeProducts.find(p => p.id === targetProductId);
-    const targetName = targetProduct?.title || `Product #${safeProducts.findIndex(p => p.id === targetProductId) + 1}`;
+    // Find target product name for toast (with null safety)
+    const targetProduct = safeProducts.find(p => p?.id === targetProductId);
+    const targetIndex = safeProducts.findIndex(p => p?.id === targetProductId);
+    const targetName = targetProduct?.title || `Product #${targetIndex >= 0 ? targetIndex + 1 : '?'}`;
     
     toast.success(
       isUndo 
@@ -549,28 +567,37 @@ export function BirdsEyeView({
   }, [selectedImages, onMoveImages, safeProducts]);
 
   const handleUndo = useCallback(() => {
-    if (!lastMove) return;
+    if (!lastMove || !lastMove.imageIds || !lastMove.toProductId || !lastMove.fromProductId) {
+      console.warn('handleUndo called with invalid lastMove state');
+      return;
+    }
     
-    // Move back to original product
-    onMoveImages(lastMove.imageIds, lastMove.toProductId, lastMove.fromProductId);
-    
-    // Show visual feedback
-    setRecentlyMovedImages(new Set(lastMove.imageIds));
-    setRecentlyReceivedProduct(lastMove.fromProductId);
-    
-    const fromProduct = safeProducts.find(p => p.id === lastMove.fromProductId);
-    const fromName = fromProduct?.title || `Product #${safeProducts.findIndex(p => p.id === lastMove.fromProductId) + 1}`;
-    
-    toast.success(`Undone: ${lastMove.imageIds.length} image${lastMove.imageIds.length > 1 ? 's' : ''} returned to ${fromName}`);
-    
-    // Clear visual feedback after animation
-    setTimeout(() => {
-      setRecentlyMovedImages(new Set());
-      setRecentlyReceivedProduct(null);
-    }, 1500);
-    
-    setSelectedImages(new Map());
-    setLastMove(null);
+    try {
+      // Move back to original product
+      onMoveImages(lastMove.imageIds, lastMove.toProductId, lastMove.fromProductId);
+      
+      // Show visual feedback
+      setRecentlyMovedImages(new Set(lastMove.imageIds));
+      setRecentlyReceivedProduct(lastMove.fromProductId);
+      
+      const fromProduct = safeProducts.find(p => p?.id === lastMove.fromProductId);
+      const fromIndex = safeProducts.findIndex(p => p?.id === lastMove.fromProductId);
+      const fromName = fromProduct?.title || `Product #${fromIndex >= 0 ? fromIndex + 1 : '?'}`;
+      
+      toast.success(`Undone: ${lastMove.imageIds.length} image${lastMove.imageIds.length > 1 ? 's' : ''} returned to ${fromName}`);
+      
+      // Clear visual feedback after animation
+      setTimeout(() => {
+        setRecentlyMovedImages(new Set());
+        setRecentlyReceivedProduct(null);
+      }, 1500);
+      
+      setSelectedImages(new Map());
+      setLastMove(null);
+    } catch (error) {
+      console.error('Error during undo:', error);
+      toast.error('Failed to undo move');
+    }
   }, [lastMove, onMoveImages, safeProducts]);
 
   const handleDeleteSelected = useCallback(async () => {
@@ -684,13 +711,121 @@ export function BirdsEyeView({
     setDraggedImageData(null);
   }, [selectedImages.size, handleMoveToProduct]);
 
-  // Virtualized cell renderer
+  // Virtualized cell renderer - wrapped in try-catch to prevent crashes
   const Cell = useCallback(({ columnIndex, rowIndex, style }: { columnIndex: number; rowIndex: number; style: React.CSSProperties }) => {
-    const index = rowIndex * gridConfig.columnCount + columnIndex;
-    const { gap, showCreateDropZone } = gridConfig;
-    
-    // Check if this is the "Create new product" cell
-    if (showCreateDropZone && index === filteredProducts.length) {
+    try {
+      // Validate inputs
+      if (typeof columnIndex !== 'number' || typeof rowIndex !== 'number') {
+        return null;
+      }
+      
+      const index = rowIndex * gridConfig.columnCount + columnIndex;
+      const { gap, showCreateDropZone } = gridConfig;
+      
+      // Early bounds check
+      if (index < 0) return null;
+      
+      // Check if this is the "Create new product" cell
+      if (showCreateDropZone && index === filteredProducts.length) {
+        return (
+          <div
+            style={{
+              ...style,
+              left: Number(style.left) + gap / 2,
+              top: Number(style.top) + gap / 2,
+              width: Number(style.width) - gap,
+              height: Number(style.height) - gap,
+            }}
+          >
+            <div
+              className={cn(
+                "border-2 border-dashed rounded-lg p-2 bg-card transition-all duration-200 relative h-full flex flex-col items-center justify-center cursor-pointer",
+                isCreateNewDropTarget 
+                  ? "border-green-500 ring-2 ring-green-500/30 bg-green-500/10 scale-[1.02] shadow-lg" 
+                  : "border-muted-foreground/50 hover:border-green-500/50"
+              )}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'copy';
+                setIsCreateNewDropTarget(true);
+              }}
+              onDragLeave={(e) => {
+                const relatedTarget = e.relatedTarget as HTMLElement;
+                if (!relatedTarget || !e.currentTarget.contains(relatedTarget)) {
+                  setIsCreateNewDropTarget(false);
+                }
+              }}
+              onDrop={async (e) => {
+                e.preventDefault();
+                if (selectedImages.size > 0 && onCreateNewProduct) {
+                  const imageIds = Array.from(selectedImages.keys());
+                  const count = imageIds.length;
+                  setSelectedImages(new Map());
+                  try {
+                    await onCreateNewProduct(imageIds);
+                    toast.success(`Created new product with ${count} image${count > 1 ? 's' : ''}`);
+                  } catch (error) {
+                    console.error('Failed to create product from drop:', error);
+                    toast.error('Failed to create product');
+                  }
+                }
+                setIsCreateNewDropTarget(false);
+                setDraggedImageData(null);
+              }}
+              onClick={async () => {
+                if (selectedImages.size > 0 && onCreateNewProduct) {
+                  const imageIds = Array.from(selectedImages.keys());
+                  const count = imageIds.length;
+                  setSelectedImages(new Map());
+                  try {
+                    await onCreateNewProduct(imageIds);
+                    toast.success(`Created new product with ${count} image${count > 1 ? 's' : ''}`);
+                  } catch (error) {
+                    console.error('Failed to create product from click:', error);
+                    toast.error('Failed to create product');
+                  }
+                }
+              }}
+            >
+              {isCreateNewDropTarget ? (
+                <>
+                  <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center mb-2">
+                    <Plus className="w-6 h-6 text-white" />
+                  </div>
+                  <span className="text-sm font-medium text-green-700 dark:text-green-400">Drop to create</span>
+                  <span className="text-xs text-green-600 dark:text-green-500">New product</span>
+                </>
+              ) : (
+                <>
+                  <div className="w-10 h-10 rounded-full border-2 border-dashed border-muted-foreground/50 flex items-center justify-center mb-2">
+                    <Plus className="w-5 h-5 text-muted-foreground" />
+                  </div>
+                  <span className="text-sm font-medium text-muted-foreground">Create new product</span>
+                  <span className="text-xs text-muted-foreground/70">Drop {selectedImages.size} image{selectedImages.size !== 1 ? 's' : ''} here</span>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      }
+      
+      // Check bounds BEFORE accessing the array
+      if (index >= filteredProducts.length) return null;
+      
+      const product = filteredProducts[index];
+      
+      // Guard against undefined product (safety check)
+      if (!product || !product.id) return null;
+      
+      const images = safeProductImages[product.id] || [];
+      const hasSelectedImages = Array.from(selectedImages.values()).some(
+        s => s && s.productId === product.id
+      );
+      const isDropTarget = dropTargetProductId === product.id;
+      const canReceive = (selectedImages.size > 0 || draggedImageData) && !hasSelectedImages;
+      const justReceived = recentlyReceivedProduct === product.id;
+      const isProductSelected = selectedProductIds?.has(product.id) ?? false;
+      
       return (
         <div
           style={{
@@ -701,135 +836,41 @@ export function BirdsEyeView({
             height: Number(style.height) - gap,
           }}
         >
-          <div
-            className={cn(
-              "border-2 border-dashed rounded-lg p-2 bg-card transition-all duration-200 relative h-full flex flex-col items-center justify-center cursor-pointer",
-              isCreateNewDropTarget 
-                ? "border-green-500 ring-2 ring-green-500/30 bg-green-500/10 scale-[1.02] shadow-lg" 
-                : "border-muted-foreground/50 hover:border-green-500/50"
-            )}
-            onDragOver={(e) => {
-              e.preventDefault();
-              e.dataTransfer.dropEffect = 'copy';
-              setIsCreateNewDropTarget(true);
-            }}
-            onDragLeave={(e) => {
-              const relatedTarget = e.relatedTarget as HTMLElement;
-              if (!relatedTarget || !e.currentTarget.contains(relatedTarget)) {
-                setIsCreateNewDropTarget(false);
+          <ProductCard
+            product={product}
+            productIndex={index}
+            images={images}
+            isProductSelected={isProductSelected}
+            hasSelectedImages={hasSelectedImages}
+            isDropTarget={isDropTarget}
+            canReceive={canReceive}
+            justReceived={justReceived}
+            selectedImages={selectedImages}
+            recentlyMovedImages={recentlyMovedImages}
+            deletingImages={deletingImages}
+            onToggleProductSelection={onToggleProductSelection}
+            onDragOver={(e) => handleDragOver(e, product.id)}
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => handleDrop(e, product.id)}
+            onClick={() => {
+              if (selectedImages.size > 0 && !hasSelectedImages) {
+                handleMoveToProduct(product.id);
               }
             }}
-            onDrop={async (e) => {
-              e.preventDefault();
-              if (selectedImages.size > 0 && onCreateNewProduct) {
-                const imageIds = Array.from(selectedImages.keys());
-                const count = imageIds.length;
-                setSelectedImages(new Map());
-                try {
-                  await onCreateNewProduct(imageIds);
-                  toast.success(`Created new product with ${count} image${count > 1 ? 's' : ''}`);
-                } catch (error) {
-                  console.error('Failed to create product from drop:', error);
-                  toast.error('Failed to create product');
-                }
-              }
-              setIsCreateNewDropTarget(false);
-              setDraggedImageData(null);
-            }}
-            onClick={async () => {
-              if (selectedImages.size > 0 && onCreateNewProduct) {
-                const imageIds = Array.from(selectedImages.keys());
-                const count = imageIds.length;
-                setSelectedImages(new Map());
-                try {
-                  await onCreateNewProduct(imageIds);
-                  toast.success(`Created new product with ${count} image${count > 1 ? 's' : ''}`);
-                } catch (error) {
-                  console.error('Failed to create product from click:', error);
-                  toast.error('Failed to create product');
-                }
-              }
-            }}
-          >
-            {isCreateNewDropTarget ? (
-              <>
-                <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center mb-2">
-                  <Plus className="w-6 h-6 text-white" />
-                </div>
-                <span className="text-sm font-medium text-green-700 dark:text-green-400">Drop to create</span>
-                <span className="text-xs text-green-600 dark:text-green-500">New product</span>
-              </>
-            ) : (
-              <>
-                <div className="w-10 h-10 rounded-full border-2 border-dashed border-muted-foreground/50 flex items-center justify-center mb-2">
-                  <Plus className="w-5 h-5 text-muted-foreground" />
-                </div>
-                <span className="text-sm font-medium text-muted-foreground">Create new product</span>
-                <span className="text-xs text-muted-foreground/70">Drop {selectedImages.size} image{selectedImages.size !== 1 ? 's' : ''} here</span>
-              </>
-            )}
-          </div>
+            onToggleImageSelection={toggleImageSelection}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+            onPreview={setPreviewImage}
+            onDeleteImage={onDeleteImage}
+            onDeleteSingle={handleDeleteSingle}
+          />
         </div>
       );
+    } catch (error) {
+      // Log error but don't crash the grid
+      console.error('Error rendering cell:', error);
+      return null;
     }
-    
-    // Check bounds BEFORE accessing the array
-    if (index < 0 || index >= filteredProducts.length) return null;
-    
-    const product = filteredProducts[index];
-    
-    // Guard against undefined product (safety check)
-    if (!product || !product.id) return null;
-    
-    const images = safeProductImages[product.id] || [];
-    const hasSelectedImages = Array.from(selectedImages.values()).some(
-      s => s.productId === product.id
-    );
-    const isDropTarget = dropTargetProductId === product.id;
-    const canReceive = (selectedImages.size > 0 || draggedImageData) && !hasSelectedImages;
-    const justReceived = recentlyReceivedProduct === product.id;
-    const isProductSelected = selectedProductIds?.has(product.id) ?? false;
-    
-    return (
-      <div
-        style={{
-          ...style,
-          left: Number(style.left) + gap / 2,
-          top: Number(style.top) + gap / 2,
-          width: Number(style.width) - gap,
-          height: Number(style.height) - gap,
-        }}
-      >
-        <ProductCard
-          product={product}
-          productIndex={index}
-          images={images}
-          isProductSelected={isProductSelected}
-          hasSelectedImages={hasSelectedImages}
-          isDropTarget={isDropTarget}
-          canReceive={canReceive}
-          justReceived={justReceived}
-          selectedImages={selectedImages}
-          recentlyMovedImages={recentlyMovedImages}
-          deletingImages={deletingImages}
-          onToggleProductSelection={onToggleProductSelection}
-          onDragOver={(e) => handleDragOver(e, product.id)}
-          onDragLeave={handleDragLeave}
-          onDrop={(e) => handleDrop(e, product.id)}
-          onClick={() => {
-            if (selectedImages.size > 0 && !hasSelectedImages) {
-              handleMoveToProduct(product.id);
-            }
-          }}
-          onToggleImageSelection={toggleImageSelection}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-          onPreview={setPreviewImage}
-          onDeleteImage={onDeleteImage}
-          onDeleteSingle={handleDeleteSingle}
-        />
-      </div>
-    );
   }, [
     filteredProducts,
     safeProductImages,
@@ -1097,14 +1138,14 @@ export function BirdsEyeView({
               </Button>
             )}
           </div>
-        ) : containerSize.width > 0 && containerSize.height > 0 && (
+        ) : containerSize.width > 0 && containerSize.height > 0 && gridConfig.columnCount > 0 && gridConfig.rowCount >= 0 && (
           <Grid
-            columnCount={gridConfig.columnCount}
-            columnWidth={gridConfig.columnWidth + gridConfig.gap}
-            height={containerSize.height - 32}
-            rowCount={gridConfig.rowCount}
-            rowHeight={gridConfig.rowHeight + gridConfig.gap}
-            width={containerSize.width}
+            columnCount={Math.max(1, gridConfig.columnCount)}
+            columnWidth={Math.max(50, gridConfig.columnWidth + gridConfig.gap)}
+            height={Math.max(100, containerSize.height - 32)}
+            rowCount={Math.max(0, gridConfig.rowCount)}
+            rowHeight={Math.max(50, gridConfig.rowHeight + gridConfig.gap)}
+            width={Math.max(100, containerSize.width)}
             className="scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent"
           >
             {Cell}
