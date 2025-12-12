@@ -3,7 +3,11 @@ import { toast } from 'sonner';
 import type { Product } from '@/types';
 import { useAIUndo, ProductAIState } from './use-ai-undo';
 
-const BATCH_SIZE = 20; // Max products per bulk generation
+// Batch size options for bulk generation
+export const BATCH_SIZE_OPTIONS = [5, 10, 20] as const;
+export type BatchSizeOption = typeof BATCH_SIZE_OPTIONS[number];
+
+const DEFAULT_BATCH_SIZE = 20;
 const CONCURRENT_REQUESTS = 5; // Process 5 at a time within a batch
 
 interface GenerationResult {
@@ -37,6 +41,9 @@ export function useAIGeneration({
   
   // Track which products have been AI generated (ai_generated = true)
   const [aiGeneratedProducts, setAiGeneratedProducts] = useState<Set<string>>(new Set());
+  
+  // Configurable batch size
+  const [batchSize, setBatchSize] = useState<BatchSizeOption>(DEFAULT_BATCH_SIZE);
   
   const abortControllerRef = useRef<AbortController | null>(null);
   
@@ -202,17 +209,20 @@ export function useAIGeneration({
     }
   }, [generatingProductIds, saveProductState, fetchImagesForProduct, updateProduct, getMatchingTags]);
 
-  // Generate AI for up to 20 products at a time (bulk generation)
+  // Generate AI for up to N products at a time (bulk generation with configurable batch size)
   const generateBulk = useCallback(async (
     allProducts: Product[],
-    selectedProductIds?: Set<string>
+    selectedProductIds?: Set<string>,
+    customBatchSize?: BatchSizeOption
   ): Promise<{ successCount: number; errorCount: number; processedIds: string[] }> => {
     if (isGenerating) {
       toast.warning('AI generation already in progress');
       return { successCount: 0, errorCount: 0, processedIds: [] };
     }
 
-    console.log('[AI] Starting bulk generation');
+    const effectiveBatchSize = customBatchSize ?? batchSize;
+    
+    console.log('[AI] Starting bulk generation with batch size:', effectiveBatchSize);
     console.log('[AI] Total products:', allProducts.length);
     console.log('[AI] Selected IDs:', selectedProductIds ? Array.from(selectedProductIds) : 'none');
 
@@ -233,8 +243,8 @@ export function useAIGeneration({
       console.log('[AI] Processing ungenerated products:', productsToProcess.length);
     }
 
-    // Limit to BATCH_SIZE (20)
-    const batch = productsToProcess.slice(0, BATCH_SIZE);
+    // Limit to configured batch size
+    const batch = productsToProcess.slice(0, effectiveBatchSize);
     
     if (batch.length === 0) {
       const alreadyGenerated = allProducts.filter(p => aiGeneratedProducts.has(p.id) || p.status !== 'new').length;
@@ -316,11 +326,11 @@ export function useAIGeneration({
     }
 
     if (remainingCount > 0) {
-      toast.info(`${remainingCount} more products remaining. Click "Generate AI (20)" again to continue.`, { duration: 5000 });
+      toast.info(`${remainingCount} more products remaining. Click "Generate AI" again to continue.`, { duration: 5000 });
     }
 
     return { successCount, errorCount, processedIds };
-  }, [isGenerating, aiGeneratedProducts, generatingProductIds, saveBulkState, generateSingleProduct]);
+  }, [isGenerating, batchSize, aiGeneratedProducts, generatingProductIds, saveBulkState, generateSingleProduct]);
 
   // Undo AI generation for a single product
   const undoSingleProduct = useCallback(async (productId: string): Promise<boolean> => {
@@ -440,6 +450,7 @@ export function useAIGeneration({
     isProductAIGenerated,
     hasBulkUndoState,
     lastBulkCount,
+    batchSize,
     
     // Actions
     generateSingleProduct,
@@ -449,5 +460,6 @@ export function useAIGeneration({
     getUnprocessedCount,
     initializeAIGeneratedStatus,
     hasUndoState,
+    setBatchSize,
   };
 }

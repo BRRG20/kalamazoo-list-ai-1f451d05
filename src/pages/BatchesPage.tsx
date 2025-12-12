@@ -588,10 +588,10 @@ const handleSelectBatch = useCallback((id: string) => {
     await aiGeneration.generateBulk(products, selectedProductIds.size > 0 ? selectedProductIds : undefined);
   }, [selectedBatchId, products, selectedProductIds, aiGeneration]);
 
-  // Generate bulk 20 - specifically for processing next 20 ungenerated products
-  const handleGenerateBulk20 = useCallback(async () => {
+  // Generate bulk - with configurable batch size
+  const handleGenerateBulk = useCallback(async (customBatchSize?: 5 | 10 | 20) => {
     if (!selectedBatchId || products.length === 0) return;
-    await aiGeneration.generateBulk(products);
+    await aiGeneration.generateBulk(products, undefined, customBatchSize);
   }, [selectedBatchId, products, aiGeneration]);
 
   // Generate AI for a single product
@@ -1056,7 +1056,7 @@ const handleSelectBatch = useCallback((id: string) => {
               onAutoGroup={handleAutoGroup}
               onReAutoGroupAll={handleReAutoGroupAll}
               onGenerateAll={handleGenerateAll}
-              onGenerateBulk20={handleGenerateBulk20}
+              onGenerateBulk={handleGenerateBulk}
               onGenerateSingleProduct={handleGenerateSingleProduct}
               onUndoSingleProduct={handleUndoSingleProduct}
               onUndoBulkGeneration={handleUndoBulkGeneration}
@@ -1065,6 +1065,8 @@ const handleSelectBatch = useCallback((id: string) => {
               unprocessedCount={aiGeneration.getUnprocessedCount(products)}
               hasBulkUndoState={aiGeneration.hasBulkUndoState}
               lastBulkCount={aiGeneration.lastBulkCount}
+              batchSize={aiGeneration.batchSize}
+              onBatchSizeChange={aiGeneration.setBatchSize}
               onExcludeLast2All={handleExcludeLast2All}
               onCreateInShopify={handleCreateInShopify}
               onEditProduct={setEditingProductId}
