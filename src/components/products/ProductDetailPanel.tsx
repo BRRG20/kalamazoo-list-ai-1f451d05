@@ -45,7 +45,7 @@ interface ProductDetailPanelProps {
   isShopifyConfigured?: boolean;
 }
 
-const departments: Department[] = ['Women', 'Men', 'Unisex', 'Kids'];
+const departments: (Department | '')[] = ['', 'Women', 'Men', 'Unisex', 'Kids'];
 const eras: Era[] = ['80s', '90s', 'Y2K', 'Modern', ''];
 const conditions: Condition[] = ['Excellent', 'Very good', 'Good – light wear', 'Fair – visible wear', ''];
 const garmentTypes = ['sweater', 'jumper', 'hoodie', 't-shirt', 'shirt', 'blouse', 'jeans', 'trousers', 'dress', 'skirt', 'jacket', 'coat', 'fleece', 'cardigan', 'vest', 'shorts'];
@@ -742,7 +742,7 @@ export function ProductDetailPanel({
                         </SelectTrigger>
                         <SelectContent>
                           {departments.map(d => (
-                            <SelectItem key={d} value={d}>{d}</SelectItem>
+                            <SelectItem key={d || 'empty'} value={d}>{d || '(Not set)'}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
