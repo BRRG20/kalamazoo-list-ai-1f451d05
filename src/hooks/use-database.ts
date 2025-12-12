@@ -243,7 +243,9 @@ export function useProducts(batchId: string | null) {
     fetchProducts();
   }, [fetchProducts]);
 
+  // DEPRECATED: Use createProductWithImages instead to prevent empty products
   const createProduct = async (sku: string) => {
+    console.warn('DEPRECATED: createProduct called without images. Use createProductWithImages instead.');
     if (!batchId) return null;
     
     const userId = await getCurrentUserId();
@@ -270,6 +272,85 @@ export function useProducts(batchId: string | null) {
     }
     
     const newProduct = mapProduct(data);
+    setProducts(prev => [...prev, newProduct]);
+    return newProduct;
+  };
+
+  /**
+   * ENFORCED SINGLE FUNCTION: Creates a product WITH images in one atomic operation.
+   * This is the ONLY way to create a product - prevents empty products.
+   * @param imageUrls - Array of image URLs to attach (MUST have at least 1)
+   * @throws Error if imageUrls is empty
+   */
+  const createProductWithImages = async (imageUrls: string[]): Promise<Product | null> => {
+    // HARD GUARD: Cannot create product with 0 images
+    if (!imageUrls || imageUrls.length === 0) {
+      console.error('BLOCKED: Attempted to create product with 0 images');
+      toast.error('Cannot create a product with 0 images');
+      throw new Error('Cannot create a product with 0 images');
+    }
+
+    if (!batchId) {
+      console.error('No batch ID for product creation');
+      return null;
+    }
+    
+    const userId = await getCurrentUserId();
+    if (!userId) {
+      toast.error('You must be logged in');
+      return null;
+    }
+
+    // Generate unique SKU
+    const timestamp = Date.now();
+    const sku = `SKU-${timestamp}-${Math.random().toString(36).substr(2, 6)}`;
+
+    // Step 1: Create the product
+    const { data: productData, error: productError } = await supabase
+      .from('products')
+      .insert({ 
+        batch_id: batchId, 
+        sku,
+        status: 'new',
+        currency: 'GBP',
+        user_id: userId,
+      })
+      .select()
+      .single();
+    
+    if (productError || !productData) {
+      console.error('Error creating product:', productError);
+      toast.error('Failed to create product');
+      return null;
+    }
+
+    const newProduct = mapProduct(productData);
+
+    // Step 2: Link ALL images to this product (update existing image records)
+    let linkedCount = 0;
+    for (let i = 0; i < imageUrls.length; i++) {
+      const { error: updateError } = await supabase
+        .from('images')
+        .update({ product_id: newProduct.id, position: i })
+        .eq('url', imageUrls[i])
+        .eq('batch_id', batchId);
+      
+      if (!updateError) {
+        linkedCount++;
+      } else {
+        console.error('Error linking image:', updateError);
+      }
+    }
+
+    // Step 3: SAFETY CHECK - If no images were linked, delete the product immediately
+    if (linkedCount === 0) {
+      console.error('SAFETY: No images were linked, deleting empty product');
+      await supabase.from('products').delete().eq('id', newProduct.id);
+      toast.error('Failed to link images to product');
+      return null;
+    }
+
+    console.log(`Created product ${newProduct.id} with ${linkedCount} images`);
     setProducts(prev => [...prev, newProduct]);
     return newProduct;
   };
@@ -355,7 +436,64 @@ export function useProducts(batchId: string | null) {
     return true;
   };
 
-  return { products, loading, createProduct, updateProduct, deleteProduct, permanentlyDeleteProduct, refetch: fetchProducts };
+  /**
+   * Delete products that have 0 images attached.
+   * Called after image moves to clean up empty products.
+   */
+  const deleteEmptyProducts = async (): Promise<number> => {
+    if (!batchId) return 0;
+    
+    // Find all products in this batch
+    const { data: batchProducts, error: fetchError } = await supabase
+      .from('products')
+      .select('id')
+      .eq('batch_id', batchId)
+      .is('deleted_at', null);
+    
+    if (fetchError || !batchProducts) return 0;
+    
+    let deletedCount = 0;
+    
+    for (const product of batchProducts) {
+      // Check image count for this product
+      const { count, error: countError } = await supabase
+        .from('images')
+        .select('id', { count: 'exact', head: true })
+        .eq('product_id', product.id);
+      
+      if (!countError && count === 0) {
+        // This product has 0 images - delete it
+        const { error: deleteError } = await supabase
+          .from('products')
+          .delete()
+          .eq('id', product.id);
+        
+        if (!deleteError) {
+          deletedCount++;
+          console.log(`Auto-deleted empty product: ${product.id}`);
+        }
+      }
+    }
+    
+    if (deletedCount > 0) {
+      // Refresh products list
+      await fetchProducts();
+    }
+    
+    return deletedCount;
+  };
+
+  return { 
+    products, 
+    loading, 
+    createProduct, 
+    createProductWithImages,
+    updateProduct, 
+    deleteProduct, 
+    permanentlyDeleteProduct, 
+    deleteEmptyProducts,
+    refetch: fetchProducts 
+  };
 }
 
 // Deleted Products Hook (for recovery)
