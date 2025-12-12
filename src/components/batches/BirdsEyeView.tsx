@@ -49,6 +49,112 @@ interface BirdsEyeViewProps {
   onDeselectAllProducts?: () => void;
 }
 
+// Memoized image tile with local hover state to prevent frozen hover in virtualized grid
+const ImageTile = memo(function ImageTile({
+  image,
+  imgIndex,
+  productId,
+  isSelected,
+  justMoved,
+  isDeleting,
+  onDragStart,
+  onDragEnd,
+  onToggleImageSelection,
+  onPreview,
+  onDeleteImage,
+  onDeleteSingle,
+}: {
+  image: ProductImage;
+  imgIndex: number;
+  productId: string;
+  isSelected: boolean;
+  justMoved: boolean;
+  isDeleting: boolean;
+  onDragStart: (e: React.DragEvent, imageId: string, productId: string, imageUrl: string) => void;
+  onDragEnd: () => void;
+  onToggleImageSelection: (imageId: string, productId: string) => void;
+  onPreview: (url: string) => void;
+  onDeleteImage?: (imageId: string) => Promise<void>;
+  onDeleteSingle: (e: React.MouseEvent, imageId: string) => void;
+}) {
+  const [isHovered, setIsHovered] = useState(false);
+  
+  return (
+    <div
+      draggable={!isDeleting}
+      onDragStart={(e) => onDragStart(e, image.id, productId, image.url)}
+      onDragEnd={onDragEnd}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className={cn(
+        "relative aspect-square rounded overflow-hidden cursor-grab active:cursor-grabbing transition-all duration-300",
+        isSelected && "ring-2 ring-primary",
+        justMoved && "ring-2 ring-green-500 scale-105 shadow-lg",
+        isDeleting && "opacity-50"
+      )}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (!isDeleting) {
+          onToggleImageSelection(image.id, productId);
+        }
+      }}
+    >
+      <img
+        src={image.url}
+        alt={`Image ${imgIndex + 1}`}
+        className={cn(
+          "w-full h-full object-cover transition-all duration-300 pointer-events-none",
+          justMoved && "brightness-110"
+        )}
+      />
+      
+      {/* Selection overlay */}
+      <div className={cn(
+        "absolute inset-0 transition-opacity flex items-center justify-center",
+        isSelected ? "bg-primary/30" : justMoved ? "bg-green-500/30" : isHovered ? "bg-black/30" : "bg-black/0"
+      )}>
+        {isSelected && (
+          <Check className="w-4 h-4 text-white drop-shadow-md" />
+        )}
+        {justMoved && !isSelected && (
+          <Check className="w-4 h-4 text-green-100 drop-shadow-md animate-bounce" />
+        )}
+        {isDeleting && (
+          <Loader2 className="w-4 h-4 text-white animate-spin" />
+        )}
+      </div>
+
+      {/* Expand button - use local hover state */}
+      <button
+        className={cn(
+          "absolute top-0.5 left-0.5 p-0.5 rounded bg-black/50 transition-opacity",
+          isHovered ? "opacity-100" : "opacity-0"
+        )}
+        onClick={(e) => {
+          e.stopPropagation();
+          onPreview(image.url);
+        }}
+      >
+        <ZoomIn className="w-3 h-3 text-white" />
+      </button>
+
+      {/* Delete button - use local hover state */}
+      {onDeleteImage && (
+        <button
+          className={cn(
+            "absolute top-0.5 right-0.5 p-0.5 rounded bg-destructive/80 hover:bg-destructive transition-opacity",
+            isHovered ? "opacity-100" : "opacity-0"
+          )}
+          onClick={(e) => onDeleteSingle(e, image.id)}
+          disabled={isDeleting}
+        >
+          <Trash2 className="w-3 h-3 text-white" />
+        </button>
+      )}
+    </div>
+  );
+});
+
 // Memoized product card component
 const ProductCard = memo(function ProductCard({
   product,
@@ -193,71 +299,21 @@ const ProductCard = memo(function ProductCard({
           const isDeleting = deletingImages.has(image.id);
           
           return (
-            <div
+            <ImageTile
               key={image.id}
-              draggable={!isDeleting}
-              onDragStart={(e) => onDragStart(e, image.id, product.id, image.url)}
+              image={image}
+              imgIndex={imgIndex}
+              productId={product.id}
+              isSelected={isSelected}
+              justMoved={justMoved}
+              isDeleting={isDeleting}
+              onDragStart={onDragStart}
               onDragEnd={onDragEnd}
-              className={cn(
-                "relative aspect-square rounded overflow-hidden cursor-grab active:cursor-grabbing group transition-all duration-300",
-                isSelected && "ring-2 ring-primary",
-                justMoved && "ring-2 ring-green-500 scale-105 shadow-lg",
-                isDeleting && "opacity-50"
-              )}
-              onClick={(e) => {
-                e.stopPropagation();
-                if (!isDeleting) {
-                  onToggleImageSelection(image.id, product.id);
-                }
-              }}
-            >
-              <img
-                src={image.url}
-                alt={`Image ${imgIndex + 1}`}
-                className={cn(
-                  "w-full h-full object-cover transition-all duration-300 pointer-events-none",
-                  justMoved && "brightness-110"
-                )}
-              />
-              
-              {/* Selection overlay */}
-              <div className={cn(
-                "absolute inset-0 transition-opacity flex items-center justify-center",
-                isSelected ? "bg-primary/30" : justMoved ? "bg-green-500/30" : "bg-black/0 group-hover:bg-black/30"
-              )}>
-                {isSelected && (
-                  <Check className="w-4 h-4 text-white drop-shadow-md" />
-                )}
-                {justMoved && !isSelected && (
-                  <Check className="w-4 h-4 text-green-100 drop-shadow-md animate-bounce" />
-                )}
-                {isDeleting && (
-                  <Loader2 className="w-4 h-4 text-white animate-spin" />
-                )}
-              </div>
-
-              {/* Expand button */}
-              <button
-                className="absolute top-0.5 left-0.5 p-0.5 rounded bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onPreview(image.url);
-                }}
-              >
-                <ZoomIn className="w-3 h-3 text-white" />
-              </button>
-
-              {/* Delete button */}
-              {onDeleteImage && (
-                <button
-                  className="absolute top-0.5 right-0.5 p-0.5 rounded bg-destructive/80 hover:bg-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                  onClick={(e) => onDeleteSingle(e, image.id)}
-                  disabled={isDeleting}
-                >
-                  <Trash2 className="w-3 h-3 text-white" />
-                </button>
-              )}
-            </div>
+              onToggleImageSelection={onToggleImageSelection}
+              onPreview={onPreview}
+              onDeleteImage={onDeleteImage}
+              onDeleteSingle={onDeleteSingle}
+            />
           );
         })}
 
