@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/batches/EmptyState';
 import { ProductDetailPanel } from '@/components/products/ProductDetailPanel';
 import { ShopifySuccessDialog } from '@/components/batches/ShopifySuccessDialog';
 import { DeletedProductsPanel } from '@/components/batches/DeletedProductsPanel';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ImageGroup, MatchingProgress } from '@/components/batches/ImageGroupManager';
 import { 
   useBatches, 
@@ -1562,29 +1563,34 @@ const handleSelectBatch = useCallback((id: string) => {
         </div>
       </div>
 
-      {/* Product detail panel */}
+      {/* Product detail panel - wrapped in error boundary to prevent crashes */}
       {editingProduct && (
-        <ProductDetailPanel
-          product={editingProduct}
-          images={editingProductImages}
-          onClose={() => setEditingProductId(null)}
-          onSave={handleSaveProduct}
-          onUpdateImage={handleUpdateImage}
-          onReorderImages={handleReorderImages}
-          onDeleteImage={handleDeleteImageFromProduct}
-          onMoveImages={handleMoveImagesById}
-          otherProducts={products}
-          onGenerateAI={handleGenerateProductAI}
-          onCreateInShopify={handleCreateSingleProductInShopify}
-          onPrevious={() => navigateProduct('prev')}
-          onNext={() => navigateProduct('next')}
-          hasPrevious={hasPrevious}
-          hasNext={hasNext}
-          isGenerating={isGenerating || isGeneratingDetailPanel}
-          regeneratingField={regeneratingField}
-          isCreatingShopify={isCreatingShopify}
-          isShopifyConfigured={!!isShopifyConfigured}
-        />
+        <ErrorBoundary 
+          fallbackMessage="Unable to load the product editor. Please close and try again."
+          showHomeButton={false}
+        >
+          <ProductDetailPanel
+            product={editingProduct}
+            images={editingProductImages}
+            onClose={() => setEditingProductId(null)}
+            onSave={handleSaveProduct}
+            onUpdateImage={handleUpdateImage}
+            onReorderImages={handleReorderImages}
+            onDeleteImage={handleDeleteImageFromProduct}
+            onMoveImages={handleMoveImagesById}
+            otherProducts={products}
+            onGenerateAI={handleGenerateProductAI}
+            onCreateInShopify={handleCreateSingleProductInShopify}
+            onPrevious={() => navigateProduct('prev')}
+            onNext={() => navigateProduct('next')}
+            hasPrevious={hasPrevious}
+            hasNext={hasNext}
+            isGenerating={isGenerating || isGeneratingDetailPanel}
+            regeneratingField={regeneratingField}
+            isCreatingShopify={isCreatingShopify}
+            isShopifyConfigured={!!isShopifyConfigured}
+          />
+        </ErrorBoundary>
       )}
 
       {/* Shopify Success Dialog */}

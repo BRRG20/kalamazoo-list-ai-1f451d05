@@ -716,13 +716,14 @@ export function ProductDetailPanel({
                     <div>
                       <Label>Garment Type</Label>
                       <Select
-                        value={formData.garment_type || ''}
-                        onValueChange={(v) => updateField('garment_type', v)}
+                        value={formData.garment_type || UNSET_VALUE}
+                        onValueChange={(v) => updateField('garment_type', v === UNSET_VALUE ? '' : v)}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select type" />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectItem value={UNSET_VALUE}>(Not set)</SelectItem>
                           {garmentTypes.map(t => (
                             <SelectItem key={t} value={t}>{t}</SelectItem>
                           ))}
@@ -780,13 +781,14 @@ export function ProductDetailPanel({
                     <div>
                       <Label>Fit</Label>
                       <Select
-                        value={formData.fit || ''}
-                        onValueChange={(v) => updateField('fit', v)}
+                        value={formData.fit || UNSET_VALUE}
+                        onValueChange={(v) => updateField('fit', v === UNSET_VALUE ? '' : v)}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select fit" />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectItem value={UNSET_VALUE}>(Not set)</SelectItem>
                           {fits.map(f => (
                             <SelectItem key={f} value={f}>{f}</SelectItem>
                           ))}
@@ -891,13 +893,14 @@ export function ProductDetailPanel({
                   <div>
                     <Label>Pattern</Label>
                     <Select
-                      value={formData.pattern || ''}
-                      onValueChange={(v) => updateField('pattern', v)}
+                      value={formData.pattern || UNSET_VALUE}
+                      onValueChange={(v) => updateField('pattern', v === UNSET_VALUE ? '' : v)}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select pattern" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value={UNSET_VALUE}>(Not set)</SelectItem>
                         {patterns.map(p => (
                           <SelectItem key={p} value={p}>{p}</SelectItem>
                         ))}
