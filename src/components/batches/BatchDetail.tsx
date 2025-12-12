@@ -1168,53 +1168,89 @@ export function BatchDetail({
             await handleRefreshImages();
           }}
           onCreateNewProduct={async (imageIds) => {
-            if (onCreateProductFromImageIds) {
-              // Use database-backed product creation
-              const newProductId = await onCreateProductFromImageIds(imageIds);
-              if (newProductId) {
-                // Refresh images to reflect the change
-                await handleRefreshImages();
-              }
-            } else {
-              // Fallback: Convert image IDs to URLs and use group manager
-              const imageUrls: string[] = [];
-              for (const [productId, images] of Object.entries(productImages)) {
-                for (const image of images) {
-                  if (imageIds.includes(image.id)) {
-                    imageUrls.push(image.url);
+            // Guard: Validate imageIds
+            if (!imageIds || !Array.isArray(imageIds) || imageIds.length === 0) {
+              console.warn('onCreateNewProduct: No images provided');
+              return;
+            }
+            
+            try {
+              if (onCreateProductFromImageIds) {
+                // Use database-backed product creation
+                const newProductId = await onCreateProductFromImageIds(imageIds);
+                if (newProductId) {
+                  // Refresh images to reflect the change
+                  await handleRefreshImages();
+                }
+              } else {
+                // Fallback: Convert image IDs to URLs and use group manager
+                const imageUrls: string[] = [];
+                for (const [productId, images] of Object.entries(productImages)) {
+                  if (!images || !Array.isArray(images)) continue;
+                  for (const image of images) {
+                    if (image && image.id && imageIds.includes(image.id)) {
+                      imageUrls.push(image.url);
+                    }
                   }
                 }
+                if (imageUrls.length > 0) {
+                  onCreateNewGroup(imageUrls);
+                  // Refresh images to reflect the change
+                  await handleRefreshImages();
+                }
               }
-              if (imageUrls.length > 0) {
-                onCreateNewGroup(imageUrls);
-                // Refresh images to reflect the change
-                handleRefreshImages();
-              }
+            } catch (error) {
+              console.error('Error in onCreateNewProduct:', error);
+              // Error is already handled by the handler, just log here
             }
           }}
           onMergeProducts={async (productIds) => {
-            // Collect all image IDs from selected products
-            const allImageIds: string[] = [];
-            for (const productId of productIds) {
-              const images = productImages[productId] || [];
-              images.forEach(img => allImageIds.push(img.id));
+            // Guard: Validate productIds
+            if (!productIds || !Array.isArray(productIds) || productIds.length < 2) {
+              console.warn('onMergeProducts: Not enough products to merge');
+              return;
             }
             
-            if (allImageIds.length > 0 && onCreateProductFromImageIds) {
-              // Use database-backed product creation
-              const newProductId = await onCreateProductFromImageIds(allImageIds);
-              if (newProductId) {
-                await handleRefreshImages();
-              }
-            } else if (allImageIds.length > 0) {
-              // Fallback: Convert to URLs and use group manager
-              const allImageUrls: string[] = [];
+            try {
+              // Collect all image IDs from selected products
+              const allImageIds: string[] = [];
               for (const productId of productIds) {
-                const images = productImages[productId] || [];
-                images.forEach(img => allImageUrls.push(img.url));
+                const images = productImages[productId];
+                if (images && Array.isArray(images)) {
+                  images.forEach(img => {
+                    if (img && img.id) {
+                      allImageIds.push(img.id);
+                    }
+                  });
+                }
               }
-              onCreateNewGroup(allImageUrls);
-              await handleRefreshImages();
+              
+              if (allImageIds.length > 0 && onCreateProductFromImageIds) {
+                // Use database-backed product creation
+                const newProductId = await onCreateProductFromImageIds(allImageIds);
+                if (newProductId) {
+                  await handleRefreshImages();
+                }
+              } else if (allImageIds.length > 0) {
+                // Fallback: Convert to URLs and use group manager
+                const allImageUrls: string[] = [];
+                for (const productId of productIds) {
+                  const images = productImages[productId];
+                  if (images && Array.isArray(images)) {
+                    images.forEach(img => {
+                      if (img && img.url) {
+                        allImageUrls.push(img.url);
+                      }
+                    });
+                  }
+                }
+                if (allImageUrls.length > 0) {
+                  onCreateNewGroup(allImageUrls);
+                  await handleRefreshImages();
+                }
+              }
+            } catch (error) {
+              console.error('Error in onMergeProducts:', error);
             }
           }}
           />
