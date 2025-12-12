@@ -3,6 +3,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 // Input validation constants
 const MAX_PRODUCTS = 100;
 const MAX_STRING_LENGTH = 1000;
+const IMAGE_UPLOAD_RETRIES = 3;
+const RETRY_DELAY_MS = 1000;
 
 function sanitizeString(value: unknown, maxLength = MAX_STRING_LENGTH): string {
   if (value === null || value === undefined) return '';
@@ -73,6 +75,67 @@ interface ImagePayload {
   position: number;
 }
 
+// Sleep helper for retry delays
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Upload a single image to a Shopify product with retry logic
+async function uploadImageWithRetry(
+  storeUrl: string,
+  accessToken: string,
+  shopifyProductId: string,
+  imageUrl: string,
+  position: number,
+  retries = IMAGE_UPLOAD_RETRIES
+): Promise<{ success: boolean; error?: string; imageId?: string }> {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const response = await fetch(
+        `${storeUrl}/admin/api/2024-01/products/${shopifyProductId}/images.json`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Shopify-Access-Token': accessToken,
+          },
+          body: JSON.stringify({
+            image: {
+              src: imageUrl,
+              position: position + 1, // Shopify positions are 1-indexed
+            }
+          }),
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        return { success: true, imageId: data.image?.id?.toString() };
+      }
+
+      const errorText = await response.text();
+      console.error(`Image upload attempt ${attempt}/${retries} failed: ${response.status} - ${errorText}`);
+      
+      // If it's a 4xx error (client error), don't retry
+      if (response.status >= 400 && response.status < 500 && response.status !== 429) {
+        return { success: false, error: `Image upload failed: ${response.status} - ${errorText}` };
+      }
+
+      // Wait before retry (exponential backoff)
+      if (attempt < retries) {
+        await sleep(RETRY_DELAY_MS * attempt);
+      }
+    } catch (error) {
+      console.error(`Image upload attempt ${attempt}/${retries} error:`, error);
+      if (attempt < retries) {
+        await sleep(RETRY_DELAY_MS * attempt);
+      }
+    }
+  }
+
+  return { success: false, error: `Failed to upload image after ${retries} attempts` };
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -120,11 +183,15 @@ serve(async (req) => {
       shopifyProductId?: string; 
       shopifyHandle?: string;
       error?: string;
+      imageResults?: { url: string; success: boolean; error?: string }[];
     }[] = [];
 
     for (const product of products as ProductPayload[]) {
       try {
         const productImages = (images[product.id] || []) as ImagePayload[];
+        
+        // Sort images by position to maintain order
+        productImages.sort((a, b) => a.position - b.position);
         
         // Sanitize product data
         const sanitizedTitle = sanitizeString(product.title, 200);
@@ -133,7 +200,7 @@ serve(async (req) => {
         const sanitizedGarmentType = sanitizeString(product.garment_type, 100);
         
         console.log(`Processing product ${sanitizedSku}: ${sanitizedTitle}`);
-        console.log(`  - ${productImages.length} images`);
+        console.log(`  - ${productImages.length} images to upload`);
 
         // Build tags array from shopify_tags and collections_tags
         const tags: string[] = [];
@@ -158,7 +225,7 @@ serve(async (req) => {
           }).join('');
         };
 
-        // Build Shopify product payload
+        // STEP 1: Create product WITHOUT images first
         const shopifyProduct = {
           product: {
             title: sanitizedTitle || sanitizedSku || 'Untitled Product',
@@ -174,14 +241,11 @@ serve(async (req) => {
                 inventory_management: 'shopify',
               }
             ],
-            images: productImages.map(img => ({
-              src: img.url,
-              position: img.position,
-            })),
+            // Do NOT include images here - we'll upload them separately for reliability
           }
         };
 
-        console.log(`  - Sending to Shopify API`);
+        console.log(`  - Creating product in Shopify (without images)`);
 
         // Create product in Shopify
         const shopifyResponse = await fetch(
@@ -198,25 +262,93 @@ serve(async (req) => {
 
         if (!shopifyResponse.ok) {
           const errorText = await shopifyResponse.text();
-          console.error(`  - Shopify error: ${shopifyResponse.status} - ${errorText}`);
+          console.error(`  - Shopify product creation error: ${shopifyResponse.status} - ${errorText}`);
           results.push({
             productId: product.id,
             success: false,
-            error: `Shopify API error: ${shopifyResponse.status}`,
+            error: `Shopify API error: ${shopifyResponse.status} - ${errorText}`,
           });
           continue;
         }
 
         const shopifyData = await shopifyResponse.json();
         const createdProduct = shopifyData.product;
+        const shopifyProductId = createdProduct.id.toString();
 
-        console.log(`  - Created successfully: ${createdProduct.id}`);
+        console.log(`  - Product created: ${shopifyProductId}`);
+
+        // STEP 2: Upload images one by one with retry logic
+        const imageResults: { url: string; success: boolean; error?: string }[] = [];
+        let allImagesSuccess = true;
+
+        for (let i = 0; i < productImages.length; i++) {
+          const img = productImages[i];
+          console.log(`  - Uploading image ${i + 1}/${productImages.length}: ${img.url.substring(0, 50)}...`);
+          
+          const result = await uploadImageWithRetry(
+            storeUrl,
+            shopifyAccessToken,
+            shopifyProductId,
+            img.url,
+            i // Use array index for position to ensure correct order
+          );
+
+          imageResults.push({
+            url: img.url,
+            success: result.success,
+            error: result.error,
+          });
+
+          if (!result.success) {
+            allImagesSuccess = false;
+            console.error(`  - Failed to upload image ${i + 1}: ${result.error}`);
+          } else {
+            console.log(`  - Image ${i + 1} uploaded successfully`);
+          }
+
+          // Small delay between images to avoid rate limiting
+          if (i < productImages.length - 1) {
+            await sleep(200);
+          }
+        }
+
+        // STEP 3: Verify images were attached by fetching product
+        console.log(`  - Verifying images on Shopify product`);
+        const verifyResponse = await fetch(
+          `${storeUrl}/admin/api/2024-01/products/${shopifyProductId}.json`,
+          {
+            method: 'GET',
+            headers: {
+              'X-Shopify-Access-Token': shopifyAccessToken,
+            },
+          }
+        );
+
+        let verifiedImageCount = 0;
+        if (verifyResponse.ok) {
+          const verifyData = await verifyResponse.json();
+          verifiedImageCount = verifyData.product?.images?.length || 0;
+          console.log(`  - Verified ${verifiedImageCount}/${productImages.length} images on Shopify`);
+        }
+
+        // Determine overall success
+        const partialSuccess = imageResults.some(r => r.success);
+        const hasImageErrors = imageResults.some(r => !r.success);
+
+        if (!allImagesSuccess && productImages.length > 0) {
+          const failedCount = imageResults.filter(r => !r.success).length;
+          console.warn(`  - Product created with ${failedCount} failed image(s)`);
+        }
 
         results.push({
           productId: product.id,
-          success: true,
-          shopifyProductId: `gid://shopify/Product/${createdProduct.id}`,
+          success: true, // Product was created successfully
+          shopifyProductId: `gid://shopify/Product/${shopifyProductId}`,
           shopifyHandle: createdProduct.handle,
+          imageResults: imageResults,
+          error: hasImageErrors 
+            ? `Product created but ${imageResults.filter(r => !r.success).length}/${productImages.length} images failed` 
+            : undefined,
         });
 
       } catch (productError) {
@@ -227,15 +359,19 @@ serve(async (req) => {
           error: productError instanceof Error ? productError.message : 'Unknown error',
         });
       }
+
+      // Delay between products to avoid rate limiting
+      await sleep(300);
     }
 
     const successCount = results.filter(r => r.success).length;
     const errorCount = results.filter(r => !r.success).length;
+    const partialCount = results.filter(r => r.success && r.error).length;
 
-    console.log(`Completed: ${successCount} success, ${errorCount} errors`);
+    console.log(`Completed: ${successCount} success (${partialCount} with image warnings), ${errorCount} errors`);
 
     return new Response(
-      JSON.stringify({ results, successCount, errorCount }),
+      JSON.stringify({ results, successCount, errorCount, partialCount }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
