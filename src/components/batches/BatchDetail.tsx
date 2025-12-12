@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { cn } from '@/lib/utils';
-import { 
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import {
   Upload, 
   Sparkles, 
   ImageMinus, 
@@ -1005,22 +1006,24 @@ export function BatchDetail({
       <div className="flex-1 p-4 overflow-auto">
         {/* Image Group Manager Mode */}
         {showGroupManager && (imageGroups.length > 0 || unassignedImages.length > 0) ? (
-          <ImageGroupManager
-            groups={imageGroups}
-            unassignedImages={unassignedImages}
-            onUpdateGroups={onUpdateImageGroups}
-            onUpdateUnassigned={onUpdateUnassignedImages}
-            onCreateNewGroup={onCreateNewGroup}
-            onDeleteGroup={onDeleteGroup}
-            onDeleteImage={onDeleteImage}
-            onSaveGroups={onSaveGroups}
-            imagesPerProduct={imagesPerProduct}
-            onRegroupUnassigned={onRegroupUnassigned}
-            onSmartMatch={onSmartMatch}
-            isMatching={isMatching}
-            matchingProgress={matchingProgress}
-            onOpenProduct={onEditProduct}
-          />
+          <ErrorBoundary fallbackMessage="Image Group Manager encountered an error. Please close and try again.">
+            <ImageGroupManager
+              groups={imageGroups}
+              unassignedImages={unassignedImages}
+              onUpdateGroups={onUpdateImageGroups}
+              onUpdateUnassigned={onUpdateUnassignedImages}
+              onCreateNewGroup={onCreateNewGroup}
+              onDeleteGroup={onDeleteGroup}
+              onDeleteImage={onDeleteImage}
+              onSaveGroups={onSaveGroups}
+              imagesPerProduct={imagesPerProduct}
+              onRegroupUnassigned={onRegroupUnassigned}
+              onSmartMatch={onSmartMatch}
+              isMatching={isMatching}
+              matchingProgress={matchingProgress}
+              onOpenProduct={onEditProduct}
+            />
+          </ErrorBoundary>
         ) : products.length === 0 ? (
           <div className="text-center py-16">
             <Upload className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
@@ -1110,7 +1113,8 @@ export function BatchDetail({
 
       {/* Birds Eye View */}
       {showBirdsEyeView && (
-        <BirdsEyeView
+        <ErrorBoundary fallbackMessage="Birds Eye View encountered an error. Please close and try again.">
+          <BirdsEyeView
           products={products}
           productImages={productImages}
           isLoading={imagesLoading}
@@ -1213,7 +1217,8 @@ export function BatchDetail({
               await handleRefreshImages();
             }
           }}
-        />
+          />
+        </ErrorBoundary>
       )}
 
       {/* Workflow Info Dialog */}
