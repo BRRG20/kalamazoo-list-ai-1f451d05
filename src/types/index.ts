@@ -72,6 +72,8 @@ export interface Settings {
   shopify_store_url: string;
   default_images_per_product: number;
   default_currency: string;
+  auto_start_recording: boolean;
+  auto_scroll_review: boolean;
 }
 
 export interface UploadedImage {

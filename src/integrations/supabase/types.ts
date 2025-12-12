@@ -270,6 +270,8 @@ export type Database = {
       }
       settings: {
         Row: {
+          auto_scroll_review: boolean | null
+          auto_start_recording: boolean | null
           created_at: string
           default_currency: string
           default_images_per_product: number
@@ -279,6 +281,8 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          auto_scroll_review?: boolean | null
+          auto_start_recording?: boolean | null
           created_at?: string
           default_currency?: string
           default_images_per_product?: number
@@ -288,6 +292,8 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          auto_scroll_review?: boolean | null
+          auto_start_recording?: boolean | null
           created_at?: string
           default_currency?: string
           default_images_per_product?: number
