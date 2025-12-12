@@ -10,6 +10,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
   const { isAuthenticated, loading } = useAuth();
   const location = useLocation();
 
+  // Handle loading state
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -18,9 +19,11 @@ export function AuthGuard({ children }: AuthGuardProps) {
     );
   }
 
+  // Handle unauthenticated state
   if (!isAuthenticated) {
     return <Navigate to="/auth" state={{ from: location }} replace />;
   }
 
+  // Render children - they should be wrapped in ErrorBoundary at route level
   return <>{children}</>;
 }

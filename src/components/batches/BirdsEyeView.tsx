@@ -265,8 +265,8 @@ const ProductCard = memo(function ProductCard({
 });
 
 export function BirdsEyeView({
-  products,
-  productImages,
+  products = [],
+  productImages = {},
   onClose,
   onMoveImages,
   onDeleteImage,
@@ -274,11 +274,14 @@ export function BirdsEyeView({
   onCreateNewProduct,
   onMergeProducts,
   isLoading = false,
-  selectedProductIds,
+  selectedProductIds = new Set<string>(),
   onToggleProductSelection,
   onBulkSelectProducts,
   onDeselectAllProducts,
 }: BirdsEyeViewProps) {
+  // Ensure products and productImages are never undefined
+  const safeProducts = products ?? [];
+  const safeProductImages = productImages ?? {};
   const [selectedImages, setSelectedImages] = useState<Map<string, { imageId: string; productId: string }>>(new Map());
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [dropTargetProductId, setDropTargetProductId] = useState<string | null>(null);
@@ -319,8 +322,8 @@ export function BirdsEyeView({
     let empty = 0;
     let totalImageCount = 0;
     
-    products.forEach(p => {
-      const count = productImages[p.id]?.length || 0;
+    safeProducts.forEach(p => {
+      const count = safeProductImages[p.id]?.length || 0;
       totalImageCount += count;
       if (count > 0) {
         withImages++;
@@ -330,24 +333,24 @@ export function BirdsEyeView({
     });
     
     return { withImages, empty, totalImageCount };
-  }, [products, productImages]);
+  }, [safeProducts, safeProductImages]);
 
   // Get empty product IDs for cleanup
   const emptyProductIds = useMemo(() => {
-    return products
-      .filter(p => (productImages[p.id]?.length || 0) === 0)
+    return safeProducts
+      .filter(p => (safeProductImages[p.id]?.length || 0) === 0)
       .map(p => p.id);
-  }, [products, productImages]);
+  }, [safeProducts, safeProductImages]);
 
   // Filter products based on search query AND filter mode
   const filteredProducts = useMemo(() => {
-    let result = products;
+    let result = safeProducts;
     
     // Apply filter mode
     if (filterMode === 'with-images') {
-      result = result.filter(p => (productImages[p.id]?.length || 0) > 0);
+      result = result.filter(p => (safeProductImages[p.id]?.length || 0) > 0);
     } else if (filterMode === 'empty') {
-      result = result.filter(p => (productImages[p.id]?.length || 0) === 0);
+      result = result.filter(p => (safeProductImages[p.id]?.length || 0) === 0);
     }
     
     // Apply search
@@ -362,12 +365,12 @@ export function BirdsEyeView({
     }
     
     return result;
-  }, [products, productImages, searchQuery, filterMode]);
+  }, [safeProducts, safeProductImages, searchQuery, filterMode]);
 
   // Count total images (for filtered products)
   const totalImages = useMemo(() => {
-    return filteredProducts.reduce((sum, p) => sum + (productImages[p.id]?.length || 0), 0);
-  }, [filteredProducts, productImages]);
+    return filteredProducts.reduce((sum, p) => sum + (safeProductImages[p.id]?.length || 0), 0);
+  }, [filteredProducts, safeProductImages]);
 
   // Calculate grid dimensions for virtualization
   const gridConfig = useMemo(() => {
@@ -428,7 +431,7 @@ export function BirdsEyeView({
       // Collect all image IDs from selected products
       const allImageIds: string[] = [];
       selectedProductIds.forEach(productId => {
-        const images = productImages[productId] || [];
+        const images = safeProductImages[productId] || [];
         images.forEach(img => allImageIds.push(img.id));
       });
       
@@ -747,7 +750,7 @@ export function BirdsEyeView({
     if (index >= filteredProducts.length) return null;
     
     const product = filteredProducts[index];
-    const images = productImages[product.id] || [];
+    const images = safeProductImages[product.id] || [];
     const hasSelectedImages = Array.from(selectedImages.values()).some(
       s => s.productId === product.id
     );
