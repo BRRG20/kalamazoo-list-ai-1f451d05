@@ -215,7 +215,7 @@ export function ImageGroupManager({
     } else if (activeSource.groupId) {
       if (destIsNewGroup) {
         // Move from group to new group
-        const newGroups = groups.map(g => {
+        let newGroups = groups.map(g => {
           if (g.productId === activeSource.groupId) {
             return { 
               ...g, 
@@ -225,11 +225,13 @@ export function ImageGroupManager({
           }
           return g;
         });
+        // RULE: Auto-remove groups that become empty
+        newGroups = newGroups.filter(g => g.images.length > 0);
         onUpdateGroups(newGroups);
         onCreateNewGroup([activeUrl]);
       } else if (destIsUnassigned) {
         // Move from group to unassigned
-        const newGroups = groups.map(g => {
+        let newGroups = groups.map(g => {
           if (g.productId === activeSource.groupId) {
             return { 
               ...g, 
@@ -239,11 +241,13 @@ export function ImageGroupManager({
           }
           return g;
         });
+        // RULE: Auto-remove groups that become empty
+        newGroups = newGroups.filter(g => g.images.length > 0);
         onUpdateGroups(newGroups);
         onUpdateUnassigned([...unassignedImages, activeUrl]);
       } else if (destGroupId && destGroupId !== activeSource.groupId) {
         // Move between groups
-        const newGroups = groups.map(g => {
+        let newGroups = groups.map(g => {
           if (g.productId === activeSource.groupId) {
             return { 
               ...g, 
@@ -256,6 +260,8 @@ export function ImageGroupManager({
           }
           return g;
         });
+        // RULE: Auto-remove groups that become empty
+        newGroups = newGroups.filter(g => g.images.length > 0);
         onUpdateGroups(newGroups);
       } else if (destGroupId === activeSource.groupId) {
         // Reorder within same group
@@ -321,7 +327,7 @@ export function ImageGroupManager({
     if (!group || group.selectedImages.size === 0) return;
 
     const selectedUrls = [...group.selectedImages];
-    const newGroups = groups.map(g => {
+    let newGroups = groups.map(g => {
       if (g.productId === groupId) {
         return {
           ...g,
@@ -331,6 +337,8 @@ export function ImageGroupManager({
       }
       return g;
     });
+    // RULE: Auto-remove groups that become empty
+    newGroups = newGroups.filter(g => g.images.length > 0);
     onUpdateGroups(newGroups);
     onUpdateUnassigned([...unassignedImages, ...selectedUrls]);
   };
@@ -340,12 +348,11 @@ export function ImageGroupManager({
     if (groupIndex === -1 || groupIndex === groups.length - 1) return;
     
     const currentGroup = groups[groupIndex];
-    const nextGroup = groups[groupIndex + 1];
     const selectedUrls = [...currentGroup.selectedImages];
     
     if (selectedUrls.length === 0) return;
 
-    const newGroups = groups.map((g, i) => {
+    let newGroups = groups.map((g, i) => {
       if (i === groupIndex) {
         return {
           ...g,
@@ -358,6 +365,8 @@ export function ImageGroupManager({
       }
       return g;
     });
+    // RULE: Auto-remove groups that become empty
+    newGroups = newGroups.filter(g => g.images.length > 0);
     onUpdateGroups(newGroups);
   };
 
@@ -370,7 +379,7 @@ export function ImageGroupManager({
     
     if (selectedUrls.length === 0) return;
 
-    const newGroups = groups.map((g, i) => {
+    let newGroups = groups.map((g, i) => {
       if (i === groupIndex) {
         return {
           ...g,
@@ -383,6 +392,8 @@ export function ImageGroupManager({
       }
       return g;
     });
+    // RULE: Auto-remove groups that become empty
+    newGroups = newGroups.filter(g => g.images.length > 0);
     onUpdateGroups(newGroups);
   };
 
@@ -391,7 +402,7 @@ export function ImageGroupManager({
     if (!group || group.selectedImages.size === 0) return;
 
     const selectedUrls = [...group.selectedImages];
-    const newGroups = groups.map(g => {
+    let newGroups = groups.map(g => {
       if (g.productId === groupId) {
         return {
           ...g,
@@ -401,6 +412,8 @@ export function ImageGroupManager({
       }
       return g;
     });
+    // RULE: Auto-remove groups that become empty
+    newGroups = newGroups.filter(g => g.images.length > 0);
     onUpdateGroups(newGroups);
     onCreateNewGroup(selectedUrls);
   };
@@ -435,7 +448,7 @@ export function ImageGroupManager({
   };
 
   const handleDeleteImageFromGroup = (groupId: string, imageUrl: string) => {
-    const newGroups = groups.map(g => {
+    let newGroups = groups.map(g => {
       if (g.productId === groupId) {
         return {
           ...g,
@@ -445,6 +458,8 @@ export function ImageGroupManager({
       }
       return g;
     });
+    // RULE: Auto-remove groups that become empty
+    newGroups = newGroups.filter(g => g.images.length > 0);
     onUpdateGroups(newGroups);
     onDeleteImage(imageUrl);
   };
@@ -459,7 +474,7 @@ export function ImageGroupManager({
     if (!group || group.selectedImages.size === 0) return;
 
     const selectedUrls = [...group.selectedImages];
-    const newGroups = groups.map(g => {
+    let newGroups = groups.map(g => {
       if (g.productId === groupId) {
         return {
           ...g,
@@ -469,6 +484,8 @@ export function ImageGroupManager({
       }
       return g;
     });
+    // RULE: Auto-remove groups that become empty
+    newGroups = newGroups.filter(g => g.images.length > 0);
     onUpdateGroups(newGroups);
     // Delete each selected image
     selectedUrls.forEach(url => onDeleteImage(url));

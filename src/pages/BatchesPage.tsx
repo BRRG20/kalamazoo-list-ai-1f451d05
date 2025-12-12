@@ -883,6 +883,33 @@ const handleSelectBatch = useCallback((id: string) => {
     await handleCreateInShopify([editingProductId]);
   }, [editingProductId, handleCreateInShopify]);
 
+  // Delete empty products (products with 0 images) - used in Birds Eye View cleanup
+  const handleDeleteEmptyProducts = useCallback(async (productIds: string[]) => {
+    if (productIds.length === 0) return;
+    
+    let deletedCount = 0;
+    for (const productId of productIds) {
+      const success = await deleteProduct(productId);
+      if (success) {
+        deletedCount++;
+      }
+    }
+    
+    // Clear selection
+    setSelectedProductIds(prev => {
+      const next = new Set(prev);
+      productIds.forEach(id => next.delete(id));
+      return next;
+    });
+    
+    // Refresh products
+    await refetchProducts();
+    
+    if (deletedCount > 0) {
+      toast.success(`Deleted ${deletedCount} empty product(s)`);
+    }
+  }, [deleteProduct, refetchProducts]);
+
   const handleMoveImageBetweenProducts = useCallback(async (imageUrl: string, fromProductId: string, toProductId: string) => {
     // Find the image in the database by URL and update its product_id
     const { data: imageData, error: fetchError } = await supabase
@@ -1104,15 +1131,22 @@ const handleSelectBatch = useCallback((id: string) => {
               onUpdateImageGroups={setImageGroups}
               onUpdateUnassignedImages={setUnassignedImages}
               onCreateNewGroup={(images) => {
+                // GUARD: Never create a product group with 0 images
+                const validImages = images.filter(url => url && url.trim() !== '');
+                if (validImages.length === 0) {
+                  toast.warning('You must select at least one image to create a product.');
+                  return;
+                }
+                
                 const newGroup: ImageGroup = {
                   productId: `temp-${Date.now()}`,
                   productNumber: imageGroups.length + 1,
-                  images,
+                  images: validImages,
                   selectedImages: new Set(),
                 };
                 setImageGroups(prev => [...prev, newGroup]);
                 // Remove these images from unassigned pool
-                setUnassignedImages(prev => prev.filter(url => !images.includes(url)));
+                setUnassignedImages(prev => prev.filter(url => !validImages.includes(url)));
               }}
               onDeleteGroup={(productId) => {
                 const group = imageGroups.find(g => g.productId === productId);
@@ -1135,15 +1169,22 @@ const handleSelectBatch = useCallback((id: string) => {
               onSaveGroups={async () => {
                 if (!selectedBatchId) return;
                 
-                // Filter out empty groups and groups with only empty/invalid image URLs
+                // GUARD: Filter out empty groups - never create products with 0 images
                 const validGroups = imageGroups.filter(group => {
                   const validImages = group.images.filter(url => url && url.trim() !== '');
                   return validImages.length > 0;
                 });
                 
+                // Count skipped empty groups
+                const skippedCount = imageGroups.length - validGroups.length;
+                
                 if (validGroups.length === 0) {
-                  toast.error('No valid image groups to save.');
+                  toast.error('No valid image groups to save. Each product needs at least 1 image.');
                   return;
+                }
+                
+                if (skippedCount > 0) {
+                  toast.warning(`Skipping ${skippedCount} empty group(s) - products must have at least 1 image.`);
                 }
                 
                 // Save groups to database - create products and assign images
@@ -1153,9 +1194,12 @@ const handleSelectBatch = useCallback((id: string) => {
                 const createdProductIds = new Set<string>(); // Track to prevent duplicates
                 
                 for (const group of validGroups) {
-                  // Double-check valid images
+                  // Triple-check valid images (critical guard)
                   const validImages = group.images.filter(url => url && url.trim() !== '');
-                  if (validImages.length === 0) continue;
+                  if (validImages.length === 0) {
+                    console.warn('Skipping group with no valid images:', group.productId);
+                    continue;
+                  }
                   
                   // Create product with unique SKU
                   const timestamp = Date.now();
@@ -1211,6 +1255,7 @@ const handleSelectBatch = useCallback((id: string) => {
               lastUndoLabel={undoStack.length > 0 ? undoStack[undoStack.length - 1].label : undefined}
               deletedProductsCount={deletedProducts.length}
               onOpenDeletedProducts={() => setShowDeletedProducts(true)}
+              onDeleteEmptyProducts={handleDeleteEmptyProducts}
             />
           ) : (
             <EmptyState />
