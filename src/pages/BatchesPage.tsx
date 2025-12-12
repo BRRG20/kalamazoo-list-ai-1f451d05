@@ -697,14 +697,33 @@ const handleSelectBatch = useCallback((id: string) => {
         .map(id => products.find(p => p.id === id))
         .filter(Boolean) as Product[];
       
-      // Fetch images for all products (only those marked for Shopify)
+      toast.info(`Preparing ${productsToCreate.length} products for Shopify...`);
+      
+      // Fetch images for all products in parallel (only those marked for Shopify)
       const imagesMap: Record<string, { url: string; position: number }[]> = {};
-      for (const product of productsToCreate) {
+      const imagePromises = productsToCreate.map(async (product) => {
         const allImages = await fetchImagesForProduct(product.id);
-        imagesMap[product.id] = allImages
+        const shopifyImages = allImages
           .filter(img => img.include_in_shopify)
+          .sort((a, b) => a.position - b.position) // Ensure correct order
           .map(img => ({ url: img.url, position: img.position }));
+        return { productId: product.id, images: shopifyImages };
+      });
+      
+      const imageResults = await Promise.all(imagePromises);
+      for (const result of imageResults) {
+        imagesMap[result.productId] = result.images;
       }
+      
+      // Log image counts for debugging
+      let totalImages = 0;
+      for (const [productId, imgs] of Object.entries(imagesMap)) {
+        console.log(`Product ${productId}: ${imgs.length} images`);
+        totalImages += imgs.length;
+      }
+      console.log(`Total images to upload: ${totalImages}`);
+      
+      toast.info(`Uploading ${productsToCreate.length} products with ${totalImages} images...`);
       
       // Prepare product payloads with description
       const productPayloads = productsToCreate.map(p => ({
@@ -749,14 +768,24 @@ const handleSelectBatch = useCallback((id: string) => {
             shopify_product_id: result.shopifyProductId,
             shopify_handle: result.shopifyHandle,
           });
+          
+          // Log any image warnings
+          if (result.error) {
+            console.warn(`Product ${result.productId}: ${result.error}`);
+          }
         } else {
           await updateProduct(result.productId, { status: 'error' });
+          console.error(`Product ${result.productId} failed: ${result.error}`);
         }
       }
       
       setSelectedProductIds(new Set());
       
-      // Show success dialog
+      // Show success dialog with image warning count
+      const partialCount = data.partialCount || 0;
+      if (partialCount > 0) {
+        toast.warning(`${partialCount} products had some images fail to upload. Check Shopify to verify.`);
+      }
       setShopifySuccessData({ successCount: data.successCount, errorCount: data.errorCount });
       
     } catch (error) {
