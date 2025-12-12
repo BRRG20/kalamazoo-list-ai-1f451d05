@@ -172,9 +172,9 @@ const ProductCard = memo(function ProductCard({
       {/* Product title with tooltip */}
       <Tooltip>
         <TooltipTrigger asChild>
-          <p className="text-xs font-medium truncate mb-2 cursor-help relative z-20">
+          <span className="block text-xs font-medium truncate mb-2 cursor-help relative z-20">
             {product.title || product.sku || 'Untitled'}
-          </p>
+          </span>
         </TooltipTrigger>
         <TooltipContent side="bottom" className="max-w-xs">
           <p>{product.title || product.sku || 'Untitled'}</p>
@@ -327,23 +327,25 @@ export function BirdsEyeView({
   const gridRef = useRef<Grid>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const resizeTimeoutRef = useRef<number | null>(null);
+  const containerSizeRef = useRef({ width: 0, height: 0 }); // Stable ref for size
 
-  // Measure container for virtualized grid - debounced to prevent rapid updates
+  // Measure container for virtualized grid - debounced and stable
   useEffect(() => {
     const updateSize = () => {
+      // Skip size updates during mutations to prevent flickering
+      if (isMutating) return;
+      
       if (containerRef.current) {
         const width = containerRef.current.clientWidth;
         const height = containerRef.current.clientHeight;
-        // Only update if values are valid and changed significantly (> 5px)
+        // Only update if values are valid and changed significantly (> 10px)
         if (width > 0 && height > 0) {
-          setContainerSize(prev => {
-            const widthDiff = Math.abs(prev.width - width);
-            const heightDiff = Math.abs(prev.height - height);
-            if (widthDiff > 5 || heightDiff > 5) {
-              return { width, height };
-            }
-            return prev;
-          });
+          const widthDiff = Math.abs(containerSizeRef.current.width - width);
+          const heightDiff = Math.abs(containerSizeRef.current.height - height);
+          if (widthDiff > 10 || heightDiff > 10 || containerSizeRef.current.width === 0) {
+            containerSizeRef.current = { width, height };
+            setContainerSize({ width, height });
+          }
         }
       }
     };
@@ -352,25 +354,24 @@ export function BirdsEyeView({
       if (resizeTimeoutRef.current) {
         window.clearTimeout(resizeTimeoutRef.current);
       }
-      resizeTimeoutRef.current = window.setTimeout(updateSize, 100);
+      resizeTimeoutRef.current = window.setTimeout(updateSize, 150);
     };
     
-    // Initial measurement
-    updateSize();
+    // Initial measurement only if not set
+    if (containerSizeRef.current.width === 0) {
+      // Delay initial measurement to allow DOM to settle
+      setTimeout(updateSize, 50);
+    }
     
     window.addEventListener('resize', debouncedUpdateSize);
     
-    // Also measure on next frame to catch delayed layout
-    const raf = requestAnimationFrame(updateSize);
-    
     return () => {
       window.removeEventListener('resize', debouncedUpdateSize);
-      cancelAnimationFrame(raf);
       if (resizeTimeoutRef.current) {
         window.clearTimeout(resizeTimeoutRef.current);
       }
     };
-  }, []);
+  }, [isMutating]);
 
   // Count empty and populated products
   const productStats = useMemo(() => {
@@ -498,6 +499,28 @@ export function BirdsEyeView({
       setIsDeletingEmpty(false);
     }
   }, [onDeleteEmptyProducts, emptyProductIds]);
+
+  // Stable handler for creating new product from images
+  const handleCreateProductFromImages = useCallback(async (imageIds: string[]) => {
+    if (isMutating || !onCreateNewProduct || imageIds.length === 0) return;
+    
+    const count = imageIds.length;
+    setSelectedImages(new Map());
+    setIsMutating(true);
+    
+    try {
+      await onCreateNewProduct(imageIds);
+      toast.success(`Created new product with ${count} image${count > 1 ? 's' : ''}`);
+    } catch (error) {
+      console.error('Failed to create product:', error);
+      toast.error('Failed to create product');
+    } finally {
+      // Small delay to allow parent to finish refetching before unlocking
+      setTimeout(() => {
+        setIsMutating(false);
+      }, 100);
+    }
+  }, [isMutating, onCreateNewProduct]);
 
   // Handle merging selected products (with mutation guard)
   const handleMergeProducts = useCallback(async () => {
@@ -831,43 +854,17 @@ export function BirdsEyeView({
                   setIsCreateNewDropTarget(false);
                 }
               }}
-              onDrop={async (e) => {
+              onDrop={(e) => {
                 e.preventDefault();
-                if (isMutating) return; // Prevent during mutations
-                if (selectedImages.size > 0 && onCreateNewProduct) {
-                  const imageIds = Array.from(selectedImages.keys());
-                  const count = imageIds.length;
-                  setSelectedImages(new Map());
-                  setIsMutating(true);
-                  try {
-                    await onCreateNewProduct(imageIds);
-                    toast.success(`Created new product with ${count} image${count > 1 ? 's' : ''}`);
-                  } catch (error) {
-                    console.error('Failed to create product from drop:', error);
-                    toast.error('Failed to create product');
-                  } finally {
-                    setIsMutating(false);
-                  }
+                if (selectedImages.size > 0) {
+                  handleCreateProductFromImages(Array.from(selectedImages.keys()));
                 }
                 setIsCreateNewDropTarget(false);
                 setDraggedImageData(null);
               }}
-              onClick={async () => {
-                if (isMutating) return; // Prevent during mutations
-                if (selectedImages.size > 0 && onCreateNewProduct) {
-                  const imageIds = Array.from(selectedImages.keys());
-                  const count = imageIds.length;
-                  setSelectedImages(new Map());
-                  setIsMutating(true);
-                  try {
-                    await onCreateNewProduct(imageIds);
-                    toast.success(`Created new product with ${count} image${count > 1 ? 's' : ''}`);
-                  } catch (error) {
-                    console.error('Failed to create product from click:', error);
-                    toast.error('Failed to create product');
-                  } finally {
-                    setIsMutating(false);
-                  }
+              onClick={() => {
+                if (selectedImages.size > 0) {
+                  handleCreateProductFromImages(Array.from(selectedImages.keys()));
                 }
               }}
             >
@@ -971,7 +968,6 @@ export function BirdsEyeView({
     isCreateNewDropTarget,
     isMutating,
     onToggleProductSelection,
-    onCreateNewProduct,
     onDeleteImage,
     handleDragOver,
     handleDragLeave,
@@ -981,6 +977,7 @@ export function BirdsEyeView({
     handleDragStart,
     handleDragEnd,
     handleDeleteSingle,
+    handleCreateProductFromImages,
   ]);
 
   // Show error state if something went wrong
@@ -1191,24 +1188,9 @@ export function BirdsEyeView({
                   variant="default" 
                   size="sm" 
                   disabled={isMutating}
-                  onClick={async () => {
-                    if (isMutating) return;
-                    const imageIds = Array.from(selectedImages.keys());
-                    if (imageIds.length > 0) {
-                      // Clear selection immediately for UX
-                      const count = imageIds.length;
-                      setSelectedImages(new Map());
-                      setIsMutating(true);
-                      try {
-                        // Call the handler (async)
-                        await onCreateNewProduct(imageIds);
-                        toast.success(`Created new product with ${count} image${count > 1 ? 's' : ''}`);
-                      } catch (error) {
-                        console.error('Failed to create product from selection:', error);
-                        toast.error('Failed to create product');
-                      } finally {
-                        setIsMutating(false);
-                      }
+                  onClick={() => {
+                    if (!isMutating && selectedImages.size > 0) {
+                      handleCreateProductFromImages(Array.from(selectedImages.keys()));
                     }
                   }}
                   className="bg-green-600 hover:bg-green-700 text-white gap-1.5"
@@ -1247,10 +1229,20 @@ export function BirdsEyeView({
       {/* Virtualized Grid of products - dedicated scroll container */}
       <div 
         ref={containerRef} 
-        className="flex-1 p-4 overflow-hidden"
+        className="flex-1 p-4 overflow-hidden relative"
         style={{ minHeight: 0 }} // Prevents flex item from overflowing
       >
-        {filteredProducts.length === 0 ? (
+        {/* Loading overlay during mutations to prevent flicker */}
+        {isMutating && (
+          <div className="absolute inset-0 z-30 bg-background/50 flex items-center justify-center pointer-events-none">
+            <div className="flex items-center gap-2 bg-card px-4 py-2 rounded-lg shadow-lg border">
+              <Loader2 className="w-5 h-5 animate-spin text-primary" />
+              <span className="text-sm font-medium">Updating...</span>
+            </div>
+          </div>
+        )}
+        
+        {filteredProducts.length === 0 && !isMutating ? (
           <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
             <p>{searchQuery ? 'No products match your search' : 'No products found'}</p>
             {searchQuery && (
