@@ -8,7 +8,7 @@ export const BATCH_SIZE_OPTIONS = [5, 10, 20] as const;
 export type BatchSizeOption = typeof BATCH_SIZE_OPTIONS[number];
 
 const DEFAULT_BATCH_SIZE = 20;
-const CONCURRENT_REQUESTS = 5; // Process 5 at a time within a batch
+const CONCURRENT_REQUESTS = 3; // Reduced to prevent overwhelming the event loop
 
 interface GenerationResult {
   productId: string;
@@ -37,9 +37,14 @@ export function useAIGeneration({
 }: UseAIGenerationOptions) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState({ current: 0, total: 0 });
+  const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
+  
+  // Use refs for generating IDs to avoid re-render storms
+  const generatingProductIdsRef = useRef<Set<string>>(new Set());
   const [generatingProductIds, setGeneratingProductIds] = useState<Set<string>>(new Set());
   
   // Track which products have been AI generated (ai_generated = true)
+  const aiGeneratedProductsRef = useRef<Set<string>>(new Set());
   const [aiGeneratedProducts, setAiGeneratedProducts] = useState<Set<string>>(new Set());
   
   // Configurable batch size
@@ -60,36 +65,28 @@ export function useAIGeneration({
 
   // Check if a product is currently being generated
   const isProductGenerating = useCallback((productId: string) => {
-    return generatingProductIds.has(productId);
-  }, [generatingProductIds]);
+    return generatingProductIdsRef.current.has(productId);
+  }, []);
 
   // Check if a product has been AI generated
   const isProductAIGenerated = useCallback((productId: string) => {
-    return aiGeneratedProducts.has(productId);
-  }, [aiGeneratedProducts]);
+    return aiGeneratedProductsRef.current.has(productId);
+  }, []);
 
-  // Generate AI for a single product
-  const generateSingleProduct = useCallback(async (
-    product: Product,
-    options?: { skipUndo?: boolean }
+  // Internal function to process a single product without state updates
+  const processProduct = useCallback(async (
+    product: Product
   ): Promise<GenerationResult> => {
     const productId = product.id;
     
-    // Prevent duplicate requests
-    if (generatingProductIds.has(productId)) {
+    // Prevent duplicate requests using ref (no re-render)
+    if (generatingProductIdsRef.current.has(productId)) {
       console.warn(`[AI] Product ${productId} is already generating, ignoring request`);
       return { productId, success: false, skipped: true, error: 'Already generating' };
     }
 
-    console.log(`[AI] Starting generation for product: ${productId} (${product.sku})`);
-    
-    // Mark as generating
-    setGeneratingProductIds(prev => new Set([...prev, productId]));
-    
-    // Save state for undo (unless skipped)
-    if (!options?.skipUndo) {
-      saveProductState(product);
-    }
+    // Mark as generating in ref only (no state update)
+    generatingProductIdsRef.current.add(productId);
     
     try {
       // Get product images for AI context
@@ -101,8 +98,6 @@ export function useAIGeneration({
       }
       
       const imageUrls = images.slice(0, 2).map(img => img.url);
-      
-      console.log(`[AI] Calling generate-listing for ${productId} with ${imageUrls.length} images`);
       
       // Call the edge function
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-listing`, {
@@ -149,12 +144,6 @@ export function useAIGeneration({
       const data = await response.json();
       const generated = data.generated;
       
-      console.log(`[AI] Generated content for ${productId}:`, {
-        title: generated.title?.substring(0, 50),
-        hasDescA: !!generated.description_style_a,
-        hasDescB: !!generated.description_style_b,
-      });
-      
       // Get default tags based on garment type, gender, and keywords
       const garmentType = product.garment_type || generated.garment_type || '';
       const department = product.department || '';
@@ -185,10 +174,9 @@ export function useAIGeneration({
         collections_tags: generated.collections_tags || product.collections_tags,
       });
       
-      // Mark as AI generated
-      setAiGeneratedProducts(prev => new Set([...prev, productId]));
+      // Mark as AI generated in ref only (no state update)
+      aiGeneratedProductsRef.current.add(productId);
       
-      console.log(`[AI] Successfully generated for ${productId}`);
       return { productId, success: true };
       
     } catch (error) {
@@ -200,14 +188,42 @@ export function useAIGeneration({
         error: error instanceof Error ? error.message : 'Unknown error' 
       };
     } finally {
-      // Remove from generating set
+      // Remove from generating ref (no state update)
+      generatingProductIdsRef.current.delete(productId);
+    }
+  }, [fetchImagesForProduct, updateProduct, getMatchingTags]);
+
+  // Generate AI for a single product (with state updates for UI)
+  const generateSingleProduct = useCallback(async (
+    product: Product,
+    options?: { skipUndo?: boolean }
+  ): Promise<GenerationResult> => {
+    // Save state for undo (unless skipped)
+    if (!options?.skipUndo) {
+      saveProductState(product);
+    }
+    
+    // Update UI state to show generating
+    setGeneratingProductIds(prev => new Set([...prev, product.id]));
+    
+    try {
+      const result = await processProduct(product);
+      
+      if (result.success) {
+        // Sync ref to state for UI
+        setAiGeneratedProducts(prev => new Set([...prev, product.id]));
+      }
+      
+      return result;
+    } finally {
+      // Update UI state to remove generating
       setGeneratingProductIds(prev => {
         const next = new Set(prev);
-        next.delete(productId);
+        next.delete(product.id);
         return next;
       });
     }
-  }, [generatingProductIds, saveProductState, fetchImagesForProduct, updateProduct, getMatchingTags]);
+  }, [saveProductState, processProduct]);
 
   // Generate AI for up to N products at a time (bulk generation with configurable batch size)
   const generateBulk = useCallback(async (
@@ -223,31 +239,25 @@ export function useAIGeneration({
     const effectiveBatchSize = customBatchSize ?? batchSize;
     
     console.log('[AI] Starting bulk generation with batch size:', effectiveBatchSize);
-    console.log('[AI] Total products:', allProducts.length);
-    console.log('[AI] Selected IDs:', selectedProductIds ? Array.from(selectedProductIds) : 'none');
 
     // Determine which products to process
     let productsToProcess: Product[];
     
     if (selectedProductIds && selectedProductIds.size > 0) {
-      // User explicitly selected products - process those regardless of ai_generated status
       productsToProcess = allProducts.filter(p => selectedProductIds.has(p.id));
-      console.log('[AI] Processing selected products:', productsToProcess.length);
     } else {
-      // No selection - find products that haven't been AI generated yet
       productsToProcess = allProducts.filter(p => 
-        !aiGeneratedProducts.has(p.id) && 
+        !aiGeneratedProductsRef.current.has(p.id) && 
         p.status === 'new' &&
-        !generatingProductIds.has(p.id)
+        !generatingProductIdsRef.current.has(p.id)
       );
-      console.log('[AI] Processing ungenerated products:', productsToProcess.length);
     }
 
     // Limit to configured batch size
     const batch = productsToProcess.slice(0, effectiveBatchSize);
     
     if (batch.length === 0) {
-      const alreadyGenerated = allProducts.filter(p => aiGeneratedProducts.has(p.id) || p.status !== 'new').length;
+      const alreadyGenerated = allProducts.filter(p => aiGeneratedProductsRef.current.has(p.id) || p.status !== 'new').length;
       if (alreadyGenerated > 0) {
         toast.info(`All ${alreadyGenerated} products already generated. Select specific products to re-generate.`);
       } else {
@@ -258,7 +268,7 @@ export function useAIGeneration({
 
     const remainingCount = productsToProcess.length - batch.length;
     
-    console.log(`[AI] Processing batch of ${batch.length} products${remainingCount > 0 ? ` (${remainingCount} remaining after this batch)` : ''}`);
+    console.log(`[AI] Processing batch of ${batch.length} products`);
     
     // Save bulk state for undo
     saveBulkState(batch);
@@ -266,20 +276,28 @@ export function useAIGeneration({
     setIsGenerating(true);
     setGenerationProgress({ current: 0, total: batch.length });
     
+    // Update UI to show all products as generating (single state update)
+    const batchIds = new Set(batch.map(p => p.id));
+    setGeneratingProductIds(batchIds);
+    
     let successCount = 0;
     let errorCount = 0;
     const processedIds: string[] = [];
+    const successfulIds: string[] = [];
     const failedProducts: { sku: string; error: string }[] = [];
 
-    // Process in chunks of CONCURRENT_REQUESTS
+    // Process in chunks of CONCURRENT_REQUESTS with breathing room
     for (let i = 0; i < batch.length; i += CONCURRENT_REQUESTS) {
       const chunk = batch.slice(i, i + CONCURRENT_REQUESTS);
       
+      // Process chunk in parallel
       const results = await Promise.allSettled(
-        chunk.map(product => generateSingleProduct(product, { skipUndo: true }))
+        chunk.map(product => processProduct(product))
       );
       
-      for (const result of results) {
+      // Collect results without triggering state updates
+      for (let j = 0; j < results.length; j++) {
+        const result = results[j];
         if (result.status === 'fulfilled') {
           const value = result.value;
           processedIds.push(value.productId);
@@ -288,29 +306,32 @@ export function useAIGeneration({
             continue;
           } else if (value.noImages) {
             errorCount++;
-            const product = batch.find(p => p.id === value.productId);
-            failedProducts.push({ sku: product?.sku || 'Unknown', error: 'No images' });
+            failedProducts.push({ sku: chunk[j]?.sku || 'Unknown', error: 'No images' });
           } else if (value.success) {
             successCount++;
+            successfulIds.push(value.productId);
           } else {
             errorCount++;
-            const product = batch.find(p => p.id === value.productId);
-            failedProducts.push({ sku: product?.sku || 'Unknown', error: value.error || 'Unknown error' });
+            failedProducts.push({ sku: chunk[j]?.sku || 'Unknown', error: value.error || 'Unknown error' });
           }
         } else {
           errorCount++;
         }
       }
       
-      // Update progress
-      setGenerationProgress({ current: Math.min(i + CONCURRENT_REQUESTS, batch.length), total: batch.length });
+      // Update progress (single state update per chunk)
+      const currentProgress = Math.min(i + CONCURRENT_REQUESTS, batch.length);
+      setGenerationProgress({ current: currentProgress, total: batch.length });
       
-      // Small delay between chunks
+      // Allow event loop to breathe between chunks
       if (i + CONCURRENT_REQUESTS < batch.length) {
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 50));
       }
     }
 
+    // Batch sync refs to state (single update at end)
+    setAiGeneratedProducts(new Set(aiGeneratedProductsRef.current));
+    setGeneratingProductIds(new Set());
     setIsGenerating(false);
     setGenerationProgress({ current: 0, total: 0 });
 
@@ -330,7 +351,7 @@ export function useAIGeneration({
     }
 
     return { successCount, errorCount, processedIds };
-  }, [isGenerating, batchSize, aiGeneratedProducts, generatingProductIds, saveBulkState, generateSingleProduct]);
+  }, [isGenerating, batchSize, saveBulkState, processProduct]);
 
   // Undo AI generation for a single product
   const undoSingleProduct = useCallback(async (productId: string): Promise<boolean> => {
@@ -355,12 +376,9 @@ export function useAIGeneration({
         status: savedState.status as any,
       });
       
-      // Remove from AI generated set
-      setAiGeneratedProducts(prev => {
-        const next = new Set(prev);
-        next.delete(productId);
-        return next;
-      });
+      // Remove from AI generated set and ref
+      aiGeneratedProductsRef.current.delete(productId);
+      setAiGeneratedProducts(new Set(aiGeneratedProductsRef.current));
       
       clearProductUndoState(productId);
       toast.success('Restored previous version');
@@ -399,12 +417,8 @@ export function useAIGeneration({
           status: savedState.status as any,
         });
         
-        // Remove from AI generated set
-        setAiGeneratedProducts(prev => {
-          const next = new Set(prev);
-          next.delete(savedState.productId);
-          return next;
-        });
+        // Remove from AI generated set and ref
+        aiGeneratedProductsRef.current.delete(savedState.productId);
         
         restored++;
       } catch (error) {
@@ -412,6 +426,9 @@ export function useAIGeneration({
         failed++;
       }
     }
+    
+    // Sync ref to state once at end
+    setAiGeneratedProducts(new Set(aiGeneratedProductsRef.current));
     
     if (failed > 0) {
       toast.warning(`Restored ${restored} products, ${failed} failed.`);
@@ -425,11 +442,11 @@ export function useAIGeneration({
   // Get count of products that can be generated (not yet AI generated)
   const getUnprocessedCount = useCallback((products: Product[]): number => {
     return products.filter(p => 
-      !aiGeneratedProducts.has(p.id) && 
+      !aiGeneratedProductsRef.current.has(p.id) && 
       p.status === 'new' &&
-      !generatingProductIds.has(p.id)
+      !generatingProductIdsRef.current.has(p.id)
     ).length;
-  }, [aiGeneratedProducts, generatingProductIds]);
+  }, []);
 
   // Initialize AI generated status from products
   const initializeAIGeneratedStatus = useCallback((products: Product[]) => {
@@ -439,6 +456,8 @@ export function useAIGeneration({
         generated.add(p.id);
       }
     });
+    // Update both ref and state
+    aiGeneratedProductsRef.current = generated;
     setAiGeneratedProducts(generated);
   }, []);
 
