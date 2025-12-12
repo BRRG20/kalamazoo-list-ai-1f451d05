@@ -649,6 +649,104 @@ export function ProductDetailPanel({
           </div>
         </div>
 
+        {/* Voice Recording - Always visible at top */}
+        <div className="border-b border-border p-3 md:p-4 bg-muted/30">
+          <div className="flex flex-wrap items-center gap-2 max-w-6xl">
+            {/* Description Style Toggle */}
+            <div className="flex items-center gap-1 border border-border rounded-md p-1 bg-background">
+              <Button
+                variant={descriptionStyle === 'A' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setDescriptionStyle('A')}
+                className="h-7 px-2 text-xs"
+                type="button"
+              >
+                Style A
+              </Button>
+              <Button
+                variant={descriptionStyle === 'B' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setDescriptionStyle('B')}
+                className="h-7 px-2 text-xs"
+                type="button"
+              >
+                Style B
+              </Button>
+            </div>
+            
+            {!isListening ? (
+              <Button
+                variant="outline"
+                onClick={startVoiceInput}
+                disabled={isParsingVoice}
+                className="flex-1 md:flex-none"
+              >
+                <Mic className="w-4 h-4 mr-2" />
+                Start Recording
+              </Button>
+            ) : (
+              <Button
+                variant="destructive"
+                onClick={stopVoiceInput}
+                className="flex-1 md:flex-none"
+              >
+                <Square className="w-4 h-4 mr-2" />
+                Stop Recording
+              </Button>
+            )}
+            
+            {isListening && (
+              <span className="text-sm text-destructive animate-pulse flex items-center gap-2">
+                <span className="w-2 h-2 bg-destructive rounded-full animate-pulse" />
+                Recording...
+              </span>
+            )}
+            
+            {voiceTranscript && !isListening && (
+              <Button 
+                variant="default" 
+                onClick={applyVoiceToFields}
+                disabled={isParsingVoice}
+              >
+                {isParsingVoice ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Parsing...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    Apply to Fields
+                  </>
+                )}
+              </Button>
+            )}
+            
+            {voiceTranscript && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setVoiceTranscript('')}
+              >
+                Clear
+              </Button>
+            )}
+          </div>
+          
+          {voiceTranscript && (
+            <div className="mt-2 p-3 bg-muted/50 rounded-lg border border-border max-w-6xl">
+              <Label className="text-xs text-muted-foreground">Voice Transcript:</Label>
+              <p className="text-sm mt-1 text-foreground">{voiceTranscript}</p>
+            </div>
+          )}
+          
+          {!voiceTranscript && !isListening && (
+            <p className="text-xs text-muted-foreground mt-2">
+              Speak product details or description. Say "for the description..." to add text to Style {descriptionStyle}.
+            </p>
+          )}
+        </div>
+
         {/* Content */}
         <div className="flex-1 flex flex-col md:flex-row md:overflow-hidden">
           {/* Left: Images */}
@@ -1032,103 +1130,10 @@ export function ProductDetailPanel({
                 </div>
               </section>
 
-              {/* Voice Input & Notes */}
+              {/* Notes */}
               <section>
-                <h3 className="font-semibold text-foreground mb-3">Voice Input & Notes</h3>
+                <h3 className="font-semibold text-foreground mb-3">Notes</h3>
                 <div className="space-y-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {/* Description Style Toggle */}
-                    <div className="flex items-center gap-1 mr-2 border border-border rounded-md p-1">
-                      <Button
-                        variant={descriptionStyle === 'A' ? 'default' : 'ghost'}
-                        size="sm"
-                        onClick={() => setDescriptionStyle('A')}
-                        className="h-7 px-2 text-xs"
-                        type="button"
-                      >
-                        Style A
-                      </Button>
-                      <Button
-                        variant={descriptionStyle === 'B' ? 'default' : 'ghost'}
-                        size="sm"
-                        onClick={() => setDescriptionStyle('B')}
-                        className="h-7 px-2 text-xs"
-                        type="button"
-                      >
-                        Style B
-                      </Button>
-                    </div>
-                    
-                    {!isListening ? (
-                      <Button
-                        variant="outline"
-                        onClick={startVoiceInput}
-                        disabled={isParsingVoice}
-                      >
-                        <Mic className="w-4 h-4 mr-2" />
-                        Start Recording
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="destructive"
-                        onClick={stopVoiceInput}
-                      >
-                        <Square className="w-4 h-4 mr-2" />
-                        Stop Recording
-                      </Button>
-                    )}
-                    
-                    {isListening && (
-                      <span className="text-sm text-destructive animate-pulse flex items-center gap-2">
-                        <span className="w-2 h-2 bg-destructive rounded-full animate-pulse" />
-                        Recording...
-                      </span>
-                    )}
-                    
-                    {voiceTranscript && !isListening && (
-                      <Button 
-                        variant="default" 
-                        onClick={applyVoiceToFields}
-                        disabled={isParsingVoice}
-                      >
-                        {isParsingVoice ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Parsing...
-                          </>
-                        ) : (
-                          <>
-                            <Sparkles className="w-4 h-4 mr-2" />
-                            Apply to Fields
-                          </>
-                        )}
-                      </Button>
-                    )}
-                    
-                    {voiceTranscript && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setVoiceTranscript('')}
-                      >
-                        Clear
-                      </Button>
-                    )}
-                  </div>
-                  
-                  {voiceTranscript && (
-                    <div className="p-3 bg-muted/50 rounded-lg border border-border">
-                      <Label className="text-xs text-muted-foreground">Voice Transcript:</Label>
-                      <p className="text-sm mt-1 text-foreground">{voiceTranscript}</p>
-                    </div>
-                  )}
-                  
-                  {!voiceTranscript && !isListening && (
-                    <p className="text-xs text-muted-foreground">
-                      Speak product details or description. Say "for the description..." to add text to Style {descriptionStyle}. Say "use style B" to switch styles.
-                    </p>
-                  )}
-
                   <div>
                     <Label>Raw Input Text</Label>
                     <Textarea
