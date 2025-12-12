@@ -21,13 +21,15 @@ import {
   Layers,
   Undo2,
   HelpCircle,
-  Info
+  Info,
+  ChevronDown
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
+import { BATCH_SIZE_OPTIONS, BatchSizeOption } from '@/hooks/use-ai-generation';
 import { ProductCard } from './ProductCard';
 import { ImageGroupManager, ImageGroup, MatchingProgress } from './ImageGroupManager';
 import { BirdsEyeView } from './BirdsEyeView';
@@ -66,7 +68,7 @@ interface BatchDetailProps {
   onAutoGroup: (imagesPerProduct: number) => void;
   onReAutoGroupAll: (imagesPerProduct: number) => void;
   onGenerateAll: () => void;
-  onGenerateBulk20: () => void;
+  onGenerateBulk: (batchSize?: number) => void;
   onGenerateSingleProduct: (productId: string) => void;
   onUndoSingleProduct: (productId: string) => void;
   onUndoBulkGeneration?: () => void;
@@ -75,6 +77,9 @@ interface BatchDetailProps {
   unprocessedCount: number;
   hasBulkUndoState: boolean;
   lastBulkCount: number;
+  // Batch size controls
+  batchSize: BatchSizeOption;
+  onBatchSizeChange: (size: BatchSizeOption) => void;
   onExcludeLast2All: () => void;
   onCreateInShopify: (productIds: string[]) => void;
   onEditProduct: (productId: string) => void;
@@ -134,10 +139,12 @@ export function BatchDetail({
   onAutoGroup,
   onReAutoGroupAll,
   onGenerateAll,
-  onGenerateBulk20,
+  onGenerateBulk,
   onGenerateSingleProduct,
   onUndoSingleProduct,
   onUndoBulkGeneration,
+  batchSize,
+  onBatchSizeChange,
   isProductGenerating,
   hasProductUndoState,
   unprocessedCount,
@@ -688,28 +695,57 @@ export function BatchDetail({
               </Tooltip>
             )}
 
-            {/* Generate AI (20) - bulk generation button */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={onGenerateBulk20}
-                  disabled={isGenerating || products.length === 0 || unprocessedCount === 0}
-                  className="text-xs md:text-sm"
-                >
-                  {isGenerating ? (
-                    <Loader2 className="w-4 h-4 mr-1 md:mr-2 animate-spin" />
-                  ) : (
-                    <Sparkles className="w-4 h-4 mr-1 md:mr-2" />
-                  )}
-                  <span className="hidden sm:inline">Generate</span> AI ({Math.min(20, unprocessedCount)})
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{unprocessedCount > 0 ? `Generate AI for next ${Math.min(20, unprocessedCount)} unprocessed products` : 'All products have been generated'}</p>
-              </TooltipContent>
-            </Tooltip>
+            {/* Generate AI with batch size dropdown */}
+            <div className="flex items-center gap-1">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => onGenerateBulk(batchSize)}
+                    disabled={isGenerating || products.length === 0 || unprocessedCount === 0}
+                    className="text-xs md:text-sm rounded-r-none"
+                  >
+                    {isGenerating ? (
+                      <Loader2 className="w-4 h-4 mr-1 md:mr-2 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-4 h-4 mr-1 md:mr-2" />
+                    )}
+                    <span className="hidden sm:inline">Generate</span> AI ({Math.min(batchSize, unprocessedCount)})
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{unprocessedCount > 0 ? `Generate AI for next ${Math.min(batchSize, unprocessedCount)} unprocessed products` : 'All products have been generated'}</p>
+                </TooltipContent>
+              </Tooltip>
+              
+              {/* Batch size selector dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    disabled={isGenerating || products.length === 0 || unprocessedCount === 0}
+                    className="text-xs md:text-sm rounded-l-none border-l border-primary-foreground/20 px-2"
+                  >
+                    <MoreVertical className="w-3 h-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>Batch Size</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {BATCH_SIZE_OPTIONS.map(size => (
+                    <DropdownMenuItem
+                      key={size}
+                      onClick={() => onBatchSizeChange(size)}
+                      className={batchSize === size ? 'bg-accent' : ''}
+                    >
+                      {size} products {batchSize === size && '✓'}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
 
             {/* Undo bulk AI generation */}
             {hasBulkUndoState && onUndoBulkGeneration && (
