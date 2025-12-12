@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
-import { X, ZoomIn, Check, Undo2, Trash2, Loader2 } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { X, ZoomIn, Check, Undo2, Trash2, Loader2, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
@@ -39,9 +40,24 @@ export function BirdsEyeView({
   const [lastMove, setLastMove] = useState<MoveHistory | null>(null);
   const [draggedImageData, setDraggedImageData] = useState<{ imageId: string; productId: string } | null>(null);
   const [deletingImages, setDeletingImages] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // Count total images
-  const totalImages = Object.values(productImages).reduce((sum, images) => sum + images.length, 0);
+  // Filter products based on search query
+  const filteredProducts = useMemo(() => {
+    if (!searchQuery.trim()) return products;
+    const query = searchQuery.toLowerCase();
+    return products.filter(product =>
+      product.title?.toLowerCase().includes(query) ||
+      product.sku?.toLowerCase().includes(query) ||
+      product.brand?.toLowerCase().includes(query) ||
+      product.garment_type?.toLowerCase().includes(query)
+    );
+  }, [products, searchQuery]);
+
+  // Count total images (for filtered products)
+  const totalImages = useMemo(() => {
+    return filteredProducts.reduce((sum, p) => sum + (productImages[p.id]?.length || 0), 0);
+  }, [filteredProducts, productImages]);
 
   const toggleImageSelection = (imageId: string, productId: string) => {
     setSelectedImages(prev => {
@@ -240,11 +256,32 @@ export function BirdsEyeView({
     <div className="fixed inset-0 z-50 bg-background flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-border bg-card">
-        <div className="flex items-center gap-4 flex-wrap">
+        <div className="flex items-center gap-4 flex-wrap flex-1">
           <h2 className="text-lg font-semibold">Birds Eye View</h2>
           <span className="text-sm text-muted-foreground">
-            {products.length} products • {totalImages} images
+            {filteredProducts.length} products • {totalImages} images
+            {searchQuery && ` (filtered from ${products.length})`}
           </span>
+          
+          {/* Search input */}
+          <div className="relative flex-shrink-0">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="Search products..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 h-8 w-48 md:w-64"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
           
           {isLoading && (
             <div className="flex items-center gap-2 text-muted-foreground">
@@ -297,13 +334,18 @@ export function BirdsEyeView({
 
       {/* Grid of products */}
       <ScrollArea className="flex-1 p-4">
-        {products.length === 0 ? (
+        {filteredProducts.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
-            <p>No products found</p>
+            <p>{searchQuery ? 'No products match your search' : 'No products found'}</p>
+            {searchQuery && (
+              <Button variant="link" size="sm" onClick={() => setSearchQuery('')}>
+                Clear search
+              </Button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-4">
-            {products.map((product, productIndex) => {
+            {filteredProducts.map((product, productIndex) => {
               const images = productImages[product.id] || [];
               const hasSelectedImages = Array.from(selectedImages.values()).some(
                 s => s.productId === product.id
