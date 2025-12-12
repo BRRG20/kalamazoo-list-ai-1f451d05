@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, memo, useRef, useEffect } from 'react';
 import { FixedSizeGrid as Grid } from 'react-window';
-import { X, ZoomIn, Check, Undo2, Trash2, Loader2, Search, Filter, AlertTriangle, Plus, CheckSquare, Combine } from 'lucide-react';
+import { X, ZoomIn, Check, Undo2, Trash2, Loader2, Search, Filter, AlertTriangle, Plus, CheckSquare, Combine, ArrowUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogHeader, DialogFooter } from '@/components/ui/dialog';
@@ -378,6 +378,7 @@ export function BirdsEyeView({
   const [isMergingProducts, setIsMergingProducts] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [isMutating, setIsMutating] = useState(false);
+  const [showScrollTop, setShowScrollTop] = useState(false);
   
   const containerRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<Grid>(null);
@@ -1305,20 +1306,40 @@ export function BirdsEyeView({
             )}
           </div>
         ) : containerSize.width > 0 && containerSize.height > 0 && gridConfig.columnCount > 0 && gridConfig.rowCount >= 0 ? (
-          <Grid
-            ref={gridRef}
-            columnCount={Math.max(1, gridConfig.columnCount)}
-            columnWidth={Math.max(50, gridConfig.columnWidth + gridConfig.gap)}
-            height={Math.max(100, containerSize.height - 32)}
-            rowCount={Math.max(0, gridConfig.rowCount)}
-            rowHeight={Math.max(50, gridConfig.rowHeight + gridConfig.gap)}
-            width={Math.max(100, containerSize.width)}
-            className="scrollbar-visible"
-            overscanRowCount={2}
-            overscanColumnCount={1}
-          >
-            {Cell}
-          </Grid>
+          <>
+            <Grid
+              ref={gridRef}
+              columnCount={Math.max(1, gridConfig.columnCount)}
+              columnWidth={Math.max(50, gridConfig.columnWidth + gridConfig.gap)}
+              height={Math.max(100, containerSize.height - 32)}
+              rowCount={Math.max(0, gridConfig.rowCount)}
+              rowHeight={Math.max(50, gridConfig.rowHeight + gridConfig.gap)}
+              width={Math.max(100, containerSize.width)}
+              className="scrollbar-visible"
+              style={{ scrollBehavior: 'smooth' }}
+              overscanRowCount={2}
+              overscanColumnCount={1}
+              onScroll={({ scrollTop }) => {
+                setShowScrollTop(scrollTop > 300);
+              }}
+            >
+              {Cell}
+            </Grid>
+            
+            {/* Scroll to top button */}
+            {showScrollTop && (
+              <Button
+                variant="secondary"
+                size="icon"
+                className="absolute bottom-6 right-6 z-20 shadow-lg animate-fade-in rounded-full h-10 w-10"
+                onClick={() => {
+                  gridRef.current?.scrollTo({ scrollTop: 0 });
+                }}
+              >
+                <ArrowUp className="h-5 w-5" />
+              </Button>
+            )}
+          </>
         ) : (
           <div className="flex items-center justify-center h-32">
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
