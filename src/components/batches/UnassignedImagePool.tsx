@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useDroppable } from '@dnd-kit/core';
+import { toast } from 'sonner';
 import { AlertTriangle, Plus, Check, X, Eye, Trash2, Grid3X3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -75,13 +76,13 @@ export function UnassignedImagePool({
         ? [images[0]] 
         : [];
     
+    // GUARD: Never create a product group with 0 images
     if (imagesToUse.length === 0) {
-      console.warn('No images selected for creating group');
+      toast.warning('You must select at least one image to create a product.');
       return;
     }
     
     console.log('Creating group with images:', imagesToUse);
-    // Pass true as second param to signal these should be removed from unassigned
     onCreateGroup(imagesToUse);
     setSelectedImages(new Set());
   };

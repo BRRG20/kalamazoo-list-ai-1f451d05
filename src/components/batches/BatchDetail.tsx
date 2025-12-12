@@ -129,6 +129,8 @@ interface BatchDetailProps {
   // Deleted products
   deletedProductsCount?: number;
   onOpenDeletedProducts?: () => void;
+  // Empty products cleanup
+  onDeleteEmptyProducts?: (productIds: string[]) => Promise<void>;
 }
 
 export function BatchDetail({
@@ -196,6 +198,7 @@ export function BatchDetail({
   lastUndoLabel,
   deletedProductsCount = 0,
   onOpenDeletedProducts,
+  onDeleteEmptyProducts,
 }: BatchDetailProps) {
   const { settings, isShopifyConfigured } = useSettings();
   const [imagesPerProduct, setImagesPerProduct] = useState(settings?.default_images_per_product || 9);
@@ -1142,12 +1145,16 @@ export function BatchDetail({
               }
             }
           }}
-          onDeleteEmptyProducts={async (productIds) => {
-            // Delete empty products one by one
+          onDeleteEmptyProducts={onDeleteEmptyProducts ? async (productIds) => {
+            // Use the actual delete handler for real products
+            await onDeleteEmptyProducts(productIds);
+            // Refresh images after cleanup
+            await handleRefreshImages();
+          } : async (productIds) => {
+            // Fallback for temp groups only
             for (const productId of productIds) {
               await onDeleteGroup(productId);
             }
-            // Refresh images after cleanup
             await handleRefreshImages();
           }}
         />
