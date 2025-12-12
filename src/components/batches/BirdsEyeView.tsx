@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { X, ZoomIn, Check, Undo2, Trash2, Loader2, Search, Filter, AlertTriangle } from 'lucide-react';
+import { X, ZoomIn, Check, Undo2, Trash2, Loader2, Search, Filter, AlertTriangle, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogHeader, DialogFooter } from '@/components/ui/dialog';
@@ -281,13 +281,28 @@ export function BirdsEyeView({
   };
 
   // Drag and drop handlers for single image
-  const handleDragStart = (e: React.DragEvent, imageId: string, productId: string) => {
+  const handleDragStart = (e: React.DragEvent, imageId: string, productId: string, imageUrl: string) => {
     setDraggedImageData({ imageId, productId });
     // If the dragged image is not selected, select only it
     if (!selectedImages.has(imageId)) {
       setSelectedImages(new Map([[imageId, { imageId, productId }]]));
     }
     e.dataTransfer.effectAllowed = 'move';
+    
+    // Create custom drag image
+    const dragImage = document.createElement('div');
+    dragImage.style.cssText = 'position: absolute; top: -1000px; left: -1000px; width: 80px; height: 80px; border-radius: 8px; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.3); border: 2px solid hsl(var(--primary)); transform: rotate(3deg);';
+    const img = document.createElement('img');
+    img.src = imageUrl;
+    img.style.cssText = 'width: 100%; height: 100%; object-fit: cover;';
+    dragImage.appendChild(img);
+    document.body.appendChild(dragImage);
+    e.dataTransfer.setDragImage(dragImage, 40, 40);
+    
+    // Clean up after drag starts
+    setTimeout(() => {
+      document.body.removeChild(dragImage);
+    }, 0);
   };
 
   const handleDragEnd = () => {
@@ -490,11 +505,12 @@ export function BirdsEyeView({
                 <div
                   key={product.id}
                   className={cn(
-                    "border rounded-lg p-2 bg-card transition-all",
-                    isDropTarget && "ring-2 ring-primary bg-primary/10 scale-[1.02]",
-                    canReceive && "hover:ring-2 hover:ring-primary/50 cursor-pointer",
-                    hasSelectedImages && "ring-2 ring-primary",
-                    justReceived && "ring-2 ring-green-500 bg-green-500/10 animate-pulse"
+                    "border-2 rounded-lg p-2 bg-card transition-all duration-200 relative",
+                    isDropTarget && "border-primary ring-2 ring-primary/30 bg-primary/10 scale-[1.02] shadow-lg",
+                    !isDropTarget && canReceive && "border-dashed border-muted-foreground/50 hover:border-primary/50 cursor-pointer",
+                    !isDropTarget && !canReceive && "border-border",
+                    hasSelectedImages && "ring-2 ring-primary border-primary",
+                    justReceived && "ring-2 ring-green-500 bg-green-500/10 border-green-500"
                   )}
                   onDragOver={(e) => handleDragOver(e, product.id)}
                   onDragLeave={handleDragLeave}
@@ -505,6 +521,15 @@ export function BirdsEyeView({
                     }
                   }}
                 >
+                  {/* Drop indicator overlay */}
+                  {isDropTarget && (
+                    <div className="absolute inset-0 z-10 bg-primary/20 flex items-center justify-center pointer-events-none rounded-lg">
+                      <div className="bg-primary text-primary-foreground px-3 py-1.5 rounded-md shadow-lg font-medium text-xs flex items-center gap-1.5">
+                        <Plus className="w-3 h-3" />
+                        Drop here
+                      </div>
+                    </div>
+                  )}
                   {/* Product header */}
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-medium text-muted-foreground truncate">
@@ -544,8 +569,8 @@ export function BirdsEyeView({
                       return (
                         <div
                           key={image.id}
-                          draggable
-                          onDragStart={(e) => handleDragStart(e, image.id, product.id)}
+                          draggable={!isDeleting}
+                          onDragStart={(e) => handleDragStart(e, image.id, product.id, image.url)}
                           onDragEnd={handleDragEnd}
                           className={cn(
                             "relative aspect-square rounded overflow-hidden cursor-grab active:cursor-grabbing group transition-all duration-300",

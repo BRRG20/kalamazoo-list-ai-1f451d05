@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
+import { useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import {
   ChevronLeft,
@@ -179,13 +180,35 @@ export function ImageGroupCard({
   const [showAddPopover, setShowAddPopover] = useState(false);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
 
+  // Make this card a drop target
+  const { isOver, setNodeRef } = useDroppable({
+    id: group.productId,
+  });
+
   const hasSelectedImages = group.selectedImages.size > 0;
   const isFirstGroup = groupIndex === 0;
   const isLastGroup = groupIndex === totalGroups - 1;
 
   return (
     <>
-      <div className="bg-card border border-border rounded-lg overflow-hidden">
+      <div 
+        ref={setNodeRef}
+        className={cn(
+          "bg-card border-2 rounded-lg overflow-hidden transition-all duration-200 relative",
+          isOver 
+            ? "border-primary ring-2 ring-primary/30 bg-primary/5 scale-[1.01] shadow-lg" 
+            : "border-border"
+        )}
+      >
+        {/* Drop indicator overlay */}
+        {isOver && (
+          <div className="absolute inset-0 z-10 bg-primary/10 flex items-center justify-center pointer-events-none">
+            <div className="bg-primary text-primary-foreground px-4 py-2 rounded-lg shadow-lg font-medium text-sm flex items-center gap-2">
+              <Plus className="w-4 h-4" />
+              Drop to add here
+            </div>
+          </div>
+        )}
         {/* Header */}
         <div className="flex items-center justify-between p-3 bg-muted/30 border-b border-border">
           <div 

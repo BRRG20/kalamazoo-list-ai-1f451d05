@@ -649,14 +649,18 @@ export function ImageGroupManager({
         <NewGroupDropZone />
       </div>
 
-      <DragOverlay>
+      <DragOverlay dropAnimation={{
+        duration: 200,
+        easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)',
+      }}>
         {activeImageUrl ? (
-          <div className="w-16 h-16 rounded-lg overflow-hidden shadow-lg ring-2 ring-primary">
+          <div className="w-20 h-20 rounded-lg overflow-hidden shadow-2xl ring-2 ring-primary border-2 border-background rotate-3 scale-110">
             <img
               src={activeImageUrl}
               alt="Dragging"
               className="w-full h-full object-cover"
             />
+            <div className="absolute inset-0 bg-primary/20" />
           </div>
         ) : null}
       </DragOverlay>
