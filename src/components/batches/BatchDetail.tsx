@@ -1111,6 +1111,10 @@ export function BatchDetail({
           products={products}
           productImages={productImages}
           isLoading={imagesLoading}
+          selectedProductIds={selectedProductIds}
+          onToggleProductSelection={onToggleProductSelection}
+          onBulkSelectProducts={onBulkSelectProducts}
+          onDeselectAllProducts={onDeselectAllProducts}
           onClose={() => {
             setShowBirdsEyeView(false);
             handleRefreshImages();

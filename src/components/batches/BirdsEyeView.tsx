@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { X, ZoomIn, Check, Undo2, Trash2, Loader2, Search, Filter, AlertTriangle, Plus } from 'lucide-react';
+import { X, ZoomIn, Check, Undo2, Trash2, Loader2, Search, Filter, AlertTriangle, Plus, CheckSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogHeader, DialogFooter } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,6 +40,11 @@ interface BirdsEyeViewProps {
   onDeleteImage?: (imageId: string) => Promise<void>;
   onDeleteEmptyProducts?: (productIds: string[]) => Promise<void>;
   isLoading?: boolean;
+  // Product selection props
+  selectedProductIds?: Set<string>;
+  onToggleProductSelection?: (productId: string) => void;
+  onBulkSelectProducts?: (productIds: string[]) => void;
+  onDeselectAllProducts?: () => void;
 }
 
 export function BirdsEyeView({
@@ -49,6 +55,10 @@ export function BirdsEyeView({
   onDeleteImage,
   onDeleteEmptyProducts,
   isLoading = false,
+  selectedProductIds,
+  onToggleProductSelection,
+  onBulkSelectProducts,
+  onDeselectAllProducts,
 }: BirdsEyeViewProps) {
   const [selectedImages, setSelectedImages] = useState<Map<string, { imageId: string; productId: string }>>(new Map());
   const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -355,6 +365,56 @@ export function BirdsEyeView({
             {filterMode !== 'all' && ` (${filterMode === 'empty' ? 'showing empty' : 'showing with images'})`}
           </span>
           
+          {/* Product selection counter and controls */}
+          {selectedProductIds && selectedProductIds.size > 0 && (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-primary/10 rounded-lg">
+              <CheckSquare className="w-4 h-4 text-primary" />
+              <span className="text-sm font-medium text-primary">
+                {selectedProductIds.size} selected
+              </span>
+              {onDeselectAllProducts && (
+                <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={onDeselectAllProducts}>
+                  Clear
+                </Button>
+              )}
+            </div>
+          )}
+          
+          {/* Bulk select dropdown */}
+          {onBulkSelectProducts && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8 gap-1.5">
+                  <CheckSquare className="w-4 h-4" />
+                  Bulk select...
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuLabel>Select products</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {[5, 10, 20, 50, 75, 100].map(count => (
+                  <DropdownMenuItem
+                    key={count}
+                    disabled={filteredProducts.length === 0}
+                    onClick={() => {
+                      const idsToSelect = filteredProducts.slice(0, count).map(p => p.id);
+                      onBulkSelectProducts(idsToSelect);
+                    }}
+                  >
+                    Select {count}
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  disabled={filteredProducts.length === 0}
+                  onClick={() => onBulkSelectProducts(filteredProducts.map(p => p.id))}
+                >
+                  Select all ({filteredProducts.length})
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          
           {/* Stats badges */}
           <div className="flex items-center gap-2 text-xs">
             <span className="px-2 py-1 rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
@@ -500,6 +560,7 @@ export function BirdsEyeView({
               const isDropTarget = dropTargetProductId === product.id;
               const canReceive = (selectedImages.size > 0 || draggedImageData) && !hasSelectedImages;
               const justReceived = recentlyReceivedProduct === product.id;
+              const isProductSelected = selectedProductIds?.has(product.id) ?? false;
 
               return (
                 <div
@@ -510,7 +571,8 @@ export function BirdsEyeView({
                     !isDropTarget && canReceive && "border-dashed border-muted-foreground/50 hover:border-primary/50 cursor-pointer",
                     !isDropTarget && !canReceive && "border-border",
                     hasSelectedImages && "ring-2 ring-primary border-primary",
-                    justReceived && "ring-2 ring-green-500 bg-green-500/10 border-green-500"
+                    justReceived && "ring-2 ring-green-500 bg-green-500/10 border-green-500",
+                    isProductSelected && "ring-2 ring-primary/50 bg-primary/5"
                   )}
                   onDragOver={(e) => handleDragOver(e, product.id)}
                   onDragLeave={handleDragLeave}
@@ -530,14 +592,24 @@ export function BirdsEyeView({
                       </div>
                     </div>
                   )}
-                  {/* Product header */}
+                  {/* Product header with checkbox */}
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-medium text-muted-foreground truncate">
-                      #{productIndex + 1}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {onToggleProductSelection && (
+                        <Checkbox
+                          checked={isProductSelected}
+                          onCheckedChange={() => onToggleProductSelection(product.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="h-4 w-4"
+                        />
+                      )}
+                      <span className="text-xs font-medium text-muted-foreground truncate">
+                        #{productIndex + 1}
+                      </span>
+                    </div>
                     <span className={cn(
                       "text-xs px-1.5 py-0.5 rounded",
-                      images.length === 0 
+                      images.length === 0
                         ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
                         : "bg-muted text-muted-foreground"
                     )}>
