@@ -73,6 +73,10 @@ export default function BatchesPage() {
   const [showGroupManager, setShowGroupManager] = useState(false);
   const [isMatching, setIsMatching] = useState(false);
   const [matchingProgress, setMatchingProgress] = useState<MatchingProgress>({ current: 0, total: 0, currentBatch: 0, totalBatches: 0 });
+  const [isConfirmingGrouping, setIsConfirmingGrouping] = useState(false);
+  
+  // Track initial state for change detection in Confirm Grouping
+  const [initialImageAssignments, setInitialImageAssignments] = useState<Map<string, string | null>>(new Map());
   
   // Global undo state for all actions
   interface UndoState {
@@ -148,6 +152,7 @@ const handleSelectBatch = useCallback((id: string) => {
       if (!selectedBatchId) {
         setUnassignedImages([]);
         setImageGroups([]);
+        setInitialImageAssignments(new Map());
         return;
       }
       
@@ -157,14 +162,19 @@ const handleSelectBatch = useCallback((id: string) => {
       if (allBatchImages.length === 0) {
         setUnassignedImages([]);
         setImageGroups([]);
+        setInitialImageAssignments(new Map());
         return;
       }
       
-      // Group images by product_id
+      // Group images by product_id and track initial assignments
       const imagesByProduct: Record<string, string[]> = {};
       const unassigned: string[] = [];
+      const initialAssignments = new Map<string, string | null>();
       
       for (const img of allBatchImages) {
+        // Track initial assignment: image URL -> product_id (or null if unassigned)
+        initialAssignments.set(img.url, img.product_id || null);
+        
         if (img.product_id && img.product_id !== '') {
           if (!imagesByProduct[img.product_id]) {
             imagesByProduct[img.product_id] = [];
@@ -187,6 +197,7 @@ const handleSelectBatch = useCallback((id: string) => {
       
       setImageGroups(groups);
       setUnassignedImages(unassigned);
+      setInitialImageAssignments(initialAssignments);
       
       // Show group manager if there are unassigned images
       if (unassigned.length > 0) {
@@ -1335,71 +1346,131 @@ const handleSelectBatch = useCallback((id: string) => {
                 }
               }}
               onSaveGroups={async () => {
-                if (!selectedBatchId) return;
+                if (!selectedBatchId || isConfirmingGrouping) return;
                 
-                // GUARD: Filter out empty groups - never create products with 0 images
-                const validGroups = imageGroups.filter(group => {
-                  const validImages = group.images.filter(url => url && url.trim() !== '');
-                  return validImages.length > 0;
-                });
+                setIsConfirmingGrouping(true);
                 
-                // Count skipped empty groups
-                const skippedCount = imageGroups.length - validGroups.length;
-                
-                if (validGroups.length === 0) {
-                  toast.error('No valid image groups to save. Each product needs at least 1 image.');
-                  return;
-                }
-                
-                if (skippedCount > 0) {
-                  toast.warning(`Skipping ${skippedCount} empty group(s) - products must have at least 1 image.`);
-                }
-                
-                // Save groups to database - create products and assign images
-                toast.info('Saving groups...');
-                
-                let savedCount = 0;
-                const createdProductIds = new Set<string>(); // Track to prevent duplicates
-                
-                for (const group of validGroups) {
-                  // Triple-check valid images (critical guard)
-                  const validImages = group.images.filter(url => url && url.trim() !== '');
-                  if (validImages.length === 0) {
-                    console.warn('Skipping group with no valid images:', group.productId);
-                    continue;
+                try {
+                  // Build current state: image URL -> product ID (or null for unassigned)
+                  const currentAssignments = new Map<string, string | null>();
+                  
+                  // Track images currently in groups
+                  for (const group of imageGroups) {
+                    for (const url of group.images) {
+                      if (!url || url.trim() === '') continue;
+                      currentAssignments.set(url, group.productId);
+                    }
                   }
                   
-                  try {
-                    // USE THE ENFORCED SINGLE FUNCTION: createProductWithImages
-                    // This ensures product + images are created atomically
-                    const product = await createProductWithImages(validImages);
-                    
-                    if (product && !createdProductIds.has(product.id)) {
-                      createdProductIds.add(product.id);
-                      savedCount++;
-                    }
-                  } catch (error) {
-                    console.error('Error creating product with images:', error);
-                    // Continue to next group even if one fails
+                  // Track unassigned images
+                  for (const url of unassignedImages) {
+                    if (!url || url.trim() === '') continue;
+                    currentAssignments.set(url, null);
                   }
+                  
+                  // Detect changes: compare current vs initial
+                  const changedImages: { url: string; newProductId: string | null }[] = [];
+                  const newTempGroups: { productId: string; images: string[] }[] = [];
+                  
+                  for (const [url, currentProductId] of currentAssignments) {
+                    const initialProductId = initialImageAssignments.get(url) ?? null;
+                    
+                    // Skip if no change
+                    if (currentProductId === initialProductId) continue;
+                    
+                    // Skip if image no longer exists (was deleted during session)
+                    if (!url || url.trim() === '') continue;
+                    
+                    // Check if this is a temp group (new product needs to be created)
+                    const isNewTempGroup = currentProductId && currentProductId.startsWith('temp-');
+                    
+                    if (isNewTempGroup) {
+                      // Collect images for new temp groups
+                      const existingTemp = newTempGroups.find(g => g.productId === currentProductId);
+                      if (existingTemp) {
+                        existingTemp.images.push(url);
+                      } else {
+                        newTempGroups.push({ productId: currentProductId!, images: [url] });
+                      }
+                    } else {
+                      // Image moved to existing product or unassigned
+                      changedImages.push({ url, newProductId: currentProductId });
+                    }
+                  }
+                  
+                  // Count total changes
+                  const totalChanges = changedImages.length + newTempGroups.length;
+                  
+                  if (totalChanges === 0) {
+                    toast.info('No changes to save.');
+                    setShowGroupManager(false);
+                    setIsConfirmingGrouping(false);
+                    return;
+                  }
+                  
+                  toast.info(`Saving ${totalChanges} change(s)...`);
+                  
+                  // 1. Create new products for temp groups (in parallel)
+                  const createdProducts: string[] = [];
+                  const tempToRealProductMap = new Map<string, string>();
+                  
+                  if (newTempGroups.length > 0) {
+                    const createPromises = newTempGroups.map(async (tempGroup) => {
+                      const validImages = tempGroup.images.filter(url => url && url.trim() !== '');
+                      if (validImages.length === 0) return null;
+                      
+                      try {
+                        const product = await createProductWithImages(validImages);
+                        if (product) {
+                          tempToRealProductMap.set(tempGroup.productId, product.id);
+                          return product.id;
+                        }
+                      } catch (error) {
+                        console.error('Error creating product:', error);
+                      }
+                      return null;
+                    });
+                    
+                    const results = await Promise.all(createPromises);
+                    results.forEach(id => { if (id) createdProducts.push(id); });
+                  }
+                  
+                  // 2. Update image assignments for moves to existing products (in parallel)
+                  if (changedImages.length > 0) {
+                    const updatePromises = changedImages.map(async ({ url, newProductId }, index) => {
+                      try {
+                        await updateImageProductIdByUrl(url, newProductId, index);
+                      } catch (error) {
+                        console.error('Error updating image:', error);
+                      }
+                    });
+                    
+                    await Promise.all(updatePromises);
+                  }
+                  
+                  // 3. Clean up empty products (non-blocking)
+                  deleteEmptyProducts().catch(err => console.error('Cleanup error:', err));
+                  
+                  // Clear group management state
+                  setImageGroups([]);
+                  setUnassignedImages([]);
+                  setPendingImageUrls([]);
+                  setShowGroupManager(false);
+                  setInitialImageAssignments(new Map());
+                  
+                  // Clear image cache and refresh
+                  clearCache();
+                  await refetchProducts();
+                  
+                  const savedCount = createdProducts.length + (changedImages.length > 0 ? 1 : 0);
+                  toast.success(`Saved ${createdProducts.length} new product(s), updated ${changedImages.length} image(s).`);
+                  
+                } catch (error) {
+                  console.error('Error in Confirm Grouping:', error);
+                  toast.error('Failed to save grouping. Please try again.');
+                } finally {
+                  setIsConfirmingGrouping(false);
                 }
-                
-                // Handle unassigned images - keep them in database but not linked to products
-                // They're already saved, just not assigned
-                
-                // Clear group management state
-                setImageGroups([]);
-                setUnassignedImages([]);
-                setPendingImageUrls([]);
-                setShowGroupManager(false);
-                
-                // Clear image cache to force refresh
-                clearCache();
-                
-                // Refresh products
-                await refetchProducts();
-                
-                toast.success(`Saved ${savedCount} product(s) successfully`);
               }}
               showGroupManager={showGroupManager}
               onToggleGroupManager={() => setShowGroupManager(prev => !prev)}
@@ -1416,6 +1487,7 @@ const handleSelectBatch = useCallback((id: string) => {
               onSmartMatch={handleSmartMatch}
               isMatching={isMatching}
               matchingProgress={matchingProgress}
+              isConfirmingGrouping={isConfirmingGrouping}
               undoStackLength={undoStack.length}
               onGlobalUndo={handleGlobalUndo}
               lastUndoLabel={undoStack.length > 0 ? undoStack[undoStack.length - 1].label : undefined}

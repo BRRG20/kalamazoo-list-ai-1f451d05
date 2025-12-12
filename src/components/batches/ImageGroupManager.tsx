@@ -100,6 +100,7 @@ interface ImageGroupManagerProps {
   isMatching?: boolean;
   matchingProgress?: MatchingProgress;
   onOpenProduct?: (productId: string) => void;
+  isConfirmingGrouping?: boolean;
 }
 
 export function ImageGroupManager({
@@ -117,6 +118,7 @@ export function ImageGroupManager({
   isMatching,
   matchingProgress,
   onOpenProduct,
+  isConfirmingGrouping,
 }: ImageGroupManagerProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeSource, setActiveSource] = useState<{ type: 'group' | 'unassigned'; groupId?: string } | null>(null);
@@ -575,8 +577,15 @@ export function ImageGroupManager({
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
-            <Button size="sm" onClick={onSaveGroups}>
-              Confirm Grouping
+            <Button size="sm" onClick={onSaveGroups} disabled={isConfirmingGrouping}>
+              {isConfirmingGrouping ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Confirm Grouping'
+              )}
             </Button>
           </div>
         </div>

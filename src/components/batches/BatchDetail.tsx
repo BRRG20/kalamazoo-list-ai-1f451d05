@@ -123,6 +123,7 @@ interface BatchDetailProps {
   onSmartMatch?: () => Promise<void>;
   isMatching?: boolean;
   matchingProgress?: MatchingProgress;
+  isConfirmingGrouping?: boolean;
   // Global undo
   undoStackLength?: number;
   onGlobalUndo?: () => void;
@@ -196,6 +197,7 @@ export function BatchDetail({
   onSmartMatch,
   isMatching,
   matchingProgress,
+  isConfirmingGrouping,
   undoStackLength = 0,
   onGlobalUndo,
   lastUndoLabel,
@@ -1022,6 +1024,7 @@ export function BatchDetail({
               isMatching={isMatching}
               matchingProgress={matchingProgress}
               onOpenProduct={onEditProduct}
+              isConfirmingGrouping={isConfirmingGrouping}
             />
           </ErrorBoundary>
         ) : products.length === 0 ? (
