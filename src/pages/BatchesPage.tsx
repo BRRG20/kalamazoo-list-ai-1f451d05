@@ -1034,34 +1034,64 @@ const handleSelectBatch = useCallback((id: string) => {
 
   // Standalone handler for moving images by ID (used in birds eye view)
   const handleMoveImagesByIdStandalone = useCallback(async (imageIds: string[], targetProductId: string) => {
-    if (imageIds.length === 0) return;
+    // GUARD: Validate inputs
+    if (!imageIds || !Array.isArray(imageIds) || imageIds.length === 0) {
+      console.warn('handleMoveImagesByIdStandalone: No images to move');
+      return;
+    }
+    
+    if (!targetProductId || typeof targetProductId !== 'string') {
+      console.warn('handleMoveImagesByIdStandalone: Invalid target product ID');
+      return;
+    }
+    
+    // Filter out any undefined/null image IDs
+    const validImageIds = imageIds.filter(id => id && typeof id === 'string');
+    if (validImageIds.length === 0) {
+      console.warn('handleMoveImagesByIdStandalone: No valid image IDs after filtering');
+      return;
+    }
     
     try {
       // Get the count of images in the target product to set starting position
       const targetImages = await fetchImagesForProduct(targetProductId);
-      let nextPosition = targetImages.length;
+      let nextPosition = Array.isArray(targetImages) ? targetImages.length : 0;
 
-      for (const imageId of imageIds) {
+      let movedCount = 0;
+      for (const imageId of validImageIds) {
         const { error } = await supabase
           .from('images')
           .update({ product_id: targetProductId, position: nextPosition })
           .eq('id', imageId);
 
         if (error) {
-          console.error('Error moving image:', error);
+          console.error('Error moving image:', imageId, error);
           continue;
         }
+        movedCount++;
         nextPosition++;
       }
 
-      // Clear cache and refetch
+      if (movedCount === 0) {
+        toast.error('Failed to move images');
+        return;
+      }
+
+      // Clear cache first
       clearCache();
+      
+      // Refetch products
       await refetchProducts();
       
-      // AUTO-CLEANUP: Delete any source products that became empty
-      await deleteEmptyProducts();
+      // AUTO-CLEANUP: Delete any source products that became empty (with error handling)
+      try {
+        await deleteEmptyProducts();
+      } catch (cleanupError) {
+        console.error('Error during empty product cleanup:', cleanupError);
+        // Don't fail the whole operation if cleanup fails
+      }
       
-      toast.success(`${imageIds.length} image(s) moved`);
+      toast.success(`${movedCount} image(s) moved`);
     } catch (error) {
       console.error('Error moving images:', error);
       toast.error('Failed to move images');
@@ -1071,8 +1101,21 @@ const handleSelectBatch = useCallback((id: string) => {
   // Handler for creating a new product from selected image IDs (used in Birds Eye View)
   // This creates a REAL product in the database and moves images to it
   const handleCreateProductFromImageIds = useCallback(async (imageIds: string[]): Promise<string | null> => {
-    if (!selectedBatchId || imageIds.length === 0) {
+    // GUARD: Early validation
+    if (!selectedBatchId) {
+      console.warn('handleCreateProductFromImageIds: No batch selected');
+      return null;
+    }
+    
+    if (!imageIds || !Array.isArray(imageIds) || imageIds.length === 0) {
       toast.warning('No images selected');
+      return null;
+    }
+    
+    // Filter out any undefined/null image IDs
+    const validImageIds = imageIds.filter(id => id && typeof id === 'string');
+    if (validImageIds.length === 0) {
+      toast.warning('No valid images selected');
       return null;
     }
 
@@ -1109,31 +1152,42 @@ const handleSelectBatch = useCallback((id: string) => {
       const newProductId = productData.id;
 
       // Step 3: Move all selected images to the new product
+      // Use a single batch update for efficiency
       let movedCount = 0;
-      for (let i = 0; i < imageIds.length; i++) {
+      for (let i = 0; i < validImageIds.length; i++) {
         const { error } = await supabase
           .from('images')
           .update({ product_id: newProductId, position: i })
-          .eq('id', imageIds[i]);
+          .eq('id', validImageIds[i]);
 
         if (!error) {
           movedCount++;
         } else {
-          console.error('Error moving image:', error);
+          console.error('Error moving image:', validImageIds[i], error);
         }
       }
 
       // Step 4: Safety check - delete product if no images were moved
       if (movedCount === 0) {
+        console.error('SAFETY: No images moved, deleting empty product');
         await supabase.from('products').delete().eq('id', newProductId);
         toast.error('Failed to move images to new product');
         return null;
       }
 
-      // Step 5: Clean up empty source products
+      // Step 5: Clear cache first
       clearCache();
+      
+      // Step 6: Refetch products to update UI
       await refetchProducts();
-      await deleteEmptyProducts();
+      
+      // Step 7: Clean up empty source products AFTER refetch completes
+      try {
+        await deleteEmptyProducts();
+      } catch (cleanupError) {
+        console.error('Error during empty product cleanup:', cleanupError);
+        // Don't fail the whole operation if cleanup fails
+      }
 
       console.log(`Created product ${newProductId} with ${movedCount} images from Birds Eye View`);
       return newProductId;
@@ -1143,6 +1197,7 @@ const handleSelectBatch = useCallback((id: string) => {
       return null;
     }
   }, [selectedBatchId, clearCache, refetchProducts, deleteEmptyProducts]);
+
   
   const handleReorderProductImages = useCallback(async (productId: string, imageIds: string[]) => {
     // Update positions for all images in the new order

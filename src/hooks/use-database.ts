@@ -443,44 +443,56 @@ export function useProducts(batchId: string | null) {
   const deleteEmptyProducts = async (): Promise<number> => {
     if (!batchId) return 0;
     
-    // Find all products in this batch
-    const { data: batchProducts, error: fetchError } = await supabase
-      .from('products')
-      .select('id')
-      .eq('batch_id', batchId)
-      .is('deleted_at', null);
-    
-    if (fetchError || !batchProducts) return 0;
-    
-    let deletedCount = 0;
-    
-    for (const product of batchProducts) {
-      // Check image count for this product
-      const { count, error: countError } = await supabase
-        .from('images')
-        .select('id', { count: 'exact', head: true })
-        .eq('product_id', product.id);
+    try {
+      // Find all products in this batch
+      const { data: batchProducts, error: fetchError } = await supabase
+        .from('products')
+        .select('id')
+        .eq('batch_id', batchId)
+        .is('deleted_at', null);
       
-      if (!countError && count === 0) {
-        // This product has 0 images - delete it
-        const { error: deleteError } = await supabase
-          .from('products')
-          .delete()
-          .eq('id', product.id);
+      if (fetchError || !batchProducts || !Array.isArray(batchProducts)) {
+        console.error('Error fetching products for cleanup:', fetchError);
+        return 0;
+      }
+      
+      let deletedCount = 0;
+      
+      for (const product of batchProducts) {
+        if (!product || !product.id) continue;
         
-        if (!deleteError) {
-          deletedCount++;
-          console.log(`Auto-deleted empty product: ${product.id}`);
+        // Check image count for this product
+        const { count, error: countError } = await supabase
+          .from('images')
+          .select('id', { count: 'exact', head: true })
+          .eq('product_id', product.id);
+        
+        if (!countError && count === 0) {
+          // This product has 0 images - delete it
+          const { error: deleteError } = await supabase
+            .from('products')
+            .delete()
+            .eq('id', product.id);
+          
+          if (!deleteError) {
+            deletedCount++;
+            console.log(`Auto-deleted empty product: ${product.id}`);
+          } else {
+            console.error('Error deleting empty product:', product.id, deleteError);
+          }
         }
       }
+      
+      if (deletedCount > 0) {
+        // Refresh products list
+        await fetchProducts();
+      }
+      
+      return deletedCount;
+    } catch (error) {
+      console.error('Error in deleteEmptyProducts:', error);
+      return 0;
     }
-    
-    if (deletedCount > 0) {
-      // Refresh products list
-      await fetchProducts();
-    }
-    
-    return deletedCount;
   };
 
   return { 
