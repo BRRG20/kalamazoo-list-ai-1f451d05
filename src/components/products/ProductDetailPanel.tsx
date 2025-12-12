@@ -90,10 +90,12 @@ export function ProductDetailPanel({
   const [isApplyingFixes, setIsApplyingFixes] = useState(false);
   const [isAutoScrolling, setIsAutoScrolling] = useState(false);
   const [isScrollPaused, setIsScrollPaused] = useState(false);
+  const [scrollSpeed, setScrollSpeed] = useState<'slow' | 'medium' | 'fast'>('medium');
   const recognitionRef = useRef<any>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const autoScrollIntervalRef = useRef<number | null>(null);
   const hasAutoStartedRef = useRef(false);
+  const hasAutoScrollStartedRef = useRef(false);
 
   // Settings with defaults
   const autoStartRecording = settings?.auto_start_recording ?? true;
@@ -144,24 +146,47 @@ export function ProductDetailPanel({
     }
   }, [autoStartRecording, product.id]);
 
-  // Auto-scroll functionality
+  // Auto-scroll functionality - reset when product changes
   useEffect(() => {
-    if (autoScrollReview && !isAutoScrolling && !isScrollPaused) {
-      startAutoScroll();
+    hasAutoScrollStartedRef.current = false;
+    setIsScrollPaused(false);
+    stopAutoScroll();
+  }, [product.id]);
+
+  // Start auto-scroll when enabled
+  useEffect(() => {
+    if (autoScrollReview && !hasAutoScrollStartedRef.current && !isAutoScrolling) {
+      hasAutoScrollStartedRef.current = true;
+      const timer = setTimeout(() => {
+        startAutoScroll();
+      }, 800); // Delay to let content render
+      return () => clearTimeout(timer);
     }
-    return () => stopAutoScroll();
   }, [autoScrollReview, product.id]);
 
-  const startAutoScroll = () => {
-    if (autoScrollIntervalRef.current) return;
+  // Speed settings: slow=20px/s, medium=40px/s, fast=70px/s
+  const getScrollPixelsPerSecond = useCallback(() => {
+    switch (scrollSpeed) {
+      case 'slow': return 20;
+      case 'medium': return 40;
+      case 'fast': return 70;
+      default: return 40;
+    }
+  }, [scrollSpeed]);
+
+  const startAutoScroll = useCallback(() => {
+    if (autoScrollIntervalRef.current) {
+      clearInterval(autoScrollIntervalRef.current);
+    }
     setIsAutoScrolling(true);
+    setIsScrollPaused(false);
     
-    const scrollSpeed = 30; // pixels per second
+    const pxPerSecond = getScrollPixelsPerSecond();
     const intervalMs = 50;
-    const pxPerInterval = (scrollSpeed * intervalMs) / 1000;
+    const pxPerInterval = (pxPerSecond * intervalMs) / 1000;
     
     autoScrollIntervalRef.current = window.setInterval(() => {
-      if (contentRef.current && !isScrollPaused) {
+      if (contentRef.current) {
         const { scrollTop, scrollHeight, clientHeight } = contentRef.current;
         if (scrollTop + clientHeight >= scrollHeight - 5) {
           // Reached bottom, stop
@@ -171,32 +196,48 @@ export function ProductDetailPanel({
         }
       }
     }, intervalMs);
-  };
+  }, [getScrollPixelsPerSecond]);
 
-  const stopAutoScroll = () => {
+  const stopAutoScroll = useCallback(() => {
     if (autoScrollIntervalRef.current) {
       clearInterval(autoScrollIntervalRef.current);
       autoScrollIntervalRef.current = null;
     }
     setIsAutoScrolling(false);
-  };
+  }, []);
 
-  const handleManualScroll = () => {
-    // User manually scrolled, stop auto-scroll
+  const handleManualScroll = useCallback(() => {
+    // User manually scrolled, pause auto-scroll
     if (isAutoScrolling && !isScrollPaused) {
-      stopAutoScroll();
+      setIsScrollPaused(true);
+      if (autoScrollIntervalRef.current) {
+        clearInterval(autoScrollIntervalRef.current);
+        autoScrollIntervalRef.current = null;
+      }
     }
-  };
+  }, [isAutoScrolling, isScrollPaused]);
 
-  const toggleScrollPause = () => {
+  const toggleScrollPause = useCallback(() => {
     if (isScrollPaused) {
       setIsScrollPaused(false);
       startAutoScroll();
     } else {
       setIsScrollPaused(true);
-      stopAutoScroll();
+      if (autoScrollIntervalRef.current) {
+        clearInterval(autoScrollIntervalRef.current);
+        autoScrollIntervalRef.current = null;
+      }
     }
-  };
+  }, [isScrollPaused, startAutoScroll]);
+
+  // Update scroll speed and restart if scrolling
+  const changeScrollSpeed = useCallback((newSpeed: 'slow' | 'medium' | 'fast') => {
+    setScrollSpeed(newSpeed);
+    if (isAutoScrolling && !isScrollPaused) {
+      // Restart with new speed
+      setTimeout(() => startAutoScroll(), 50);
+    }
+  }, [isAutoScrolling, isScrollPaused, startAutoScroll]);
 
   const updateField = <K extends keyof Product>(field: K, value: Product[K]) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -825,22 +866,54 @@ export function ProductDetailPanel({
             
             {/* Auto-scroll control */}
             {autoScrollReview && (
-              <div className="flex items-center justify-end gap-2">
+              <div className="flex items-center justify-between gap-2 bg-muted/50 rounded-lg p-2 border border-border">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Speed:</span>
+                  <div className="flex items-center gap-1 border border-border rounded-md p-0.5 bg-background">
+                    <Button
+                      variant={scrollSpeed === 'slow' ? 'default' : 'ghost'}
+                      size="sm"
+                      onClick={() => changeScrollSpeed('slow')}
+                      className="h-6 px-2 text-xs"
+                      type="button"
+                    >
+                      Slow
+                    </Button>
+                    <Button
+                      variant={scrollSpeed === 'medium' ? 'default' : 'ghost'}
+                      size="sm"
+                      onClick={() => changeScrollSpeed('medium')}
+                      className="h-6 px-2 text-xs"
+                      type="button"
+                    >
+                      Medium
+                    </Button>
+                    <Button
+                      variant={scrollSpeed === 'fast' ? 'default' : 'ghost'}
+                      size="sm"
+                      onClick={() => changeScrollSpeed('fast')}
+                      className="h-6 px-2 text-xs"
+                      type="button"
+                    >
+                      Fast
+                    </Button>
+                  </div>
+                </div>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={toggleScrollPause}
-                  className="gap-1"
+                  className="gap-1 h-7"
                 >
                   {isScrollPaused || !isAutoScrolling ? (
                     <>
                       <Play className="w-3 h-3" />
-                      Resume Scroll
+                      Resume
                     </>
                   ) : (
                     <>
                       <Pause className="w-3 h-3" />
-                      Pause Scroll
+                      Pause
                     </>
                   )}
                 </Button>
