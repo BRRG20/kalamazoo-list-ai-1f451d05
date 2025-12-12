@@ -49,7 +49,7 @@ const UNSET_VALUE = '__unset__';
 const departments: Department[] = ['Women', 'Men', 'Unisex', 'Kids'];
 const eras: Era[] = ['80s', '90s', 'Y2K', 'Modern'];
 const conditions: Condition[] = ['Excellent', 'Very good', 'Good', 'Fair'];
-const garmentTypes = ['sweater', 'jumper', 'hoodie', 't-shirt', 'shirt', 'blouse', 'jeans', 'trousers', 'dress', 'skirt', 'jacket', 'coat', 'fleece', 'cardigan', 'vest', 'shorts'];
+const garmentTypes = ['sweater', 'jumper', 'hoodie', 't-shirt', 'shirt', 'blouse', 'jeans', 'trousers', 'dress', 'skirt', 'jacket', 'coat', 'fleece', 'cardigan', 'vest', 'shorts', 'flannel shirt'];
 const fits = ['oversized', 'boxy', 'regular', 'slim', 'cropped', 'relaxed', 'fitted'];
 const patterns = ['plain', 'striped', 'graphic', 'fair isle', 'cable knit', 'argyle', 'floral', 'abstract', 'checked', 'plaid'];
 
@@ -98,6 +98,7 @@ export function ProductDetailPanel({
       material: product.material,
       condition: product.condition,
       flaws: product.flaws,
+      pit_to_pit: product.pit_to_pit,
       made_in: product.made_in,
       colour_main: product.colour_main,
       colour_secondary: product.colour_secondary,
@@ -388,6 +389,14 @@ export function ProductDetailPanel({
         fieldUpdates.garment_type = parsed.garment_type;
         updatedFields.push('garment type');
       }
+      if (parsed.pit_to_pit) {
+        fieldUpdates.pit_to_pit = parsed.pit_to_pit;
+        updatedFields.push('pit to pit');
+      }
+      if (parsed.made_in) {
+        fieldUpdates.made_in = parsed.made_in;
+        updatedFields.push('made in');
+      }
       if (parsed.notes) {
         fieldUpdates.notes = (formData.notes || '') + '\n' + parsed.notes;
         updatedFields.push('notes');
@@ -416,11 +425,51 @@ export function ProductDetailPanel({
         }
       }
       
-      // Update form data
-      setFormData(prev => ({ ...prev, ...fieldUpdates }));
+      // Update form data first
+      const updatedFormData = { ...formData, ...fieldUpdates };
+      setFormData(updatedFormData);
       
       // Also add transcript to raw input for reference
-      updateField('raw_input_text', (formData.raw_input_text || '') + '\n' + voiceTranscript);
+      updatedFormData.raw_input_text = (formData.raw_input_text || '') + '\n' + voiceTranscript;
+      
+      // Auto-regenerate descriptions with the updated product data
+      if (updatedFields.length > 0) {
+        try {
+          toast.info('Regenerating descriptions...');
+          const listingResponse = await fetch(
+            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-listing`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+              },
+              body: JSON.stringify({
+                product: { ...product, ...updatedFormData },
+                imageUrls: images.slice(0, 2).map(img => img.url),
+              }),
+            }
+          );
+          
+          if (listingResponse.ok) {
+            const { generated } = await listingResponse.json();
+            if (generated) {
+              setFormData(prev => ({
+                ...prev,
+                ...fieldUpdates,
+                raw_input_text: updatedFormData.raw_input_text,
+                description_style_a: generated.description_style_a || prev.description_style_a,
+                description_style_b: generated.description_style_b || prev.description_style_b,
+              }));
+              updatedFields.push('descriptions regenerated');
+            }
+          } else {
+            console.error('Failed to regenerate descriptions');
+          }
+        } catch (descError) {
+          console.error('Error regenerating descriptions:', descError);
+        }
+      }
       
       toast.success(`Updated: ${updatedFields.join(', ')}`);
       setVoiceTranscript('');
@@ -912,6 +961,15 @@ export function ProductDetailPanel({
                         placeholder="e.g. Best for UK 12–14"
                       />
                     </div>
+                  </div>
+
+                  <div>
+                    <Label>Pit to Pit</Label>
+                    <Input
+                      value={formData.pit_to_pit || ''}
+                      onChange={(e) => updateField('pit_to_pit', e.target.value)}
+                      placeholder="e.g. 23 inches"
+                    />
                   </div>
                 </div>
               </section>

@@ -48,6 +48,7 @@ export interface Product {
   material: string;
   condition: Condition;
   flaws: string;
+  pit_to_pit: string;
   made_in: string;
   notes: string;
   shopify_tags: string;

@@ -33,6 +33,7 @@ FIELD MAPPINGS (be flexible with phrasing):
 - "price" / "pounds" / "£" / "quid" / numbers with context → price (number only)
 - "size" / "label size" / "tagged" → size_label (e.g. "M", "L", "UK 12")
 - "recommended" / "fits like" / "would fit" / "true to size" → size_recommended
+- "pit to pit" / "ptp" / "p2p" / "chest" / "chest measurement" / "across the chest" → pit_to_pit (e.g. "23 inches", "22in")
 - "condition" / "quality" / "state" → condition (Excellent, Very good, Good, Fair)
 - "flaw" / "wear" / "damage" / "hole" / "stain" / "bobbling" / "fading" → append to condition in parentheses
 - "women" / "ladies" / "men" / "unisex" / "kids" → department (Women, Men, Unisex, Kids)
@@ -44,6 +45,8 @@ FIELD MAPPINGS (be flexible with phrasing):
 - "pattern" / "striped" / "checked" / "plain" / "graphic" → pattern
 - "fit" / "oversized" / "slim" / "boxy" / "relaxed" → fit
 - "garment" / "type" / clothing items (shirt, jumper, jacket, etc.) → garment_type
+- "made in" / "manufactured in" / "country" / "from" (country context) → made_in
+- "style" / "aesthetic" / "vibe" → style_notes (e.g. "streetwear", "preppy", "grunge")
 
 DESCRIPTION CONTENT:
 - If user says "description" / "add to description" / "for the description" followed by text → description_text
@@ -64,6 +67,12 @@ Output: {"price": 25}
 
 Input: "Women's, 90s era, condition very good with minor bobbling"
 Output: {"department": "Women", "era": "90s", "condition": "Very good (minor bobbling)"}
+
+Input: "Pit to pit is 23 inches, brand Nike, label size large"
+Output: {"pit_to_pit": "23 inches", "brand": "Nike", "size_label": "Large"}
+
+Input: "Made in USA, material 100% cotton"
+Output: {"made_in": "USA", "material": "100% cotton"}
 
 Input: "For the description this is a beautiful authentic vintage piece from the nineties"
 Output: {"description_text": "This is a beautiful authentic vintage piece from the nineties."}
