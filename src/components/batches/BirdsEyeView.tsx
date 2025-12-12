@@ -984,7 +984,7 @@ export function BirdsEyeView({
           )}
           
           {selectedImages.size > 0 && (
-            <div className="flex items-center gap-2 ml-4">
+            <div className="flex items-center gap-2 ml-4 px-3 py-1.5 bg-primary/10 rounded-lg border border-primary/20">
               <span className="text-sm font-medium text-primary">
                 {selectedImages.size} image(s) selected
               </span>
@@ -1002,8 +1002,27 @@ export function BirdsEyeView({
                   Delete
                 </Button>
               )}
+              {/* CREATE PRODUCT FROM SELECTION BUTTON */}
+              {onCreateNewProduct && (
+                <Button 
+                  variant="default" 
+                  size="sm" 
+                  onClick={() => {
+                    const imageIds = Array.from(selectedImages.keys());
+                    if (imageIds.length > 0) {
+                      onCreateNewProduct(imageIds);
+                      toast.success(`Created new product with ${imageIds.length} image${imageIds.length > 1 ? 's' : ''}`);
+                      setSelectedImages(new Map());
+                    }
+                  }}
+                  className="bg-green-600 hover:bg-green-700 text-white gap-1.5"
+                >
+                  <Plus className="w-4 h-4" />
+                  Create product from selection
+                </Button>
+              )}
               <span className="text-xs text-muted-foreground">
-                Drag or click a product to move
+                or drag to a product
               </span>
             </div>
           )}
