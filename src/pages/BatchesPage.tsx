@@ -1001,19 +1001,22 @@ const handleSelectBatch = useCallback((id: string) => {
     try {
       // Get the count of images in the target product to set starting position
       const targetImages = await fetchImagesForProduct(targetProductId);
-      let nextPosition = targetImages.length;
+      const startPosition = targetImages.length;
 
-      for (const imageId of imageIds) {
-        const { error } = await supabase
+      // Move all images in PARALLEL
+      const updatePromises = imageIds.map((imageId, index) =>
+        supabase
           .from('images')
-          .update({ product_id: targetProductId, position: nextPosition })
-          .eq('id', imageId);
+          .update({ product_id: targetProductId, position: startPosition + index })
+          .eq('id', imageId)
+      );
+      
+      const results = await Promise.all(updatePromises);
+      const movedCount = results.filter(r => !r.error).length;
 
-        if (error) {
-          console.error('Error moving image:', error);
-          continue;
-        }
-        nextPosition++;
+      if (movedCount === 0) {
+        toast.error('Failed to move images');
+        return;
       }
 
       // Refresh images for both products
@@ -1022,10 +1025,10 @@ const handleSelectBatch = useCallback((id: string) => {
       setEditingProductImages(updatedImages);
       await refetchProducts();
       
-      // AUTO-CLEANUP: Delete the source product if it became empty
-      await deleteEmptyProducts();
+      // AUTO-CLEANUP: Delete the source product if it became empty (background)
+      deleteEmptyProducts().catch(err => console.error('Cleanup error:', err));
       
-      toast.success(`${imageIds.length} image(s) moved successfully`);
+      toast.success(`${movedCount} image(s) moved`);
     } catch (error) {
       console.error('Error moving images:', error);
       toast.error('Failed to move images');
@@ -1055,41 +1058,30 @@ const handleSelectBatch = useCallback((id: string) => {
     try {
       // Get the count of images in the target product to set starting position
       const targetImages = await fetchImagesForProduct(targetProductId);
-      let nextPosition = Array.isArray(targetImages) ? targetImages.length : 0;
+      const startPosition = Array.isArray(targetImages) ? targetImages.length : 0;
 
-      let movedCount = 0;
-      for (const imageId of validImageIds) {
-        const { error } = await supabase
+      // Move all images in PARALLEL
+      const updatePromises = validImageIds.map((imageId, index) =>
+        supabase
           .from('images')
-          .update({ product_id: targetProductId, position: nextPosition })
-          .eq('id', imageId);
-
-        if (error) {
-          console.error('Error moving image:', imageId, error);
-          continue;
-        }
-        movedCount++;
-        nextPosition++;
-      }
+          .update({ product_id: targetProductId, position: startPosition + index })
+          .eq('id', imageId)
+      );
+      
+      const results = await Promise.all(updatePromises);
+      const movedCount = results.filter(r => !r.error).length;
 
       if (movedCount === 0) {
         toast.error('Failed to move images');
         return;
       }
 
-      // Clear cache first
+      // Clear cache and refetch
       clearCache();
-      
-      // Refetch products
       await refetchProducts();
       
-      // AUTO-CLEANUP: Delete any source products that became empty (with error handling)
-      try {
-        await deleteEmptyProducts();
-      } catch (cleanupError) {
-        console.error('Error during empty product cleanup:', cleanupError);
-        // Don't fail the whole operation if cleanup fails
-      }
+      // AUTO-CLEANUP: Delete any source products that became empty (background)
+      deleteEmptyProducts().catch(err => console.error('Cleanup error:', err));
       
       toast.success(`${movedCount} image(s) moved`);
     } catch (error) {
