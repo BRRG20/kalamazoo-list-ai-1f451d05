@@ -904,10 +904,8 @@ export function BatchDetail({
                     defaultValue=""
                     onChange={(e) => {
                       const count = parseInt(e.target.value);
-                      console.log('Bulk select triggered:', count, 'filteredProducts:', filteredProducts.length);
                       if (count > 0 && onBulkSelectProducts) {
                         const productIdsToSelect = filteredProducts.slice(0, count).map(p => p.id);
-                        console.log('Selecting products:', productIdsToSelect.length);
                         onBulkSelectProducts(productIdsToSelect);
                         // Reset dropdown by incrementing key
                         setBulkSelectKey(k => k + 1);
@@ -928,8 +926,12 @@ export function BatchDetail({
                     variant="ghost" 
                     size="sm" 
                     onClick={() => {
-                      console.log('Select all clicked, products:', products.length);
-                      onSelectAllProducts();
+                      if (onBulkSelectProducts) {
+                        // Use bulk select with all filtered products to ensure consistency
+                        onBulkSelectProducts(filteredProducts.map(p => p.id));
+                      } else {
+                        onSelectAllProducts();
+                      }
                     }} 
                     type="button"
                   >
@@ -938,10 +940,7 @@ export function BatchDetail({
                   <Button 
                     variant="ghost" 
                     size="sm" 
-                    onClick={() => {
-                      console.log('Clear clicked');
-                      onDeselectAllProducts();
-                    }} 
+                    onClick={onDeselectAllProducts} 
                     type="button"
                   >
                     Clear

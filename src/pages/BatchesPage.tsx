@@ -730,6 +730,29 @@ const handleSelectBatch = useCallback((id: string) => {
     setSelectedProductIds(new Set(productIds));
   }, []);
 
+  // Sync selection with current products - remove any stale IDs that no longer exist
+  useEffect(() => {
+    if (products.length === 0) {
+      setSelectedProductIds(new Set());
+      return;
+    }
+    
+    const validProductIds = new Set(products.map(p => p.id));
+    setSelectedProductIds(prev => {
+      const validSelection = new Set<string>();
+      prev.forEach(id => {
+        if (validProductIds.has(id)) {
+          validSelection.add(id);
+        }
+      });
+      // Only update if something changed
+      if (validSelection.size !== prev.size) {
+        return validSelection;
+      }
+      return prev;
+    });
+  }, [products]);
+
   const handleSaveProduct = useCallback(async (updates: Partial<Product>) => {
     if (!editingProductId) return;
     
