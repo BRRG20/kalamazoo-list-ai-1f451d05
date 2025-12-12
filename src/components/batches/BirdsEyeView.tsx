@@ -1313,7 +1313,7 @@ export function BirdsEyeView({
             rowCount={Math.max(0, gridConfig.rowCount)}
             rowHeight={Math.max(50, gridConfig.rowHeight + gridConfig.gap)}
             width={Math.max(100, containerSize.width)}
-            className="scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent"
+            className="scrollbar-visible"
             overscanRowCount={2}
             overscanColumnCount={1}
           >
