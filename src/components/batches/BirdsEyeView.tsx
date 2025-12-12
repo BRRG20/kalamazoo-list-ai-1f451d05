@@ -321,20 +321,25 @@ export function BirdsEyeView({
   const [isCreateNewDropTarget, setIsCreateNewDropTarget] = useState(false);
   const [isMergingProducts, setIsMergingProducts] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [isMutating, setIsMutating] = useState(false);
   
   const containerRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<Grid>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+  const resizeTimeoutRef = useRef<number | null>(null);
 
-  // Measure container for virtualized grid
+  // Measure container for virtualized grid - debounced to prevent rapid updates
   useEffect(() => {
     const updateSize = () => {
       if (containerRef.current) {
         const width = containerRef.current.clientWidth;
         const height = containerRef.current.clientHeight;
-        // Only update if values are valid and changed
+        // Only update if values are valid and changed significantly (> 5px)
         if (width > 0 && height > 0) {
           setContainerSize(prev => {
-            if (prev.width !== width || prev.height !== height) {
+            const widthDiff = Math.abs(prev.width - width);
+            const heightDiff = Math.abs(prev.height - height);
+            if (widthDiff > 5 || heightDiff > 5) {
               return { width, height };
             }
             return prev;
@@ -343,15 +348,27 @@ export function BirdsEyeView({
       }
     };
     
+    const debouncedUpdateSize = () => {
+      if (resizeTimeoutRef.current) {
+        window.clearTimeout(resizeTimeoutRef.current);
+      }
+      resizeTimeoutRef.current = window.setTimeout(updateSize, 100);
+    };
+    
+    // Initial measurement
     updateSize();
-    window.addEventListener('resize', updateSize);
+    
+    window.addEventListener('resize', debouncedUpdateSize);
     
     // Also measure on next frame to catch delayed layout
     const raf = requestAnimationFrame(updateSize);
     
     return () => {
-      window.removeEventListener('resize', updateSize);
+      window.removeEventListener('resize', debouncedUpdateSize);
       cancelAnimationFrame(raf);
+      if (resizeTimeoutRef.current) {
+        window.clearTimeout(resizeTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -482,8 +499,10 @@ export function BirdsEyeView({
     }
   }, [onDeleteEmptyProducts, emptyProductIds]);
 
-  // Handle merging selected products
+  // Handle merging selected products (with mutation guard)
   const handleMergeProducts = useCallback(async () => {
+    if (isMutating) return; // Prevent double operations
+    
     if (safeSelectedProductIds.size < 2) {
       toast.error('Select at least 2 products to merge');
       return;
@@ -494,6 +513,7 @@ export function BirdsEyeView({
       return;
     }
     
+    setIsMutating(true);
     setIsMergingProducts(true);
     
     try {
@@ -512,7 +532,6 @@ export function BirdsEyeView({
       
       if (allImageIds.length === 0) {
         toast.error('Selected products have no images');
-        setIsMergingProducts(false);
         return;
       }
       
@@ -534,8 +553,9 @@ export function BirdsEyeView({
       toast.error('Failed to merge products');
     } finally {
       setIsMergingProducts(false);
+      setIsMutating(false);
     }
-  }, [safeSelectedProductIds, safeProductImages, onCreateNewProduct, onMergeProducts, onDeselectAllProducts]);
+  }, [isMutating, safeSelectedProductIds, safeProductImages, onCreateNewProduct, onMergeProducts, onDeselectAllProducts]);
 
   const toggleImageSelection = useCallback((imageId: string, productId: string) => {
     setSelectedImages(prev => {
@@ -813,32 +833,40 @@ export function BirdsEyeView({
               }}
               onDrop={async (e) => {
                 e.preventDefault();
+                if (isMutating) return; // Prevent during mutations
                 if (selectedImages.size > 0 && onCreateNewProduct) {
                   const imageIds = Array.from(selectedImages.keys());
                   const count = imageIds.length;
                   setSelectedImages(new Map());
+                  setIsMutating(true);
                   try {
                     await onCreateNewProduct(imageIds);
                     toast.success(`Created new product with ${count} image${count > 1 ? 's' : ''}`);
                   } catch (error) {
                     console.error('Failed to create product from drop:', error);
                     toast.error('Failed to create product');
+                  } finally {
+                    setIsMutating(false);
                   }
                 }
                 setIsCreateNewDropTarget(false);
                 setDraggedImageData(null);
               }}
               onClick={async () => {
+                if (isMutating) return; // Prevent during mutations
                 if (selectedImages.size > 0 && onCreateNewProduct) {
                   const imageIds = Array.from(selectedImages.keys());
                   const count = imageIds.length;
                   setSelectedImages(new Map());
+                  setIsMutating(true);
                   try {
                     await onCreateNewProduct(imageIds);
                     toast.success(`Created new product with ${count} image${count > 1 ? 's' : ''}`);
                   } catch (error) {
                     console.error('Failed to create product from click:', error);
                     toast.error('Failed to create product');
+                  } finally {
+                    setIsMutating(false);
                   }
                 }
               }}
@@ -941,6 +969,7 @@ export function BirdsEyeView({
     safeSelectedProductIds,
     gridConfig,
     isCreateNewDropTarget,
+    isMutating,
     onToggleProductSelection,
     onCreateNewProduct,
     onDeleteImage,
@@ -1002,14 +1031,14 @@ export function BirdsEyeView({
             </div>
           )}
           
-          {/* Merge Products button - NEW */}
+          {/* Merge Products button */}
           {safeSelectedProductIds.size >= 2 && onCreateNewProduct && (
             <Button
               variant="default"
               size="sm"
               className="h-8 gap-1.5 bg-green-600 hover:bg-green-700 text-white"
               onClick={handleMergeProducts}
-              disabled={isMergingProducts}
+              disabled={isMergingProducts || isMutating}
             >
               {isMergingProducts ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -1161,12 +1190,15 @@ export function BirdsEyeView({
                 <Button 
                   variant="default" 
                   size="sm" 
+                  disabled={isMutating}
                   onClick={async () => {
+                    if (isMutating) return;
                     const imageIds = Array.from(selectedImages.keys());
                     if (imageIds.length > 0) {
                       // Clear selection immediately for UX
                       const count = imageIds.length;
                       setSelectedImages(new Map());
+                      setIsMutating(true);
                       try {
                         // Call the handler (async)
                         await onCreateNewProduct(imageIds);
@@ -1174,12 +1206,18 @@ export function BirdsEyeView({
                       } catch (error) {
                         console.error('Failed to create product from selection:', error);
                         toast.error('Failed to create product');
+                      } finally {
+                        setIsMutating(false);
                       }
                     }
                   }}
                   className="bg-green-600 hover:bg-green-700 text-white gap-1.5"
                 >
-                  <Plus className="w-4 h-4" />
+                  {isMutating ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Plus className="w-4 h-4" />
+                  )}
                   Create product from selection
                 </Button>
               )}
@@ -1206,8 +1244,12 @@ export function BirdsEyeView({
         </Button>
       </div>
 
-      {/* Virtualized Grid of products */}
-      <div ref={containerRef} className="flex-1 p-4 overflow-hidden">
+      {/* Virtualized Grid of products - dedicated scroll container */}
+      <div 
+        ref={containerRef} 
+        className="flex-1 p-4 overflow-hidden"
+        style={{ minHeight: 0 }} // Prevents flex item from overflowing
+      >
         {filteredProducts.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
             <p>{searchQuery ? 'No products match your search' : 'No products found'}</p>
@@ -1217,8 +1259,9 @@ export function BirdsEyeView({
               </Button>
             )}
           </div>
-        ) : containerSize.width > 0 && containerSize.height > 0 && gridConfig.columnCount > 0 && gridConfig.rowCount >= 0 && (
+        ) : containerSize.width > 0 && containerSize.height > 0 && gridConfig.columnCount > 0 && gridConfig.rowCount >= 0 ? (
           <Grid
+            ref={gridRef}
             columnCount={Math.max(1, gridConfig.columnCount)}
             columnWidth={Math.max(50, gridConfig.columnWidth + gridConfig.gap)}
             height={Math.max(100, containerSize.height - 32)}
@@ -1226,9 +1269,15 @@ export function BirdsEyeView({
             rowHeight={Math.max(50, gridConfig.rowHeight + gridConfig.gap)}
             width={Math.max(100, containerSize.width)}
             className="scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent"
+            overscanRowCount={2}
+            overscanColumnCount={1}
           >
             {Cell}
           </Grid>
+        ) : (
+          <div className="flex items-center justify-center h-32">
+            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+          </div>
         )}
       </div>
 
