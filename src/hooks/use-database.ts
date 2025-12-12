@@ -52,6 +52,7 @@ function mapProduct(row: any): Product {
     material: row.material || '',
     condition: (row.condition || '') as Condition,
     flaws: row.flaws || '',
+    pit_to_pit: row.pit_to_pit || '',
     made_in: row.made_in || '',
     notes: row.notes || '',
     shopify_tags: row.shopify_tags || '',

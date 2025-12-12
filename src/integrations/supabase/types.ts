@@ -166,6 +166,7 @@ export type Database = {
           material: string | null
           notes: string | null
           pattern: string | null
+          pit_to_pit: string | null
           price: number | null
           raw_input_text: string | null
           shopify_handle: string | null
@@ -204,6 +205,7 @@ export type Database = {
           material?: string | null
           notes?: string | null
           pattern?: string | null
+          pit_to_pit?: string | null
           price?: number | null
           raw_input_text?: string | null
           shopify_handle?: string | null
@@ -242,6 +244,7 @@ export type Database = {
           material?: string | null
           notes?: string | null
           pattern?: string | null
+          pit_to_pit?: string | null
           price?: number | null
           raw_input_text?: string | null
           shopify_handle?: string | null

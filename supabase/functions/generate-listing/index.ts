@@ -33,6 +33,7 @@ function validateProduct(product: unknown): { valid: boolean; error?: string; sa
     pattern: sanitizeString(p.pattern),
     size_label: sanitizeString(p.size_label),
     size_recommended: sanitizeString(p.size_recommended),
+    pit_to_pit: sanitizeString(p.pit_to_pit),
     fit: sanitizeString(p.fit),
     material: sanitizeString(p.material),
     made_in: sanitizeString(p.made_in),
@@ -110,16 +111,19 @@ Short, clean, factual. State garment type, colour, key features, construction, f
 STYLE B — NATURAL MINIMAL SEO (~70–80 words):
 Slightly smoother flow with natural SEO integration. Include type, colour, material, features, fit, aesthetic.
 
-BOTH must end with this structured block:
+BOTH must end with this structured block (ONLY include fields that have values — skip any that are empty/unknown):
 
 Brand:
 Label Size:
+Pit to Pit:
 Recommended Size:
 Materials:
-Era: (only 80s/90s/Y2K or blank)
+Era:
 Condition:
 Style:
 Made in:
+
+CRITICAL: Only include a field in the structured block if the product data provides a value for it. Do NOT include fields with "Unknown" or empty values.
 
 ==========================================
 3. VISUAL VOCABULARY (NOT LIMITED TO)
@@ -203,25 +207,27 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    // Build context from product fields
-    const productContext = `
-Product Details:
-- Brand: ${product.brand || "Unknown"}
-- Garment Type: ${product.garment_type || "Unknown"}
-- Department: ${product.department || "Unknown"} (use Mens/Womens/Unisex in title)
-- Colour Main: ${product.colour_main || "Unknown"}
-- Colour Secondary: ${product.colour_secondary || ""}
-- Pattern/Style: ${product.pattern || ""}
-- Size Label: ${product.size_label || "Unknown"}
-- Size Recommended: ${product.size_recommended || ""}
-- Material: ${product.material || "Unknown"}
-- Era: ${product.era || ""} (ONLY include if 80s, 90s, or Y2K - otherwise leave blank)
-- Condition: ${product.condition || "Good"}
-- Flaws: ${product.flaws || ""}
-- Fit: ${product.fit || ""}
-- Made In: ${product.made_in || ""}
-- Additional Notes: ${product.raw_input_text || ""}
-`;
+    // Build context from product fields - only include fields with values
+    const contextLines: string[] = ["Product Details:"];
+    
+    if (product.brand) contextLines.push(`- Brand: ${product.brand}`);
+    if (product.garment_type) contextLines.push(`- Garment Type: ${product.garment_type}`);
+    if (product.department) contextLines.push(`- Department: ${product.department} (use Mens/Womens/Unisex in title)`);
+    if (product.colour_main) contextLines.push(`- Colour Main: ${product.colour_main}`);
+    if (product.colour_secondary) contextLines.push(`- Colour Secondary: ${product.colour_secondary}`);
+    if (product.pattern) contextLines.push(`- Pattern/Style: ${product.pattern}`);
+    if (product.size_label) contextLines.push(`- Size Label: ${product.size_label}`);
+    if (product.pit_to_pit) contextLines.push(`- Pit to Pit: ${product.pit_to_pit}`);
+    if (product.size_recommended) contextLines.push(`- Size Recommended: ${product.size_recommended}`);
+    if (product.material) contextLines.push(`- Material: ${product.material}`);
+    if (product.era) contextLines.push(`- Era: ${product.era} (ONLY include if 80s, 90s, or Y2K)`);
+    if (product.condition) contextLines.push(`- Condition: ${product.condition}`);
+    if (product.flaws) contextLines.push(`- Flaws: ${product.flaws}`);
+    if (product.fit) contextLines.push(`- Fit: ${product.fit}`);
+    if (product.made_in) contextLines.push(`- Made In: ${product.made_in}`);
+    if (product.raw_input_text) contextLines.push(`- Additional Notes: ${product.raw_input_text}`);
+    
+    const productContext = contextLines.join('\n');
 
     // Adjust prompt based on what to regenerate
     let userPrompt = `Generate a vintage clothing listing for this product:\n${productContext}`;
