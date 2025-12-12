@@ -397,6 +397,22 @@ export function ProductDetailPanel({
         fieldUpdates.made_in = parsed.made_in;
         updatedFields.push('made in');
       }
+      if (parsed.flaws) {
+        fieldUpdates.flaws = parsed.flaws;
+        updatedFields.push('flaws');
+      }
+      if (parsed.shopify_tags) {
+        fieldUpdates.shopify_tags = parsed.shopify_tags;
+        updatedFields.push('Shopify tags');
+      }
+      if (parsed.collections_tags) {
+        fieldUpdates.collections_tags = parsed.collections_tags;
+        updatedFields.push('collection tags');
+      }
+      if (parsed.etsy_tags) {
+        fieldUpdates.etsy_tags = parsed.etsy_tags;
+        updatedFields.push('Etsy tags');
+      }
       if (parsed.notes) {
         fieldUpdates.notes = (formData.notes || '') + '\n' + parsed.notes;
         updatedFields.push('notes');
@@ -431,7 +447,7 @@ export function ProductDetailPanel({
       
       // Also add transcript to raw input for reference
       updatedFormData.raw_input_text = (formData.raw_input_text || '') + '\n' + voiceTranscript;
-      
+
       // Auto-regenerate descriptions with the updated product data
       if (updatedFields.length > 0) {
         try {
