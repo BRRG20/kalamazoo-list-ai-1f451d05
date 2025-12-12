@@ -39,6 +39,7 @@ interface BirdsEyeViewProps {
   onMoveImages: (imageIds: string[], fromProductId: string, toProductId: string) => void;
   onDeleteImage?: (imageId: string) => Promise<void>;
   onDeleteEmptyProducts?: (productIds: string[]) => Promise<void>;
+  onCreateNewProduct?: (imageIds: string[]) => void;
   isLoading?: boolean;
   // Product selection props
   selectedProductIds?: Set<string>;
@@ -54,6 +55,7 @@ export function BirdsEyeView({
   onMoveImages,
   onDeleteImage,
   onDeleteEmptyProducts,
+  onCreateNewProduct,
   isLoading = false,
   selectedProductIds,
   onToggleProductSelection,
@@ -72,6 +74,7 @@ export function BirdsEyeView({
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
   const [showCleanupDialog, setShowCleanupDialog] = useState(false);
   const [isDeletingEmpty, setIsDeletingEmpty] = useState(false);
+  const [isCreateNewDropTarget, setIsCreateNewDropTarget] = useState(false);
 
   // Count empty and populated products
   const productStats = useMemo(() => {
@@ -719,6 +722,66 @@ export function BirdsEyeView({
                 </div>
               );
             })}
+
+            {/* Create New Product drop zone */}
+            {onCreateNewProduct && (selectedImages.size > 0 || draggedImageData) && (
+              <div
+                className={cn(
+                  "border-2 border-dashed rounded-lg p-2 bg-card transition-all duration-200 relative min-h-[140px] flex flex-col items-center justify-center cursor-pointer",
+                  isCreateNewDropTarget 
+                    ? "border-green-500 ring-2 ring-green-500/30 bg-green-500/10 scale-[1.02] shadow-lg" 
+                    : "border-muted-foreground/50 hover:border-green-500/50"
+                )}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'copy';
+                  setIsCreateNewDropTarget(true);
+                }}
+                onDragLeave={(e) => {
+                  const relatedTarget = e.relatedTarget as HTMLElement;
+                  if (!relatedTarget || !e.currentTarget.contains(relatedTarget)) {
+                    setIsCreateNewDropTarget(false);
+                  }
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (selectedImages.size > 0) {
+                    const imageIds = Array.from(selectedImages.keys());
+                    onCreateNewProduct(imageIds);
+                    toast.success(`Created new product with ${imageIds.length} image${imageIds.length > 1 ? 's' : ''}`);
+                    setSelectedImages(new Map());
+                  }
+                  setIsCreateNewDropTarget(false);
+                  setDraggedImageData(null);
+                }}
+                onClick={() => {
+                  if (selectedImages.size > 0) {
+                    const imageIds = Array.from(selectedImages.keys());
+                    onCreateNewProduct(imageIds);
+                    toast.success(`Created new product with ${imageIds.length} image${imageIds.length > 1 ? 's' : ''}`);
+                    setSelectedImages(new Map());
+                  }
+                }}
+              >
+                {isCreateNewDropTarget ? (
+                  <>
+                    <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center mb-2">
+                      <Plus className="w-6 h-6 text-white" />
+                    </div>
+                    <span className="text-sm font-medium text-green-700 dark:text-green-400">Drop to create</span>
+                    <span className="text-xs text-green-600 dark:text-green-500">New product</span>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-10 h-10 rounded-full border-2 border-dashed border-muted-foreground/50 flex items-center justify-center mb-2">
+                      <Plus className="w-5 h-5 text-muted-foreground" />
+                    </div>
+                    <span className="text-sm font-medium text-muted-foreground">Create new product</span>
+                    <span className="text-xs text-muted-foreground/70">Drop {selectedImages.size} image{selectedImages.size !== 1 ? 's' : ''} here</span>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         )}
       </ScrollArea>

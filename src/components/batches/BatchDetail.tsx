@@ -1160,6 +1160,22 @@ export function BatchDetail({
             }
             await handleRefreshImages();
           }}
+          onCreateNewProduct={(imageIds) => {
+            // Convert image IDs to URLs
+            const imageUrls: string[] = [];
+            for (const [productId, images] of Object.entries(productImages)) {
+              for (const image of images) {
+                if (imageIds.includes(image.id)) {
+                  imageUrls.push(image.url);
+                }
+              }
+            }
+            if (imageUrls.length > 0) {
+              onCreateNewGroup(imageUrls);
+              // Refresh images to reflect the change
+              handleRefreshImages();
+            }
+          }}
         />
       )}
 
