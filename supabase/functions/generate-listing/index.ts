@@ -61,145 +61,123 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const SYSTEM_PROMPT = `You are generating product descriptions for Kalamazoo, a vintage clothing app.
+const SYSTEM_PROMPT = `You are generating product listings for Kalamazoo, a vintage clothing app.
 
 ==========================================
-DESCRIPTION TONE — SOURCE OF TRUTH (DO NOT DEVIATE)
+CRITICAL RULES — NEVER BREAK THESE
+==========================================
+
+1. NEVER output "Unknown", "Not specified", "N/A", or placeholder text
+2. If a value is not provided, OMIT that attribute line entirely
+3. Brand in description MUST exactly match brand in title
+4. Era: ONLY include if explicitly 80s, 90s, or Y2K — otherwise OMIT
+5. Made In: ONLY include if explicitly provided — otherwise OMIT
+6. The attribute block is MANDATORY — never return a description without it
+
+==========================================
+DESCRIPTION TONE — SOURCE OF TRUTH
 ==========================================
 
 Descriptions must be:
-- Minimal
-- Editorial
-- Confident
-- Neutral
-- Human
-- Premium vintage-store tone
+- Clean, minimal, natural, confident
+- Editorial, not salesy
+- 2-4 sentences max, plain English
 
-Do NOT use:
-- Marketing language
-- Sales phrases
-- Lifestyle copy
-- "Perfect for…"
-- "Ideal for…"
-- "Crafted from…"
-- "Features…"
-- "Offers…"
-- "Boasts…"
-- "Showcases…"
-- "Designed for…"
-- "Making it perfect…"
-- "This item…"
+BANNED PHRASES (never use):
+- "Perfect for…" / "Ideal for…"
+- "Crafted from…" / "Features…" / "Offers…"
+- "Boasts…" / "Showcases…" / "Designed for…"
+- "Making it perfect…" / "This item…"
+- Any marketing/lifestyle copy
 - Emojis
-- Over-explaining
-- Repetition of attributes listed below
 
 ==========================================
-DESCRIPTION FORMAT (ALWAYS THIS EXACT STRUCTURE)
+DESCRIPTION FORMAT (MANDATORY STRUCTURE)
 ==========================================
 
-Write 1–2 short sentences ONLY describing what the item is and what makes it distinct.
-Stop immediately after those sentences.
-Then show a clean attribute list.
+ALWAYS output this structure:
+[2-4 sentence description paragraph]
 
-If any information is unknown, OMIT IT ENTIRELY.
-NEVER write "Unknown".
+[blank line]
 
-FORMAT:
-[1-2 sentence description paragraph]
+Brand: [exact brand name]
+Label Size: [size]
+Pit to Pit: [measurement with units]
+Material: [fabric composition]
+Era: [ONLY if 80s/90s/Y2K, otherwise OMIT this line]
+Condition: [condition, with flaws in parentheses if any]
+Colour: [main colour, and secondary if applicable]
 
-Brand:
-Label Size:
-Pit to Pit:
-Material:
-Era:
-Condition:
-Colour:
+EXAMPLE OUTPUT:
+"Vintage Malinmor chunky knit sweater, made in the Republic of Ireland from pure new wool. Ribbed crew neckline with cream stripe detailing. Heavyweight and well-made.\\n\\nBrand: Malinmor\\nLabel Size: Large\\nPit to Pit: 21\\"\\nMaterial: 100% Pure New Wool\\nCondition: Very good\\nColour: Dark grey with cream stripes"
 
-Do NOT add extra sections. Do NOT repeat information from attributes in the description.
-
-==========================================
-CORRECT EXAMPLES (MATCH THIS EXACT STYLE)
-==========================================
-
-EXAMPLE 1:
-Vintage Malinmor chunky knit sweater, made in the Republic of Ireland from pure new wool. Ribbed crew neckline with cream stripe detailing across the chest and shoulders.
-
-Brand: Malinmor
-Label Size: Large
-Pit to Pit: Approx. 21"
-Material: 100% Pure New Wool
-Era: Vintage
-Condition: Very good
-Colour: Dark grey with cream stripes
-
-EXAMPLE 2:
-Vintage 90s Ralph Lauren wool turtleneck sweater in a multicoloured geometric knit. Heavyweight, warm, and well-made with a relaxed vintage fit.
-
-Brand: Ralph Lauren
-Label Size: Medium
-Pit to Pit: 22"
-Material: 100% Pure New Wool
-Era: 1990s
-Condition: Very good
-Colour: Multicolour
+Note: Era line is OMITTED because it wasn't explicitly stated as 80s/90s/Y2K.
 
 ==========================================
 TITLE FORMAT (Etsy-Optimised, Max 80 chars)
 ==========================================
 
-Brand/Franchise → Era (if known) → Gender → Item Type → Key Feature → Size
+Format: Brand → Era (if known) → Gender → Item Type → Key Feature → Size
 
 Rules:
-- Start with brand name or recognisable franchise
+- Start with brand name or recognisable franchise/character
+- Gender: Mens / Womens / Unisex (default to Unisex if unclear)
 - If era unknown, leave it out (do NOT guess)
-- Max 80 characters, NO punctuation (no commas, hyphens, dashes)
-- Gender: Mens / Womens / Unisex (only if obvious)
+- Max 80 characters, NO punctuation
 - Size ALWAYS at the end: "Size L" or "W32 L30"
 - NO hype words: "rare", "beautiful", "excellent", "amazing"
 
 Examples:
 - "Malinmor Vintage Mens Chunky Knit Wool Sweater Size L"
 - "Ralph Lauren 90s Mens Wool Turtleneck Geometric Knit Size M"
+- "Nike Unisex Graphic Print T Shirt Size XL"
 
 ==========================================
-ERA & CONDITION RULES
+TAG RULES (CRITICAL FOR MARKETPLACE COMPATIBILITY)
 ==========================================
 
-ERA: Only 80s, 90s, Y2K, or "Vintage" if older. If uncertain → LEAVE BLANK.
-CONDITION: Use "Excellent", "Very good", "Good", "Fair".
-If flaws exist, add in parentheses: "Very good (small mark on sleeve)"
-NEVER invent flaws.
+ETSY TAGS (etsy_tags):
+- MUST be 2-3 words each (NEVER single words)
+- SEO-driven, specific to the item
+- Examples: "vintage wool sweater", "90s streetwear", "mens knit jumper", "fair isle cardigan"
+- BAD examples (never use): "red", "hoodie", "menswear", "vintage"
+
+SHOPIFY TAGS (shopify_tags):
+- Can include single words and phrases
+- Include: brand, garment type, colour, material, era, style
+- Example: "Ralph Lauren, Sweater, Wool, 90s, Vintage, Knitwear, Mens"
+
+COLLECTIONS TAGS (collections_tags):
+- For Shopify auto-collections
+- Example: "Knitwear, Sweaters, Vintage Menswear"
 
 ==========================================
-FINAL RULE
+CATEGORY/TYPE INFERENCE
 ==========================================
 
-If the generated description does not match the CORRECT EXAMPLES tone exactly, regenerate it before returning.
-The tone must be minimal, editorial, confident, neutral, human. No marketing language whatsoever.
+Map garment_type to correct marketplace categories:
+- Sweater/Jumper/Pullover → Knitwear
+- Hoodie/Sweatshirt → Sweatshirts & Hoodies
+- T-shirt/Tee → T-Shirts
+- Shirt/Button-up → Shirts
+- Jacket/Coat → Outerwear
+- Cardigan → Cardigans
+- Flannel Shirt → Flannel Shirts
+
+Default department to Unisex unless explicitly Men/Women/Kids.
 
 ==========================================
-OUTPUT FORMAT (CRITICAL - FOLLOW EXACTLY)
+OUTPUT FORMAT (JSON ONLY)
 ==========================================
 
-MANDATORY: Each description MUST contain:
-1. A 1-2 sentence paragraph
-2. FOLLOWED BY the attribute block with line breaks
-
-The attribute block MUST be included. Format EXACTLY like this:
-
-"description_style_a": "Vintage Malinmor chunky knit sweater, made in the Republic of Ireland from pure new wool. Ribbed crew neckline with cream stripe detailing.\\n\\nBrand: Malinmor\\nLabel Size: Large\\nPit to Pit: 21\\"\\nMaterial: 100% Pure New Wool\\nEra: Vintage\\nCondition: Very good\\nColour: Dark grey with cream stripes"
-
-Use \\n for line breaks. Include a blank line (\\n\\n) between the description paragraph and the attribute block.
-Only include attribute lines that have values. Omit any attribute that is empty or unknown.
-
-Respond ONLY with valid JSON (no markdown, no code blocks):
+Respond with ONLY valid JSON (no markdown, no code blocks):
 {
-  "title": "max 80 chars, no punctuation, brand first",
-  "description_style_a": "[1-2 sentences]\\n\\nBrand: [value]\\nLabel Size: [value]\\nPit to Pit: [value]\\nMaterial: [value]\\nEra: [value]\\nCondition: [value]\\nColour: [value]",
-  "description_style_b": "[1-2 sentences]\\n\\nBrand: [value]\\nLabel Size: [value]\\nPit to Pit: [value]\\nMaterial: [value]\\nEra: [value]\\nCondition: [value]\\nColour: [value]",
-  "shopify_tags": "tag1, tag2, tag3",
-  "etsy_tags": "tag1, tag2, tag3",
-  "collections_tags": "collection1, collection2"
+  "title": "max 80 chars, no punctuation, brand first, size at end",
+  "description_style_a": "[2-4 sentences]\\n\\nBrand: [value]\\nLabel Size: [value]\\nPit to Pit: [value]\\nMaterial: [value]\\nEra: [OMIT if unknown]\\nCondition: [value]\\nColour: [value]",
+  "description_style_b": "[2-4 sentences, slightly more descriptive]\\n\\nBrand: [value]\\nLabel Size: [value]\\nPit to Pit: [value]\\nMaterial: [value]\\nEra: [OMIT if unknown]\\nCondition: [value]\\nColour: [value]",
+  "shopify_tags": "Brand, Type, Material, Era, Style",
+  "etsy_tags": "two word tag, three word tag, another tag",
+  "collections_tags": "Collection1, Collection2"
 }`;
 
 
