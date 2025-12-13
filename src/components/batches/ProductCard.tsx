@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Edit2, ImageIcon, Trash2, Eye, GripVertical, Sparkles, Undo2, Loader2 } from 'lucide-react';
+import { Edit2, ImageIcon, Trash2, Eye, GripVertical, Sparkles, Undo2, Loader2, Check, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -259,7 +259,22 @@ export function ProductCard({
                 <p className="text-xs text-muted-foreground">{product.sku}</p>
               )}
             </div>
-            <StatusBadge status={product.status} />
+            <div className="flex flex-col items-end gap-1">
+              <StatusBadge status={product.status} />
+              {/* Shopify upload status badge */}
+              {product.status === 'created_in_shopify' && product.shopify_product_id && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-success/10 text-success">
+                  <Check className="w-3 h-3" />
+                  Uploaded
+                </span>
+              )}
+              {product.status === 'error' && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-destructive/10 text-destructive">
+                  <AlertCircle className="w-3 h-3" />
+                  Failed
+                </span>
+              )}
+            </div>
           </div>
 
           {product.price > 0 && (
