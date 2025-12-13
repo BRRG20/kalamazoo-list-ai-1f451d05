@@ -52,6 +52,28 @@ const conditions: Condition[] = ['Excellent', 'Very good', 'Good', 'Fair'];
 const garmentTypes = ['sweater', 'jumper', 'hoodie', 't-shirt', 'shirt', 'blouse', 'jeans', 'trousers', 'dress', 'skirt', 'jacket', 'coat', 'fleece', 'cardigan', 'vest', 'shorts', 'flannel shirt'];
 const fits = ['oversized', 'boxy', 'regular', 'slim', 'cropped', 'relaxed', 'fitted'];
 const patterns = ['plain', 'striped', 'graphic', 'fair isle', 'cable knit', 'argyle', 'floral', 'abstract', 'checked', 'plaid'];
+const VOICE_FIELD_KEYS = [
+  'price',
+  'department',
+  'era',
+  'condition',
+  'size_label',
+  'size_recommended',
+  'brand',
+  'material',
+  'colour_main',
+  'colour_secondary',
+  'pattern',
+  'fit',
+  'garment_type',
+  'pit_to_pit',
+  'made_in',
+  'flaws',
+  'shopify_tags',
+  'collections_tags',
+  'etsy_tags',
+  'notes',
+] as const;
 
 export function ProductDetailPanel({
   product,
@@ -82,7 +104,36 @@ export function ProductDetailPanel({
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [descriptionStyle, setDescriptionStyle] = useState<'A' | 'B'>('A');
+  const [debugEnabled, setDebugEnabled] = useState(false);
+  const [recorderMountCount, setRecorderMountCount] = useState(0);
+  const [recordingState, setRecordingState] = useState<'idle' | 'recording' | 'stopping'>('idle');
+  const [micPermission, setMicPermission] = useState<'unknown' | 'granted' | 'denied' | 'error'>('unknown');
+  const [sttEngine, setSttEngine] = useState<string>('unknown');
+  const [voiceEventDebug, setVoiceEventDebug] = useState({
+    startCount: 0,
+    resultCount: 0,
+    endCount: 0,
+    errorCount: 0,
+    lastStartAt: null as string | null,
+    lastResultAt: null as string | null,
+    lastEndAt: null as string | null,
+    lastErrorAt: null as string | null,
+  });
+  const [debugTranscripts, setDebugTranscripts] = useState({
+    interim: '',
+    final: '',
+  });
+  const [debugParsedAttributes, setDebugParsedAttributes] = useState<Record<string, unknown> | null>(null);
+  const [debugPopulateStatus, setDebugPopulateStatus] = useState({
+    called: false,
+    updatedCount: 0,
+    updatedFields: [] as string[],
+    totalPossibleFields: VOICE_FIELD_KEYS.length,
+    missingFields: [] as string[],
+    error: null as string | null,
+  });
   const recognitionRef = useRef<any>(null);
+  const recorderMountRef = useRef(0);
 
   useEffect(() => {
     setFormData({
