@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useSettings } from '@/hooks/use-database';
 import { useAuth } from '@/hooks/use-auth';
 import DefaultTagsManager from '@/components/settings/DefaultTagsManager';
+import MarketplaceConnections from '@/components/settings/MarketplaceConnections';
 export default function SettingsPage() {
   const navigate = useNavigate();
   const { settings, loading, updateSettings, isShopifyConfigured } = useSettings();
@@ -89,8 +90,9 @@ export default function SettingsPage() {
           </div>
 
           <Tabs defaultValue="general" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="general">General</TabsTrigger>
+              <TabsTrigger value="marketplaces">Marketplaces</TabsTrigger>
               <TabsTrigger value="default-tags">Default Tags</TabsTrigger>
             </TabsList>
 
@@ -241,6 +243,10 @@ export default function SettingsPage() {
                   )}
                 </Button>
               </div>
+            </TabsContent>
+
+            <TabsContent value="marketplaces" className="mt-6">
+              <MarketplaceConnections />
             </TabsContent>
 
             <TabsContent value="default-tags" className="mt-6">

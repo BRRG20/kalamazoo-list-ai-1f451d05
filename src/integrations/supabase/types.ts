@@ -140,10 +140,50 @@ export type Database = {
           },
         ]
       }
+      marketplace_connections: {
+        Row: {
+          connected_at: string
+          created_at: string
+          expires_at: string | null
+          id: string
+          is_active: boolean
+          marketplace: string
+          shop_id: string | null
+          shop_name: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          connected_at?: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          marketplace: string
+          shop_id?: string | null
+          shop_name?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          connected_at?: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          marketplace?: string
+          shop_id?: string | null
+          shop_name?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       products: {
         Row: {
           batch_id: string
           brand: string | null
+          category_path: string | null
           collections_tags: string | null
           colour_main: string | null
           colour_secondary: string | null
@@ -155,7 +195,11 @@ export type Database = {
           description: string | null
           description_style_a: string | null
           description_style_b: string | null
+          ebay_listing_id: string | null
+          ebay_listing_state: string | null
           era: Database["public"]["Enums"]["era"] | null
+          etsy_listing_id: string | null
+          etsy_listing_state: string | null
           etsy_tags: string | null
           fit: string | null
           flaws: string | null
@@ -174,15 +218,21 @@ export type Database = {
           shopify_tags: string | null
           size_label: string | null
           size_recommended: string | null
+          size_type: string | null
           sku: string | null
+          sleeve_length: string | null
           status: Database["public"]["Enums"]["product_status"]
+          style: string | null
           title: string | null
           updated_at: string
           user_id: string | null
+          when_made: string | null
+          who_made: string | null
         }
         Insert: {
           batch_id: string
           brand?: string | null
+          category_path?: string | null
           collections_tags?: string | null
           colour_main?: string | null
           colour_secondary?: string | null
@@ -194,7 +244,11 @@ export type Database = {
           description?: string | null
           description_style_a?: string | null
           description_style_b?: string | null
+          ebay_listing_id?: string | null
+          ebay_listing_state?: string | null
           era?: Database["public"]["Enums"]["era"] | null
+          etsy_listing_id?: string | null
+          etsy_listing_state?: string | null
           etsy_tags?: string | null
           fit?: string | null
           flaws?: string | null
@@ -213,15 +267,21 @@ export type Database = {
           shopify_tags?: string | null
           size_label?: string | null
           size_recommended?: string | null
+          size_type?: string | null
           sku?: string | null
+          sleeve_length?: string | null
           status?: Database["public"]["Enums"]["product_status"]
+          style?: string | null
           title?: string | null
           updated_at?: string
           user_id?: string | null
+          when_made?: string | null
+          who_made?: string | null
         }
         Update: {
           batch_id?: string
           brand?: string | null
+          category_path?: string | null
           collections_tags?: string | null
           colour_main?: string | null
           colour_secondary?: string | null
@@ -233,7 +293,11 @@ export type Database = {
           description?: string | null
           description_style_a?: string | null
           description_style_b?: string | null
+          ebay_listing_id?: string | null
+          ebay_listing_state?: string | null
           era?: Database["public"]["Enums"]["era"] | null
+          etsy_listing_id?: string | null
+          etsy_listing_state?: string | null
           etsy_tags?: string | null
           fit?: string | null
           flaws?: string | null
@@ -252,11 +316,16 @@ export type Database = {
           shopify_tags?: string | null
           size_label?: string | null
           size_recommended?: string | null
+          size_type?: string | null
           sku?: string | null
+          sleeve_length?: string | null
           status?: Database["public"]["Enums"]["product_status"]
+          style?: string | null
           title?: string | null
           updated_at?: string
           user_id?: string | null
+          when_made?: string | null
+          who_made?: string | null
         }
         Relationships: [
           {
@@ -275,6 +344,9 @@ export type Database = {
           created_at: string
           default_currency: string
           default_images_per_product: number
+          ebay_connected_at: string | null
+          etsy_connected_at: string | null
+          etsy_shop_id: string | null
           id: string
           shopify_store_url: string | null
           updated_at: string
@@ -286,6 +358,9 @@ export type Database = {
           created_at?: string
           default_currency?: string
           default_images_per_product?: number
+          ebay_connected_at?: string | null
+          etsy_connected_at?: string | null
+          etsy_shop_id?: string | null
           id?: string
           shopify_store_url?: string | null
           updated_at?: string
@@ -297,6 +372,9 @@ export type Database = {
           created_at?: string
           default_currency?: string
           default_images_per_product?: number
+          ebay_connected_at?: string | null
+          etsy_connected_at?: string | null
+          etsy_shop_id?: string | null
           id?: string
           shopify_store_url?: string | null
           updated_at?: string

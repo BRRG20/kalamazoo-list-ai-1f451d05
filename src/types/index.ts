@@ -57,6 +57,17 @@ export interface Product {
   shopify_product_id: string | null;
   shopify_handle: string | null;
   listing_block: string;
+  // Marketplace fields
+  etsy_listing_id?: string | null;
+  etsy_listing_state?: string | null;
+  ebay_listing_id?: string | null;
+  ebay_listing_state?: string | null;
+  sleeve_length?: string;
+  style?: string;
+  size_type?: string;
+  who_made?: string;
+  when_made?: string;
+  category_path?: string;
 }
 
 export interface ProductImage {
