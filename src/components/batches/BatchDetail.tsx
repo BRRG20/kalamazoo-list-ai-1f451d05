@@ -263,8 +263,31 @@ export function BatchDetail({
     onUpdateUnassignedImages(lastState.unassignedImages);
   }, [history, onUpdateImageGroups, onUpdateUnassignedImages]);
 
-  // Filter products based on search query
+  // Shopify filter state
+  const [shopifyFilter, setShopifyFilter] = useState<'all' | 'uploaded' | 'not_uploaded' | 'failed'>('all');
+
+  // Calculate Shopify upload stats
+  const shopifyStats = {
+    uploaded: products.filter(p => p.status === 'created_in_shopify' && p.shopify_product_id).length,
+    failed: products.filter(p => p.status === 'error').length,
+    notUploaded: products.filter(p => p.status !== 'created_in_shopify' && p.status !== 'error').length,
+    total: products.length,
+  };
+
+  // Filter products based on search query and Shopify filter
   const filteredProducts = products.filter(product => {
+    // Apply Shopify filter first
+    if (shopifyFilter === 'uploaded' && (product.status !== 'created_in_shopify' || !product.shopify_product_id)) {
+      return false;
+    }
+    if (shopifyFilter === 'not_uploaded' && (product.status === 'created_in_shopify' || product.status === 'error')) {
+      return false;
+    }
+    if (shopifyFilter === 'failed' && product.status !== 'error') {
+      return false;
+    }
+
+    // Then apply search query
     if (!searchQuery.trim()) return true;
     const query = searchQuery.toLowerCase();
     return (
@@ -915,6 +938,23 @@ export function BatchDetail({
           
           {shopifyConfigured && (
             <>
+              {/* Shopify upload counter */}
+              <div className="flex items-center gap-4 mr-auto">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-success">
+                    Shopify uploaded: {shopifyStats.uploaded} / {shopifyStats.total}
+                  </span>
+                  {shopifyStats.failed > 0 && (
+                    <span className="text-sm text-destructive">
+                      • {shopifyStats.failed} failed
+                    </span>
+                  )}
+                  <span className="text-sm text-muted-foreground">
+                    • {shopifyStats.notUploaded} not uploaded
+                  </span>
+                </div>
+              </div>
+              
               <div className="flex items-center justify-between sm:justify-start gap-2 flex-wrap">
                 <span className="text-sm text-muted-foreground">
                   {selectedProductIds.size} selected
@@ -1058,30 +1098,45 @@ export function BatchDetail({
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Search bar */}
-            <div className="relative max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                type="text"
-                placeholder="Search products..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 h-9"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
+            {/* Search bar and filter */}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="relative max-w-sm flex-1 min-w-[200px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  type="text"
+                  placeholder="Search products..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9 h-9"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+              
+              {/* Shopify status filter */}
+              <select
+                value={shopifyFilter}
+                onChange={(e) => setShopifyFilter(e.target.value as typeof shopifyFilter)}
+                className="h-9 px-3 text-sm rounded-md border border-input bg-background text-foreground cursor-pointer"
+              >
+                <option value="all">All products</option>
+                <option value="uploaded">Uploaded to Shopify ({shopifyStats.uploaded})</option>
+                <option value="not_uploaded">Not uploaded ({shopifyStats.notUploaded})</option>
+                <option value="failed">Failed ({shopifyStats.failed})</option>
+              </select>
             </div>
             
             {/* Product count */}
-            {searchQuery && (
+            {(searchQuery || shopifyFilter !== 'all') && (
               <p className="text-sm text-muted-foreground">
                 Showing {filteredProducts.length} of {products.length} products
+                {shopifyFilter !== 'all' && ` (filtered by: ${shopifyFilter.replace('_', ' ')})`}
               </p>
             )}
 
