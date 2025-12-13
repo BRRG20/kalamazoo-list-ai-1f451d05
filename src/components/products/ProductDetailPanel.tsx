@@ -164,28 +164,53 @@ export function ProductDetailPanel({
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = 'en-GB';
-    recognition.maxAlternatives = 5; // More alternatives for better number recognition
+    recognition.maxAlternatives = 3;
 
     let finalTranscript = '';
     let interimTranscript = '';
 
-    // Post-process transcript to fix common speech recognition errors with numbers
-    const fixNumberTranscript = (text: string): string => {
+    // Post-process transcript to fix common speech recognition errors
+    const fixTranscript = (text: string): string => {
       return text
-        // Fix "five" when user likely said "25" etc
-        .replace(/\bfastest\s*£?(\d+)/gi, '£$1')
-        .replace(/\bthe\s+fastest\s+/gi, '')
-        // Common misheard numbers
+        // Fix common mishearings for vintage clothing terms
+        .replace(/\bthis is\s+(\d+)/gi, 'pit to pit $1')
+        .replace(/\bpit pit\b/gi, 'pit to pit')
+        .replace(/\bpitpit\b/gi, 'pit to pit')
+        .replace(/\bp2p\b/gi, 'pit to pit')
+        .replace(/\bptp\b/gi, 'pit to pit')
+        .replace(/\bchest\s+measurement\b/gi, 'pit to pit')
+        // Fix "common" being heard instead of "condition"
+        .replace(/\bcommon\b/gi, 'condition')
+        .replace(/\bpretty common\b/gi, 'condition good')
+        .replace(/\bis quite okay\b/gi, 'is good')
+        // Fix era mishearings
+        .replace(/\bthe era is\b/gi, 'era')
+        .replace(/\beighties\b/gi, '80s')
+        .replace(/\bnineties\b/gi, '90s')
+        // Fix brand mishearings
+        .replace(/\bbrand is just\b/gi, 'brand')
+        .replace(/\bbrand is\b/gi, 'brand')
+        // Fix "engine" being heard instead of something else
+        .replace(/\bengine\b/gi, 'condition')
+        // Fix number words
         .replace(/\bfive\b/gi, '5')
-        .replace(/\btwenty five\b/gi, '25')
-        .replace(/\btwenty-five\b/gi, '25')
+        .replace(/\btwenty[- ]?five\b/gi, '25')
+        .replace(/\btwenty[- ]?two\b/gi, '22')
+        .replace(/\btwenty[- ]?three\b/gi, '23')
+        .replace(/\btwenty[- ]?four\b/gi, '24')
         .replace(/\bfifteen\b/gi, '15')
-        .replace(/\bthirty five\b/gi, '35')
-        .replace(/\bforty five\b/gi, '45')
-        .replace(/\bfifty five\b/gi, '55')
-        // Ensure pound symbols are kept
+        .replace(/\bthirty[- ]?five\b/gi, '35')
+        .replace(/\bforty[- ]?five\b/gi, '45')
+        .replace(/\bfifty[- ]?five\b/gi, '55')
+        // Fix color words
+        .replace(/\bcar\b/gi, 'colour')
+        .replace(/\bblue car\b/gi, 'blue colour')
+        // Ensure pound symbols
         .replace(/(\d+)\s*pounds?\b/gi, '£$1')
-        .replace(/(\d+)\s*quid\b/gi, '£$1');
+        .replace(/(\d+)\s*quid\b/gi, '£$1')
+        // Clean up extra spaces
+        .replace(/\s+/g, ' ')
+        .trim();
     };
 
     recognition.onstart = () => {
@@ -225,30 +250,19 @@ export function ProductDetailPanel({
       
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
-        // Check all alternatives for better number recognition
-        let bestTranscript = result[0].transcript;
-        
-        // Look through alternatives for one with clearer numbers
-        for (let j = 0; j < result.length; j++) {
-          const alt = result[j].transcript;
-          // Prefer alternatives that contain pound signs or clear numbers
-          if (/£\d+|\b\d{2,}\b/.test(alt)) {
-            bestTranscript = alt;
-            break;
-          }
-        }
+        const transcript = result[0].transcript;
         
         if (result.isFinal) {
-          const fixedTranscript = fixNumberTranscript(bestTranscript);
-          console.log('Final result:', bestTranscript, '-> fixed:', fixedTranscript, 'confidence:', result[0].confidence);
+          const fixedTranscript = fixTranscript(transcript);
+          console.log('Final result:', transcript, '-> fixed:', fixedTranscript, 'confidence:', result[0].confidence);
           finalTranscript += fixedTranscript + ' ';
         } else {
-          interimTranscript += bestTranscript;
+          interimTranscript += transcript;
         }
       }
       
-      // Show both final and interim results so user sees real-time feedback
-      const displayText = fixNumberTranscript((finalTranscript + interimTranscript).trim());
+      // Show both final and interim results for real-time feedback
+      const displayText = fixTranscript((finalTranscript + interimTranscript).trim());
       if (displayText) {
         setVoiceTranscript(displayText);
       }

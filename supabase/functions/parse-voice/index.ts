@@ -25,105 +25,96 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const SYSTEM_PROMPT = `You are a voice input parser for a vintage clothing listing app.
+const SYSTEM_PROMPT = `You are a voice input parser for a vintage clothing listing app. The speech recognition may produce garbled or unclear text, so you must INFER what the user meant based on context.
 
 CRITICAL RULES:
 1. Extract ALL mentioned attributes in a SINGLE pass
 2. User may say attributes in ANY order — detect and map all of them
 3. NEVER output placeholder text like "Unknown" or "Not specified"
 4. If a value is not mentioned, DO NOT include that key in output
+5. Speech recognition often garbles words - use context to infer meaning:
+   - "common" often means "condition"
+   - "engine" might mean "condition" 
+   - "car" might mean "colour"
+   - Numbers followed by "inches" usually mean pit_to_pit measurement
+   - Random words near clothing terms are often brand names
 
 You must return ONLY a single JSON object. No text before or after.
 
 ==========================================
-FIELD MAPPINGS (be flexible with phrasing)
+FIELD MAPPINGS (be VERY flexible with mishearings)
 ==========================================
 
 PRICE:
-- "price" / "pounds" / "£" / "quid" / numbers with currency context → price (number only)
-- Example: "25 pounds" → price: 25
+- "price" / "pounds" / "£" / "quid" / numbers with currency → price (number only)
 
 SIZE:
-- "size" / "label size" / "tagged" / "size on label" → size_label (e.g. "M", "L", "UK 12", "W32 L30")
-- "recommended" / "fits like" / "would fit" / "true to size" → size_recommended
+- "size" / "medium" / "large" / "small" / "XL" / letters like "M" "L" "S" → size_label
+- "fits like" / "would fit" / "recommended" → size_recommended
 
 MEASUREMENTS:
-- "pit to pit" / "ptp" / "p2p" / "chest" / "chest measurement" / "across the chest" → pit_to_pit
-- Always include unit: "23 inches", "22in", "56cm"
+- ANY number followed by "inches" or "in" → pit_to_pit (e.g. "22 inches" → "22 inches")
+- "pit to pit" / "ptp" / "p2p" / "chest" → pit_to_pit
 
-CONDITION:
-- "condition" / "quality" / "state" → condition (Excellent, Very good, Good, Fair)
-- "flaw" / "wear" / "damage" / "hole" / "stain" / "bobbling" / "fading" / "mark" →
-  - If condition mentioned: append flaws in parentheses, e.g. "Very good (minor bobbling on sleeves)"
-  - Also set separate "flaws" field with plain text summary
+CONDITION (map garbled words like "common" → condition):
+- Look for: "condition" / "common" / "engine" / "quality" / "state"
+- Values: "Excellent" / "Very good" / "Good" / "Fair"
+- "pretty good" / "quite good" / "okay" → "Good"
+- "very good" / "really good" → "Very good"
+- Any flaws mentioned → append in parentheses AND set "flaws" field
 
-DEPARTMENT (default to Unisex if unclear):
-- "women" / "ladies" / "womens" → department: "Women"
-- "men" / "mens" / "gents" → department: "Men"  
-- "unisex" / "either" → department: "Unisex"
-- "kids" / "children" → department: "Kids"
+DEPARTMENT:
+- "women" / "ladies" / "womens" → "Women"
+- "men" / "mens" / "gents" → "Men"
+- "unisex" → "Unisex"
+- "kids" / "children" → "Kids"
 
-ERA (ONLY if explicitly stated — never guess):
-- "80s" / "eighties" / "1980s" → era: "80s"
-- "90s" / "nineties" / "1990s" → era: "90s"
-- "Y2K" / "2000s" / "millennium" / "early 2000s" → era: "Y2K"
-- If not mentioned, DO NOT include era key
+ERA (ONLY if clearly stated):
+- "80s" / "eighties" → "80s"
+- "90s" / "nineties" → "90s"  
+- "Y2K" / "2000s" → "Y2K"
 
 BRAND:
-- "brand" / "brand is" / company/designer names → brand
-- Example: "Ralph Lauren sweater" → brand: "Ralph Lauren"
+- Any proper noun or company name mentioned → brand
+- "brand is [name]" / "[name] sweater" → brand
 
 MATERIAL:
-- "material" / "fabric" / "made of" / "100%" / fabric types → material
-- Example: "wool sweater" → material: "Wool"
-- Example: "100% cotton" → material: "100% Cotton"
+- "wool" / "cotton" / "polyester" / "acrylic" / fabric types → material
 
-COLOURS:
-- "colour" / "color" / colour words → colour_main
-- "secondary colour" / "accent" / "with [colour]" → colour_secondary
-- Example: "dark green and navy" → colour_main: "Dark green", colour_secondary: "Navy"
+COLOURS (also check for "car" which may mean "colour"):
+- Colour words: blue, red, green, black, white, navy, cream, grey, etc. → colour_main
+- Second colour mentioned → colour_secondary
 
 PATTERN:
-- "striped" / "checked" / "plain" / "graphic" / "printed" / "patterned" → pattern
+- "striped" / "checked" / "plain" / "graphic" / "printed" → pattern
 
 GARMENT TYPE:
-- Clothing items: sweater, jumper, hoodie, t-shirt, shirt, jacket, cardigan, flannel, vest, sweatshirt, polo → garment_type
+- sweater, jumper, hoodie, t-shirt, shirt, jacket, cardigan, flannel, vest → garment_type
 
 FIT:
-- "oversized" / "slim" / "boxy" / "relaxed" / "fitted" / "regular" → fit
+- "oversized" / "slim" / "boxy" / "relaxed" / "fitted" → fit
 
-ORIGIN (ONLY if explicitly stated):
-- "made in" / "manufactured in" / "from [country]" → made_in
-- If not mentioned, DO NOT include made_in key
+ORIGIN:
+- "made in [country]" → made_in
 
 TAGS:
-- "Shopify tags" / "for Shopify" → shopify_tags (comma-separated)
-- "Etsy tags" / "for Etsy" → etsy_tags (comma-separated, 2-3 words each)
-- "collection tags" / "collections" → collections_tags (comma-separated)
-
-NOTES:
-- "notes" / "additional" / "also note" → notes
-
-DESCRIPTION:
-- "description" / "add to description" / "for the description" → description_text
-- "style A" / "minimal" → preferred_style: "A"
-- "style B" / "SEO" → preferred_style: "B"
+- "Shopify tags" → shopify_tags
+- "Etsy tags" → etsy_tags
+- "collection tags" → collections_tags
 
 ==========================================
-EXAMPLES
+EXAMPLES WITH GARBLED SPEECH
 ==========================================
 
-Input: "Brand is Ralph Lauren, wool sweater, pit to pit 22 inches, size medium, dark green and navy"
+Input: "This is 24 common is pretty common and the era is quite okay the brand is just the size is medium 22 inches is common and the engine is very good the blue car is white"
+Analysis: "common" = condition, "24" and "22 inches" = measurements, "engine is very good" = condition very good, "blue car is white" = blue colour, white secondary
+Output: {"pit_to_pit": "22 inches", "size_label": "Medium", "condition": "Very good", "colour_main": "Blue", "colour_secondary": "White"}
+
+Input: "Brand is Ralph Lauren wool sweater pit to pit 22 inches size medium dark green and navy"
 Output: {"brand": "Ralph Lauren", "garment_type": "Sweater", "material": "Wool", "pit_to_pit": "22 inches", "size_label": "Medium", "colour_main": "Dark green", "colour_secondary": "Navy"}
 
-Input: "Price 25 pounds, women's, 90s era, condition very good with minor bobbling"
-Output: {"price": 25, "department": "Women", "era": "90s", "condition": "Very good (minor bobbling)", "flaws": "minor bobbling"}
-
-Input: "Nike hoodie, oversized fit, black, large, made in USA"
-Output: {"brand": "Nike", "garment_type": "Hoodie", "fit": "Oversized", "colour_main": "Black", "size_label": "Large", "made_in": "USA"}
-
-Input: "Vintage t-shirt, graphic print, condition good some fading on the hem"
-Output: {"garment_type": "T-Shirt", "pattern": "Graphic", "condition": "Good (some fading on the hem)", "flaws": "some fading on the hem"}
+Input: "Nike hoodie oversized fit black large made in USA price 25 pounds"
+Output: {"brand": "Nike", "garment_type": "Hoodie", "fit": "Oversized", "colour_main": "Black", "size_label": "Large", "made_in": "USA", "price": 25}
 
 ==========================================
 ALLOWED OUTPUT KEYS
@@ -132,8 +123,7 @@ ALLOWED OUTPUT KEYS
 Only return these keys (any subset):
 price, garment_type, department, era, brand, fit, size_label, size_recommended,
 pit_to_pit, material, condition, flaws, made_in, colour_main, colour_secondary,
-pattern, shopify_tags, collections_tags, etsy_tags, notes, description_text,
-preferred_style
+pattern, shopify_tags, collections_tags, etsy_tags, notes, description_text, preferred_style
 
 Respond ONLY with valid JSON.`;
 
@@ -175,7 +165,7 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash-lite",
+        model: "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: userPrompt }
