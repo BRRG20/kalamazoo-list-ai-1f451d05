@@ -61,6 +61,17 @@ function mapProduct(row: any): Product {
     shopify_product_id: row.shopify_product_id,
     shopify_handle: row.shopify_handle,
     listing_block: row.listing_block || '',
+    // Marketplace fields
+    etsy_listing_id: row.etsy_listing_id,
+    etsy_listing_state: row.etsy_listing_state,
+    ebay_listing_id: row.ebay_listing_id,
+    ebay_listing_state: row.ebay_listing_state,
+    sleeve_length: row.sleeve_length || '',
+    style: row.style || '',
+    size_type: row.size_type || '',
+    who_made: row.who_made || '',
+    when_made: row.when_made || '',
+    category_path: row.category_path || '',
   };
 }
 
@@ -389,6 +400,18 @@ export function useProducts(batchId: string | null) {
     if (updates.shopify_product_id !== undefined) dbUpdates.shopify_product_id = updates.shopify_product_id;
     if (updates.shopify_handle !== undefined) dbUpdates.shopify_handle = updates.shopify_handle;
     if (updates.listing_block !== undefined) dbUpdates.listing_block = updates.listing_block;
+    if (updates.pit_to_pit !== undefined) dbUpdates.pit_to_pit = updates.pit_to_pit;
+    // Marketplace fields
+    if (updates.etsy_listing_id !== undefined) dbUpdates.etsy_listing_id = updates.etsy_listing_id;
+    if (updates.etsy_listing_state !== undefined) dbUpdates.etsy_listing_state = updates.etsy_listing_state;
+    if (updates.ebay_listing_id !== undefined) dbUpdates.ebay_listing_id = updates.ebay_listing_id;
+    if (updates.ebay_listing_state !== undefined) dbUpdates.ebay_listing_state = updates.ebay_listing_state;
+    if (updates.sleeve_length !== undefined) dbUpdates.sleeve_length = updates.sleeve_length;
+    if (updates.style !== undefined) dbUpdates.style = updates.style;
+    if (updates.size_type !== undefined) dbUpdates.size_type = updates.size_type;
+    if (updates.who_made !== undefined) dbUpdates.who_made = updates.who_made;
+    if (updates.when_made !== undefined) dbUpdates.when_made = updates.when_made;
+    if (updates.category_path !== undefined) dbUpdates.category_path = updates.category_path;
     
     const { error } = await supabase
       .from('products')
