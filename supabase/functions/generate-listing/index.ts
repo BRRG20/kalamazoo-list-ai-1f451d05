@@ -109,7 +109,7 @@ FORMAT:
 
 Brand:
 Label Size:
-Measurements:
+Pit to Pit:
 Material:
 Era:
 Condition:
@@ -126,7 +126,7 @@ Vintage Malinmor chunky knit sweater, made in the Republic of Ireland from pure 
 
 Brand: Malinmor
 Label Size: Large
-Measurements: Pit to pit approx. 21"
+Pit to Pit: Approx. 21"
 Material: 100% Pure New Wool
 Era: Vintage
 Condition: Very good
@@ -137,7 +137,7 @@ Vintage 90s Ralph Lauren wool turtleneck sweater in a multicoloured geometric kn
 
 Brand: Ralph Lauren
 Label Size: Medium
-Measurements: Pit to pit 22"
+Pit to Pit: 22"
 Material: 100% Pure New Wool
 Era: 1990s
 Condition: Very good
