@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { Batch, Product, ProductImage, Settings, ProductStatus, Department, Era, Condition } from '@/types';
@@ -9,6 +9,35 @@ export const UPLOAD_LIMITS = {
   WARNING_THRESHOLD: 300,
   RECOMMENDED_PRODUCTS_FOR_AI: 20,
 };
+
+// Export validation - check what's missing for Shopify export
+export interface ExportValidation {
+  isValid: boolean;
+  missingFields: string[];
+  warnings: string[];
+}
+
+export function validateProductForExport(product: Product, imageCount: number): ExportValidation {
+  const missingFields: string[] = [];
+  const warnings: string[] = [];
+  
+  if (!product.title || product.title.trim() === '') missingFields.push('title');
+  if (!product.price || product.price <= 0) missingFields.push('price');
+  if (imageCount === 0) missingFields.push('images');
+  
+  // Warnings (not blocking but flagged)
+  if (!product.brand) warnings.push('brand');
+  if (!product.department) warnings.push('department');
+  if (!product.garment_type) warnings.push('type');
+  if (!product.pit_to_pit) warnings.push('pit to pit');
+  if (!product.description_style_a && !product.description) warnings.push('description');
+  
+  return {
+    isValid: missingFields.length === 0,
+    missingFields,
+    warnings,
+  };
+}
 
 // Helper to get current user ID
 async function getCurrentUserId(): Promise<string | null> {
@@ -222,16 +251,42 @@ export function useBatches() {
   return { batches, loading, createBatch, updateBatch, deleteBatch, getProductCount, refetch: fetchBatches };
 }
 
-// Products Hook
+// Products Hook with mutation locking
 export function useProducts(batchId: string | null) {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isMutating, setIsMutating] = useState(false);
+  const mutationLockRef = useRef(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Acquire mutation lock - returns true if lock acquired, false if already locked
+  const acquireLock = useCallback((): boolean => {
+    if (mutationLockRef.current) {
+      console.warn('Mutation already in progress, skipping');
+      return false;
+    }
+    mutationLockRef.current = true;
+    setIsMutating(true);
+    return true;
+  }, []);
+
+  // Release mutation lock
+  const releaseLock = useCallback(() => {
+    mutationLockRef.current = false;
+    setIsMutating(false);
+  }, []);
 
   const fetchProducts = useCallback(async () => {
     if (!batchId) {
       setProducts([]);
       return;
     }
+    
+    // Cancel any in-flight requests
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
     
     setLoading(true);
     const { data, error } = await supabase
@@ -462,18 +517,27 @@ export function useProducts(batchId: string | null) {
 
   /**
    * Delete products that have 0 images attached.
-   * Called after image moves to clean up empty products.
+   * SAFE GUARD: Only deletes products that:
+   * 1. Have 0 images
+   * 2. Have no title or user-entered data
+   * 3. Were created in the last hour (automation-created)
    */
   const deleteEmptyProducts = async (): Promise<number> => {
     if (!batchId) return 0;
     
+    // Prevent concurrent cleanup
+    if (!acquireLock()) return 0;
+    
     try {
-      // Find all products in this batch
+      // Find all products in this batch with minimal data (likely automation-created)
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+      
       const { data: batchProducts, error: fetchError } = await supabase
         .from('products')
-        .select('id')
+        .select('id, title, brand, description, created_at')
         .eq('batch_id', batchId)
-        .is('deleted_at', null);
+        .is('deleted_at', null)
+        .gte('created_at', oneHourAgo); // Only recently created products
       
       if (fetchError || !batchProducts || !Array.isArray(batchProducts)) {
         console.error('Error fetching products for cleanup:', fetchError);
@@ -481,47 +545,65 @@ export function useProducts(batchId: string | null) {
       }
       
       let deletedCount = 0;
+      const productsToCheck: string[] = [];
       
+      // Pre-filter: only check products with no user-entered data
       for (const product of batchProducts) {
         if (!product || !product.id) continue;
         
-        // Check image count for this product
+        // Skip if product has user-entered data
+        if (product.title && product.title.trim() !== '') continue;
+        if (product.brand && product.brand.trim() !== '') continue;
+        if (product.description && product.description.trim() !== '') continue;
+        
+        productsToCheck.push(product.id);
+      }
+      
+      // Check image count only for candidates
+      for (const productId of productsToCheck) {
         const { count, error: countError } = await supabase
           .from('images')
           .select('id', { count: 'exact', head: true })
-          .eq('product_id', product.id);
+          .eq('product_id', productId);
         
         if (!countError && count === 0) {
-          // This product has 0 images - delete it
+          // This product has 0 images AND no user data - safe to delete
           const { error: deleteError } = await supabase
             .from('products')
             .delete()
-            .eq('id', product.id);
+            .eq('id', productId);
           
           if (!deleteError) {
             deletedCount++;
-            console.log(`Auto-deleted empty product: ${product.id}`);
+            console.log(`Auto-deleted empty product: ${productId}`);
           } else {
-            console.error('Error deleting empty product:', product.id, deleteError);
+            console.error('Error deleting empty product:', productId, deleteError);
           }
         }
       }
       
       if (deletedCount > 0) {
-        // Refresh products list
-        await fetchProducts();
+        // Update local state only - don't trigger full refetch
+        setProducts(prev => prev.filter(p => !productsToCheck.includes(p.id) || 
+          (p.title && p.title.trim() !== '') || 
+          (p.brand && p.brand.trim() !== '')));
       }
       
       return deletedCount;
     } catch (error) {
       console.error('Error in deleteEmptyProducts:', error);
       return 0;
+    } finally {
+      releaseLock();
     }
   };
 
   return { 
     products, 
-    loading, 
+    loading,
+    isMutating,
+    acquireLock,
+    releaseLock,
     createProduct, 
     createProductWithImages,
     updateProduct, 

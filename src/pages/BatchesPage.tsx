@@ -19,6 +19,7 @@ import {
   useImageUpload,
   useDeletedProducts,
   generateListingBlock,
+  validateProductForExport,
   UPLOAD_LIMITS,
 } from '@/hooks/use-database';
 import { useDefaultTags } from '@/hooks/use-default-tags';
@@ -28,7 +29,7 @@ import type { Product, ProductImage } from '@/types';
 export default function BatchesPage() {
   const { batches, createBatch, updateBatch, deleteBatch, getProductCount } = useBatches();
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
-  const { products, createProduct, createProductWithImages, updateProduct, deleteProduct, deleteEmptyProducts, refetch: refetchProducts } = useProducts(selectedBatchId);
+  const { products, createProduct, createProductWithImages, updateProduct, deleteProduct, deleteEmptyProducts, isMutating, acquireLock, releaseLock, refetch: refetchProducts } = useProducts(selectedBatchId);
   const { deletedProducts, recoverProduct, permanentlyDelete: permanentlyDeleteProduct, emptyTrash, refetch: refetchDeletedProducts } = useDeletedProducts(selectedBatchId);
   const { fetchImagesForProduct, fetchImagesForBatch, addImageToBatch, updateImage, excludeLastNImages, clearCache, deleteImage, updateImageProductIdByUrl } = useImages();
   const { settings } = useSettings();
@@ -700,7 +701,7 @@ const handleSelectBatch = useCallback((id: string) => {
       
       toast.info(`Preparing ${productsToCreate.length} products for Shopify...`);
       
-      // Fetch images for all products in parallel (only those marked for Shopify)
+      // Fetch images for all products in parallel
       const imagesMap: Record<string, { url: string; position: number }[]> = {};
       const imagePromises = productsToCreate.map(async (product) => {
         const allImages = await fetchImagesForProduct(product.id);
@@ -713,6 +714,32 @@ const handleSelectBatch = useCallback((id: string) => {
       const imageResults = await Promise.all(imagePromises);
       for (const result of imageResults) {
         imagesMap[result.productId] = result.images;
+      }
+      
+      // EXPORT VALIDATION: Check each product and warn about missing fields
+      const validationResults = productsToCreate.map(product => {
+        const imageCount = imagesMap[product.id]?.length || 0;
+        return { product, validation: validateProductForExport(product, imageCount) };
+      });
+      
+      const invalidProducts = validationResults.filter(r => !r.validation.isValid);
+      const productsWithWarnings = validationResults.filter(r => r.validation.warnings.length > 0);
+      
+      // Block export if any products are missing required fields
+      if (invalidProducts.length > 0) {
+        const missingList = invalidProducts.map(r => 
+          `${r.product.sku || r.product.title || 'Product'}: ${r.validation.missingFields.join(', ')}`
+        ).join('\n');
+        toast.error(`Cannot export ${invalidProducts.length} product(s) - missing required fields:\n${missingList}`);
+        setIsCreatingShopify(false);
+        return;
+      }
+      
+      // Show warnings but allow export
+      if (productsWithWarnings.length > 0) {
+        const warningCount = productsWithWarnings.length;
+        const warningFields = [...new Set(productsWithWarnings.flatMap(r => r.validation.warnings))];
+        toast.warning(`${warningCount} product(s) missing recommended fields: ${warningFields.join(', ')}. Exporting anyway.`);
       }
       
       // Log image counts for debugging
