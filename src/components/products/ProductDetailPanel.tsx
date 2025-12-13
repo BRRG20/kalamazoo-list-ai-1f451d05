@@ -169,43 +169,27 @@ export function ProductDetailPanel({
     let finalTranscript = '';
     let interimTranscript = '';
 
-    // Post-process transcript to fix common speech recognition errors
+    // Lightly normalize transcript (numbers & currency) but keep wording as close as possible
     const fixTranscript = (text: string): string => {
       return text
-        // Fix common mishearings for vintage clothing terms
-        .replace(/\bthis is\s+(\d+)/gi, 'pit to pit $1')
-        .replace(/\bpit pit\b/gi, 'pit to pit')
-        .replace(/\bpitpit\b/gi, 'pit to pit')
-        .replace(/\bp2p\b/gi, 'pit to pit')
-        .replace(/\bptp\b/gi, 'pit to pit')
-        .replace(/\bchest\s+measurement\b/gi, 'pit to pit')
-        // Fix "common" being heard instead of "condition"
-        .replace(/\bcommon\b/gi, 'condition')
-        .replace(/\bpretty common\b/gi, 'condition good')
-        .replace(/\bis quite okay\b/gi, 'is good')
-        // Fix era mishearings
-        .replace(/\bthe era is\b/gi, 'era')
-        .replace(/\beighties\b/gi, '80s')
-        .replace(/\bnineties\b/gi, '90s')
-        // Fix brand mishearings
-        .replace(/\bbrand is just\b/gi, 'brand')
-        .replace(/\bbrand is\b/gi, 'brand')
-        // Fix "engine" being heard instead of something else
-        .replace(/\bengine\b/gi, 'condition')
-        // Fix number words
+        // Normalize common number words
         .replace(/\bfive\b/gi, '5')
-        .replace(/\btwenty[- ]?five\b/gi, '25')
+        .replace(/\bten\b/gi, '10')
+        .replace(/\beleven\b/gi, '11')
+        .replace(/\btwelve\b/gi, '12')
+        .replace(/\bthirteen\b/gi, '13')
+        .replace(/\bfourteen\b/gi, '14')
+        .replace(/\bfifteen\b/gi, '15')
+        .replace(/\bsixteen\b/gi, '16')
+        .replace(/\bseventeen\b/gi, '17')
+        .replace(/\beighteen\b/gi, '18')
+        .replace(/\bnineteen\b/gi, '19')
+        .replace(/\btwenty[- ]?one\b/gi, '21')
         .replace(/\btwenty[- ]?two\b/gi, '22')
         .replace(/\btwenty[- ]?three\b/gi, '23')
         .replace(/\btwenty[- ]?four\b/gi, '24')
-        .replace(/\bfifteen\b/gi, '15')
-        .replace(/\bthirty[- ]?five\b/gi, '35')
-        .replace(/\bforty[- ]?five\b/gi, '45')
-        .replace(/\bfifty[- ]?five\b/gi, '55')
-        // Fix color words
-        .replace(/\bcar\b/gi, 'colour')
-        .replace(/\bblue car\b/gi, 'blue colour')
-        // Ensure pound symbols
+        .replace(/\btwenty[- ]?five\b/gi, '25')
+        // Ensure pound symbols are kept
         .replace(/(\d+)\s*pounds?\b/gi, '£$1')
         .replace(/(\d+)\s*quid\b/gi, '£$1')
         // Clean up extra spaces
@@ -224,8 +208,19 @@ export function ProductDetailPanel({
     recognition.onend = () => {
       console.log('Voice recognition ended, final transcript:', finalTranscript);
       setIsListening(false);
-      if (finalTranscript.trim()) {
-        setVoiceTranscript(finalTranscript.trim());
+      const cleaned = fixTranscript(finalTranscript).trim();
+      if (cleaned) {
+        setVoiceTranscript(cleaned);
+        console.log('Auto-applying voice to fields with transcript:', cleaned);
+        // Auto-apply once recording stops so user doesn't need an extra click
+        setTimeout(() => {
+          // Guard against double-runs
+          if (!isParsingVoiceRef.current) {
+            applyVoiceToFields(cleaned).catch((err) => {
+              console.error('Auto applyVoiceToFields error:', err);
+            });
+          }
+        }, 0);
       }
     };
     
@@ -312,13 +307,18 @@ export function ProductDetailPanel({
     };
   }, []);
 
-  const applyVoiceToFields = async () => {
-    if (!voiceTranscript.trim()) {
+  const isParsingVoiceRef = useRef(false);
+
+  const applyVoiceToFields = async (transcriptOverride?: string) => {
+    const transcriptToUse = (transcriptOverride ?? voiceTranscript).trim();
+    if (!transcriptToUse) {
       toast.error('No voice transcript to apply');
       return;
     }
     
+    console.log('[Voice] Applying voice to fields with transcript:', transcriptToUse);
     setIsParsingVoice(true);
+    isParsingVoiceRef.current = true;
     
     try {
       // Call the parse-voice edge function
@@ -329,7 +329,7 @@ export function ProductDetailPanel({
           'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
         body: JSON.stringify({ 
-          transcript: voiceTranscript,
+          transcript: transcriptToUse,
           existingCondition: formData.condition 
         }),
       });
@@ -341,8 +341,9 @@ export function ProductDetailPanel({
       
       const data = await response.json();
       const parsed = data.parsed;
+      console.log('[Voice] Parsed attributes from edge function:', parsed);
       
-      if (Object.keys(parsed).length === 0) {
+      if (!parsed || Object.keys(parsed).length === 0) {
         toast.info('No fields detected in voice input. Try speaking more clearly.');
         return;
       }
@@ -460,7 +461,7 @@ export function ProductDetailPanel({
       setFormData(updatedFormData);
       
       // Also add transcript to raw input for reference
-      updatedFormData.raw_input_text = (formData.raw_input_text || '') + '\n' + voiceTranscript;
+      updatedFormData.raw_input_text = (formData.raw_input_text || '') + '\n' + transcriptToUse;
 
       // Auto-regenerate descriptions with the updated product data
       if (updatedFields.length > 0) {
@@ -509,6 +510,7 @@ export function ProductDetailPanel({
       toast.error(error instanceof Error ? error.message : 'Failed to parse voice input');
     } finally {
       setIsParsingVoice(false);
+      isParsingVoiceRef.current = false;
     }
   };
 
@@ -784,7 +786,7 @@ export function ProductDetailPanel({
             {voiceTranscript && !isListening && (
               <Button 
                 variant="default" 
-                onClick={applyVoiceToFields}
+                onClick={() => applyVoiceToFields()}
                 disabled={isParsingVoice}
               >
                 {isParsingVoice ? (
