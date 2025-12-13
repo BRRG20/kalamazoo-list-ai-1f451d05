@@ -178,14 +178,25 @@ If the generated description does not match the CORRECT EXAMPLES tone exactly, r
 The tone must be minimal, editorial, confident, neutral, human. No marketing language whatsoever.
 
 ==========================================
-OUTPUT FORMAT
+OUTPUT FORMAT (CRITICAL - FOLLOW EXACTLY)
 ==========================================
+
+MANDATORY: Each description MUST contain:
+1. A 1-2 sentence paragraph
+2. FOLLOWED BY the attribute block with line breaks
+
+The attribute block MUST be included. Format EXACTLY like this:
+
+"description_style_a": "Vintage Malinmor chunky knit sweater, made in the Republic of Ireland from pure new wool. Ribbed crew neckline with cream stripe detailing.\\n\\nBrand: Malinmor\\nLabel Size: Large\\nPit to Pit: 21\\"\\nMaterial: 100% Pure New Wool\\nEra: Vintage\\nCondition: Very good\\nColour: Dark grey with cream stripes"
+
+Use \\n for line breaks. Include a blank line (\\n\\n) between the description paragraph and the attribute block.
+Only include attribute lines that have values. Omit any attribute that is empty or unknown.
 
 Respond ONLY with valid JSON (no markdown, no code blocks):
 {
   "title": "max 80 chars, no punctuation, brand first",
-  "description_style_a": "1-2 sentences + attribute block (minimal)",
-  "description_style_b": "1-2 sentences + attribute block (slightly more descriptive)",
+  "description_style_a": "[1-2 sentences]\\n\\nBrand: [value]\\nLabel Size: [value]\\nPit to Pit: [value]\\nMaterial: [value]\\nEra: [value]\\nCondition: [value]\\nColour: [value]",
+  "description_style_b": "[1-2 sentences]\\n\\nBrand: [value]\\nLabel Size: [value]\\nPit to Pit: [value]\\nMaterial: [value]\\nEra: [value]\\nCondition: [value]\\nColour: [value]",
   "shopify_tags": "tag1, tag2, tag3",
   "etsy_tags": "tag1, tag2, tag3",
   "collections_tags": "collection1, collection2"
