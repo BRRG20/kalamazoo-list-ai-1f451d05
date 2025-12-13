@@ -693,7 +693,8 @@ const handleSelectBatch = useCallback((id: string) => {
     
     try {
       // Prepare products and images for the edge function
-      const productsToCreate = productIds
+      const uniqueProductIds = Array.from(new Set(productIds));
+      const productsToCreate = uniqueProductIds
         .map(id => products.find(p => p.id === id))
         .filter(Boolean) as Product[];
       
@@ -703,8 +704,7 @@ const handleSelectBatch = useCallback((id: string) => {
       const imagesMap: Record<string, { url: string; position: number }[]> = {};
       const imagePromises = productsToCreate.map(async (product) => {
         const allImages = await fetchImagesForProduct(product.id);
-        const shopifyImages = allImages
-          .filter(img => img.include_in_shopify)
+        const shopifyImages = [...allImages]
           .sort((a, b) => a.position - b.position) // Ensure correct order
           .map(img => ({ url: img.url, position: img.position }));
         return { productId: product.id, images: shopifyImages };
