@@ -426,6 +426,7 @@ export function useProducts(batchId: string | null) {
     // Filter out undefined values and map to DB column names
     const dbUpdates: Record<string, any> = {};
     
+    if (updates.sku !== undefined) dbUpdates.sku = updates.sku;
     if (updates.status !== undefined) dbUpdates.status = updates.status;
     if (updates.raw_input_text !== undefined) dbUpdates.raw_input_text = updates.raw_input_text;
     if (updates.title !== undefined) dbUpdates.title = updates.title;
