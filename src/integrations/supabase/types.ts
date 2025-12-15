@@ -92,6 +92,39 @@ export type Database = {
         }
         Relationships: []
       }
+      etsy_credentials: {
+        Row: {
+          access_token_encrypted: string | null
+          app_key_encrypted: string
+          created_at: string
+          id: string
+          refresh_token_encrypted: string | null
+          shared_secret_encrypted: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_token_encrypted?: string | null
+          app_key_encrypted: string
+          created_at?: string
+          id?: string
+          refresh_token_encrypted?: string | null
+          shared_secret_encrypted: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_token_encrypted?: string | null
+          app_key_encrypted?: string
+          created_at?: string
+          id?: string
+          refresh_token_encrypted?: string | null
+          shared_secret_encrypted?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       images: {
         Row: {
           batch_id: string | null
@@ -139,6 +172,57 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      integration_settings: {
+        Row: {
+          connected_at: string | null
+          connected_shop_id: string | null
+          connected_shop_name: string | null
+          created_at: string
+          environment: string | null
+          id: string
+          integration_type: string
+          max_requests_per_day: number | null
+          max_requests_per_second: number | null
+          oauth_status: string | null
+          rate_limit_mode: string | null
+          token_expires_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          connected_at?: string | null
+          connected_shop_id?: string | null
+          connected_shop_name?: string | null
+          created_at?: string
+          environment?: string | null
+          id?: string
+          integration_type: string
+          max_requests_per_day?: number | null
+          max_requests_per_second?: number | null
+          oauth_status?: string | null
+          rate_limit_mode?: string | null
+          token_expires_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          connected_at?: string | null
+          connected_shop_id?: string | null
+          connected_shop_name?: string | null
+          created_at?: string
+          environment?: string | null
+          id?: string
+          integration_type?: string
+          max_requests_per_day?: number | null
+          max_requests_per_second?: number | null
+          oauth_status?: string | null
+          rate_limit_mode?: string | null
+          token_expires_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       marketplace_connections: {
         Row: {
