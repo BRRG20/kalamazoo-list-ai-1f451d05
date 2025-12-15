@@ -13,6 +13,8 @@ import { useSettings } from '@/hooks/use-database';
 import { useAuth } from '@/hooks/use-auth';
 import DefaultTagsManager from '@/components/settings/DefaultTagsManager';
 import MarketplaceConnections from '@/components/settings/MarketplaceConnections';
+import EtsyIntegrationSettings from '@/components/settings/EtsyIntegrationSettings';
+
 export default function SettingsPage() {
   const navigate = useNavigate();
   const { settings, loading, updateSettings, isShopifyConfigured } = useSettings();
@@ -90,8 +92,9 @@ export default function SettingsPage() {
           </div>
 
           <Tabs defaultValue="general" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="general">General</TabsTrigger>
+              <TabsTrigger value="integrations">Integrations</TabsTrigger>
               <TabsTrigger value="marketplaces">Marketplaces</TabsTrigger>
               <TabsTrigger value="default-tags">Default Tags</TabsTrigger>
             </TabsList>
@@ -243,6 +246,10 @@ export default function SettingsPage() {
                   )}
                 </Button>
               </div>
+            </TabsContent>
+
+            <TabsContent value="integrations" className="mt-6">
+              <EtsyIntegrationSettings />
             </TabsContent>
 
             <TabsContent value="marketplaces" className="mt-6">
