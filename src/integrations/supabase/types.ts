@@ -466,11 +466,39 @@ export type Database = {
         }
         Relationships: []
       }
+      sku_sequences: {
+        Row: {
+          category_code: string
+          created_at: string
+          id: string
+          last_number: number
+          updated_at: string
+        }
+        Insert: {
+          category_code: string
+          created_at?: string
+          id?: string
+          last_number?: number
+          updated_at?: string
+        }
+        Update: {
+          category_code?: string
+          created_at?: string
+          id?: string
+          last_number?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      generate_sku: {
+        Args: { p_category_code: string; p_era_code: string; p_size: string }
+        Returns: string
+      }
       is_email_authorized: { Args: { check_email: string }; Returns: boolean }
     }
     Enums: {
