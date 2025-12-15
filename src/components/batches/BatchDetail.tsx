@@ -940,9 +940,9 @@ export function BatchDetail({
             <>
               {/* Shopify upload counter */}
               <div className="flex items-center gap-4 mr-auto">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm font-medium text-success">
-                    Shopify uploaded: {shopifyStats.uploaded} / {shopifyStats.total}
+                    Uploaded: {shopifyStats.uploaded} / {shopifyStats.total}
                   </span>
                   {shopifyStats.failed > 0 && (
                     <span className="text-sm text-destructive">
@@ -950,8 +950,20 @@ export function BatchDetail({
                     </span>
                   )}
                   <span className="text-sm text-muted-foreground">
-                    • {shopifyStats.notUploaded} not uploaded
+                    • {shopifyStats.notUploaded} pending
                   </span>
+                  {/* Hide uploaded toggle */}
+                  <button
+                    onClick={() => setShopifyFilter(prev => prev === 'not_uploaded' ? 'all' : 'not_uploaded')}
+                    className={cn(
+                      "ml-2 px-2 py-0.5 text-xs rounded-full border transition-colors",
+                      shopifyFilter === 'not_uploaded'
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-transparent text-muted-foreground border-border hover:border-primary/50"
+                    )}
+                  >
+                    {shopifyFilter === 'not_uploaded' ? '✓ Showing pending only' : 'Hide uploaded'}
+                  </button>
                 </div>
               </div>
               
