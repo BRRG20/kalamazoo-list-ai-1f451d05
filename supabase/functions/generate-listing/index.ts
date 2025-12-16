@@ -69,10 +69,33 @@ CRITICAL RULES — NEVER BREAK THESE
 
 1. NEVER output "Unknown", "Not specified", "N/A", or placeholder text
 2. If a value is not provided, OMIT that attribute line entirely
-3. Brand in description MUST exactly match brand in title
+3. Brand in description MUST exactly match the brand provided in product details
 4. Era: ONLY include if explicitly 80s, 90s, or Y2K — otherwise OMIT
 5. Made In: ONLY include if explicitly provided — otherwise OMIT
 6. The attribute block is MANDATORY — never return a description without it
+7. **CRITICAL FOR TITLE**: You MUST use the EXACT brand and size values provided in the product details. DO NOT make up or change them.
+
+==========================================
+TITLE RULES — CRITICAL
+==========================================
+
+**MANDATORY**: The title MUST use these EXACT values from product details:
+- Brand: Use EXACTLY as provided (e.g., if "545" is provided, use "545" NOT something else)
+- Size: Use EXACTLY the size_label or size_recommended provided (e.g., if "Large" is provided, use "Size L" or "Size Large")
+
+Format: Brand → Era (if known) → Gender → Item Type → Key Feature → Size
+
+Rules:
+- Start with the EXACT brand name provided
+- Gender: Mens / Womens / Unisex (based on department field, default to Unisex)
+- If era is NOT provided or uncertain, leave it out (do NOT guess)
+- Max 80 characters, NO punctuation
+- Size ALWAYS at the end using EXACT size provided: "Size L" or "Size XL"
+- NO hype words: "rare", "beautiful", "excellent", "amazing"
+
+Examples:
+- If brand="Malinmor", size_label="Large" → "Malinmor Vintage Mens Chunky Knit Wool Sweater Size L"
+- If brand="545", size_label="Large" → "545 Mens Graphic Print T Shirt Size L"
 
 ==========================================
 DESCRIPTION TONE — SOURCE OF TRUTH
@@ -100,37 +123,24 @@ ALWAYS output this structure:
 
 [blank line]
 
-Brand: [exact brand name]
-Label Size: [size]
-Pit to Pit: [measurement with units]
-Material: [fabric composition]
+Brand: [EXACT brand from product details]
+Label Size: [EXACT size from product details]
+Pit to Pit: [measurement with units if provided]
+Material: [fabric composition if provided]
 Era: [ONLY if 80s/90s/Y2K, otherwise OMIT this line]
 Condition: [condition, with flaws in parentheses if any]
 Colour: [main colour, and secondary if applicable]
 
-EXAMPLE OUTPUT:
-"Vintage Malinmor chunky knit sweater, made in the Republic of Ireland from pure new wool. Ribbed crew neckline with cream stripe detailing. Heavyweight and well-made.\\n\\nBrand: Malinmor\\nLabel Size: Large\\nPit to Pit: 21\\"\\nMaterial: 100% Pure New Wool\\nCondition: Very good\\nColour: Dark grey with cream stripes"
-
-Note: Era line is OMITTED because it wasn't explicitly stated as 80s/90s/Y2K.
-
 ==========================================
-TITLE FORMAT (Etsy-Optimised, Max 80 chars)
+INFER MISSING FIELDS FROM IMAGES
 ==========================================
 
-Format: Brand → Era (if known) → Gender → Item Type → Key Feature → Size
-
-Rules:
-- Start with brand name or recognisable franchise/character
-- Gender: Mens / Womens / Unisex (default to Unisex if unclear)
-- If era unknown, leave it out (do NOT guess)
-- Max 80 characters, NO punctuation
-- Size ALWAYS at the end: "Size L" or "W32 L30"
-- NO hype words: "rare", "beautiful", "excellent", "amazing"
-
-Examples:
-- "Malinmor Vintage Mens Chunky Knit Wool Sweater Size L"
-- "Ralph Lauren 90s Mens Wool Turtleneck Geometric Knit Size M"
-- "Nike Unisex Graphic Print T Shirt Size XL"
+If product details are missing these fields, analyze the images to determine:
+- garment_type: What type of garment (T-Shirt, Hoodie, Sweater, etc.)
+- fit: How it fits (Regular, Oversized, Slim, Boxy)
+- era: ONLY if clearly 80s, 90s, or Y2K style (otherwise null)
+- condition: General condition assessment from images
+- department: Men, Women, or Unisex based on cut/style
 
 ==========================================
 TAG RULES (CRITICAL FOR MARKETPLACE COMPATIBILITY)
@@ -139,32 +149,14 @@ TAG RULES (CRITICAL FOR MARKETPLACE COMPATIBILITY)
 ETSY TAGS (etsy_tags):
 - MUST be 2-3 words each (NEVER single words)
 - SEO-driven, specific to the item
-- Examples: "vintage wool sweater", "90s streetwear", "mens knit jumper", "fair isle cardigan"
-- BAD examples (never use): "red", "hoodie", "menswear", "vintage"
+- Examples: "vintage wool sweater", "90s streetwear", "mens knit jumper"
 
 SHOPIFY TAGS (shopify_tags):
 - Can include single words and phrases
 - Include: brand, garment type, colour, material, era, style
-- Example: "Ralph Lauren, Sweater, Wool, 90s, Vintage, Knitwear, Mens"
 
 COLLECTIONS TAGS (collections_tags):
 - For Shopify auto-collections
-- Example: "Knitwear, Sweaters, Vintage Menswear"
-
-==========================================
-CATEGORY/TYPE INFERENCE
-==========================================
-
-Map garment_type to correct marketplace categories:
-- Sweater/Jumper/Pullover → Knitwear
-- Hoodie/Sweatshirt → Sweatshirts & Hoodies
-- T-shirt/Tee → T-Shirts
-- Shirt/Button-up → Shirts
-- Jacket/Coat → Outerwear
-- Cardigan → Cardigans
-- Flannel Shirt → Flannel Shirts
-
-Default department to Unisex unless explicitly Men/Women/Kids.
 
 ==========================================
 OUTPUT FORMAT (JSON ONLY)
@@ -172,12 +164,17 @@ OUTPUT FORMAT (JSON ONLY)
 
 Respond with ONLY valid JSON (no markdown, no code blocks):
 {
-  "title": "max 80 chars, no punctuation, brand first, size at end",
-  "description_style_a": "[2-4 sentences]\\n\\nBrand: [value]\\nLabel Size: [value]\\nPit to Pit: [value]\\nMaterial: [value]\\nEra: [OMIT if unknown]\\nCondition: [value]\\nColour: [value]",
-  "description_style_b": "[2-4 sentences, slightly more descriptive]\\n\\nBrand: [value]\\nLabel Size: [value]\\nPit to Pit: [value]\\nMaterial: [value]\\nEra: [OMIT if unknown]\\nCondition: [value]\\nColour: [value]",
+  "title": "MUST use exact brand and size from product details, max 80 chars",
+  "description_style_a": "[2-4 sentences]\\n\\nBrand: [exact value]\\nLabel Size: [exact value]\\n...",
+  "description_style_b": "[2-4 sentences, slightly more descriptive]\\n\\nBrand: [exact value]\\n...",
   "shopify_tags": "Brand, Type, Material, Era, Style",
   "etsy_tags": "two word tag, three word tag, another tag",
-  "collections_tags": "Collection1, Collection2"
+  "collections_tags": "Collection1, Collection2",
+  "garment_type": "inferred from images if not provided, e.g. T-Shirt, Hoodie",
+  "fit": "inferred from images if not provided, e.g. Regular, Oversized",
+  "era": "ONLY 80s, 90s, Y2K if evident, otherwise null",
+  "condition": "inferred condition if not provided",
+  "department": "Men, Women, or Unisex based on images"
 }`;
 
 

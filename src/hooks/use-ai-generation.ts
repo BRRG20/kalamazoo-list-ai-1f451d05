@@ -163,8 +163,8 @@ export function useAIGeneration({
         finalShopifyTags = allTags.join(', ');
       }
       
-      // Update product with generated content
-      await updateProduct(productId, {
+      // Update product with generated content - include inferred fields if not already set
+      const updates: Partial<Product> = {
         status: 'generated',
         title: generated.title || product.title,
         description_style_a: generated.description_style_a,
@@ -172,7 +172,26 @@ export function useAIGeneration({
         shopify_tags: finalShopifyTags,
         etsy_tags: generated.etsy_tags || product.etsy_tags,
         collections_tags: generated.collections_tags || product.collections_tags,
-      });
+      };
+      
+      // Only update inferred fields if they're not already set on the product
+      if (!product.garment_type && generated.garment_type) {
+        updates.garment_type = generated.garment_type;
+      }
+      if (!product.fit && generated.fit) {
+        updates.fit = generated.fit;
+      }
+      if (!product.era && generated.era) {
+        updates.era = generated.era;
+      }
+      if (!product.condition && generated.condition) {
+        updates.condition = generated.condition;
+      }
+      if (!product.department && generated.department) {
+        updates.department = generated.department;
+      }
+      
+      await updateProduct(productId, updates);
       
       // Mark as AI generated in ref only (no state update)
       aiGeneratedProductsRef.current.add(productId);
