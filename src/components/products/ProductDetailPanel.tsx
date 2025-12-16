@@ -175,11 +175,30 @@ export function ProductDetailPanel({
     setSkuValidation(validation);
   }, [product]);
 
-  // Update SKU validation when relevant fields change
+  // Update SKU validation and auto-generate when required fields are present
   useEffect(() => {
     const validation = validateForSKU(formData.garment_type, formData.size_recommended, formData.era);
     setSkuValidation(validation);
-  }, [formData.garment_type, formData.size_recommended, formData.era]);
+    
+    // Auto-generate SKU if valid and no SKU exists yet
+    if (validation.isValid && !formData.sku && !isGeneratingSKU) {
+      const autoGenerateSKU = async () => {
+        setIsGeneratingSKU(true);
+        try {
+          const result = await generateSKU(formData.garment_type, formData.size_recommended, formData.era);
+          if (result.sku) {
+            setFormData(prev => ({ ...prev, sku: result.sku }));
+            toast.success(`SKU auto-generated: ${result.sku}`);
+          }
+        } catch (err) {
+          console.error('Auto SKU generation error:', err);
+        } finally {
+          setIsGeneratingSKU(false);
+        }
+      };
+      autoGenerateSKU();
+    }
+  }, [formData.garment_type, formData.size_recommended, formData.era, formData.sku, isGeneratingSKU]);
 
   const handleGenerateSKU = async () => {
     const validation = validateForSKU(formData.garment_type, formData.size_recommended, formData.era);
