@@ -11,9 +11,7 @@ import {
   Save,
   Loader2,
   Camera,
-  ShoppingBag,
-  Tag,
-  AlertCircle
+  ShoppingBag
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,7 +21,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner';
 import { ImageGallery } from './ImageGallery';
 import { generateListingBlock } from '@/hooks/use-database';
-import { generateSKU, validateForSKU, isValidSKUFormat } from '@/lib/sku-generator';
 import type { Product, ProductImage, Department, Era, Condition } from '@/types';
 
 interface ProductDetailPanelProps {
@@ -103,8 +100,6 @@ export function ProductDetailPanel({
   const [isListening, setIsListening] = useState(false);
   const [isParsingVoice, setIsParsingVoice] = useState(false);
   const [isAnalyzingImages, setIsAnalyzingImages] = useState(false);
-  const [isGeneratingSKU, setIsGeneratingSKU] = useState(false);
-  const [skuValidation, setSkuValidation] = useState<{ isValid: boolean; missingFields: string[] } | null>(null);
   const [voiceTranscript, setVoiceTranscript] = useState('');
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -170,59 +165,8 @@ export function ProductDetailPanel({
       raw_input_text: product.raw_input_text,
       notes: product.notes,
     });
-    // Validate SKU fields on load
-    const validation = validateForSKU(product.garment_type, product.size_recommended, product.era);
-    setSkuValidation(validation);
   }, [product]);
 
-  // Update SKU validation and auto-generate when required fields are present
-  useEffect(() => {
-    const validation = validateForSKU(formData.garment_type, formData.size_recommended, formData.era);
-    setSkuValidation(validation);
-    
-    // Auto-generate SKU if valid and no SKU exists yet
-    if (validation.isValid && !formData.sku && !isGeneratingSKU) {
-      const autoGenerateSKU = async () => {
-        setIsGeneratingSKU(true);
-        try {
-          const result = await generateSKU(formData.garment_type, formData.size_recommended, formData.era);
-          if (result.sku) {
-            setFormData(prev => ({ ...prev, sku: result.sku }));
-            toast.success(`SKU auto-generated: ${result.sku}`);
-          }
-        } catch (err) {
-          console.error('Auto SKU generation error:', err);
-        } finally {
-          setIsGeneratingSKU(false);
-        }
-      };
-      autoGenerateSKU();
-    }
-  }, [formData.garment_type, formData.size_recommended, formData.era, formData.sku, isGeneratingSKU]);
-
-  const handleGenerateSKU = async () => {
-    const validation = validateForSKU(formData.garment_type, formData.size_recommended, formData.era);
-    if (!validation.isValid) {
-      toast.error(`Missing required fields: ${validation.missingFields.join(', ')}`);
-      return;
-    }
-
-    setIsGeneratingSKU(true);
-    try {
-      const result = await generateSKU(formData.garment_type, formData.size_recommended, formData.era);
-      if (result.sku) {
-        updateField('sku', result.sku);
-        toast.success(`SKU generated: ${result.sku}`);
-      } else {
-        toast.error(result.error || 'Failed to generate SKU');
-      }
-    } catch (err) {
-      console.error('SKU generation error:', err);
-      toast.error('Failed to generate SKU');
-    } finally {
-      setIsGeneratingSKU(false);
-    }
-  };
 
   const updateField = <K extends keyof Product>(field: K, value: Product[K]) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -960,43 +904,14 @@ export function ProductDetailPanel({
                 <h3 className="font-semibold text-foreground mb-3">Core</h3>
                 <div className="grid gap-4">
                   {/* SKU Field */}
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1">
-                      <Label className="flex items-center gap-2">
-                        SKU
-                        {formData.sku && isValidSKUFormat(formData.sku) && (
-                          <Check className="w-3 h-3 text-success" />
-                        )}
-                      </Label>
-                      <div className="flex gap-2">
-                        <Input
-                          value={formData.sku || ''}
-                          onChange={(e) => updateField('sku', e.target.value)}
-                          placeholder="Auto-generated or manual entry"
-                          className="font-mono"
-                        />
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={handleGenerateSKU}
-                          disabled={isGeneratingSKU || !skuValidation?.isValid}
-                          title={skuValidation?.isValid ? 'Generate SKU' : `Missing: ${skuValidation?.missingFields.join(', ')}`}
-                          className="flex-shrink-0"
-                        >
-                          {isGeneratingSKU ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Tag className="w-4 h-4" />
-                          )}
-                        </Button>
-                      </div>
-                      {skuValidation && !skuValidation.isValid && (
-                        <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3" />
-                          Set {skuValidation.missingFields.join(' & ')} to generate SKU
-                        </p>
-                      )}
-                    </div>
+                  <div>
+                    <Label>SKU</Label>
+                    <Input
+                      value={formData.sku || ''}
+                      onChange={(e) => updateField('sku', e.target.value)}
+                      placeholder="Enter SKU"
+                      className="font-mono"
+                    />
                   </div>
 
                   <div className="flex items-center gap-2">
