@@ -1206,7 +1206,7 @@ export function BatchDetail({
       {showBirdsEyeView && (
         <ErrorBoundary fallbackMessage="Birds Eye View encountered an error. Please close and try again.">
           <BirdsEyeView
-          products={products}
+          products={filteredProducts}
           productImages={productImages}
           isLoading={imagesLoading}
           selectedProductIds={selectedProductIds}
