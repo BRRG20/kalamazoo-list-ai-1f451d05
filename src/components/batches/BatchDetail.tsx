@@ -12,6 +12,8 @@ import {
   Image as ImageIcon,
   ArrowLeft,
   X,
+  EyeOff,
+  Eye,
   Trash2,
   Settings2,
   Plus,
@@ -231,6 +233,7 @@ export function BatchDetail({
   const [showBirdsEyeView, setShowBirdsEyeView] = useState(false);
   const [bulkSelectKey, setBulkSelectKey] = useState(0);
   const [showInfoDialog, setShowInfoDialog] = useState(false);
+  const [hiddenProductIds, setHiddenProductIds] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const shopifyConfigured = isShopifyConfigured();
   
@@ -274,9 +277,14 @@ export function BatchDetail({
     total: products.length,
   };
 
-  // Filter products based on search query and Shopify filter
+  // Filter products based on search query, Shopify filter, and hidden products
   const filteredProducts = products.filter(product => {
-    // Apply Shopify filter first
+    // Apply hidden filter first
+    if (hiddenProductIds.has(product.id)) {
+      return false;
+    }
+    
+    // Apply Shopify filter
     // A product is "uploaded" if it has shopify_product_id OR status is 'created_in_shopify'
     const isUploaded = !!product.shopify_product_id || product.status === 'created_in_shopify';
     const isFailed = product.status === 'error';
@@ -303,6 +311,22 @@ export function BatchDetail({
       product.colour_main?.toLowerCase().includes(query)
     );
   });
+
+  // Hide selected products
+  const handleHideSelected = useCallback(() => {
+    if (selectedProductIds.size === 0) return;
+    setHiddenProductIds(prev => {
+      const newSet = new Set(prev);
+      selectedProductIds.forEach(id => newSet.add(id));
+      return newSet;
+    });
+    onDeselectAllProducts();
+  }, [selectedProductIds, onDeselectAllProducts]);
+
+  // Show all hidden products
+  const handleShowAllHidden = useCallback(() => {
+    setHiddenProductIds(new Set());
+  }, []);
 
   // Update imagesPerProduct when settings load
   useEffect(() => {
@@ -1024,6 +1048,34 @@ export function BatchDetail({
                   >
                     Clear
                   </Button>
+                  
+                  {/* Hide Selected button */}
+                  {selectedProductIds.size > 0 && (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={handleHideSelected}
+                      type="button"
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      <EyeOff className="w-4 h-4 mr-1" />
+                      Hide ({selectedProductIds.size})
+                    </Button>
+                  )}
+                  
+                  {/* Show Hidden button */}
+                  {hiddenProductIds.size > 0 && (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={handleShowAllHidden}
+                      type="button"
+                      className="text-amber-600 hover:text-amber-700 border-amber-300 hover:border-amber-400"
+                    >
+                      <Eye className="w-4 h-4 mr-1" />
+                      Show Hidden ({hiddenProductIds.size})
+                    </Button>
+                  )}
                   
                   {/* Three-dots menu with actions for selected products */}
                   {selectedProductIds.size > 0 && onRegroupSelectedProducts && (
