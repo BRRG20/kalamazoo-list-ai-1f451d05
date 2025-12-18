@@ -268,22 +268,26 @@ export function BatchDetail({
 
   // Calculate Shopify upload stats
   const shopifyStats = {
-    uploaded: products.filter(p => p.status === 'created_in_shopify' && p.shopify_product_id).length,
+    uploaded: products.filter(p => !!p.shopify_product_id || p.status === 'created_in_shopify').length,
     failed: products.filter(p => p.status === 'error').length,
-    notUploaded: products.filter(p => p.status !== 'created_in_shopify' && p.status !== 'error').length,
+    notUploaded: products.filter(p => !p.shopify_product_id && p.status !== 'created_in_shopify' && p.status !== 'error').length,
     total: products.length,
   };
 
   // Filter products based on search query and Shopify filter
   const filteredProducts = products.filter(product => {
     // Apply Shopify filter first
-    if (shopifyFilter === 'uploaded' && (product.status !== 'created_in_shopify' || !product.shopify_product_id)) {
+    // A product is "uploaded" if it has shopify_product_id OR status is 'created_in_shopify'
+    const isUploaded = !!product.shopify_product_id || product.status === 'created_in_shopify';
+    const isFailed = product.status === 'error';
+    
+    if (shopifyFilter === 'uploaded' && !isUploaded) {
       return false;
     }
-    if (shopifyFilter === 'not_uploaded' && (product.status === 'created_in_shopify' || product.status === 'error')) {
+    if (shopifyFilter === 'not_uploaded' && (isUploaded || isFailed)) {
       return false;
     }
-    if (shopifyFilter === 'failed' && product.status !== 'error') {
+    if (shopifyFilter === 'failed' && !isFailed) {
       return false;
     }
 
