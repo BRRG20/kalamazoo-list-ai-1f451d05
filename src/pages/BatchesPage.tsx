@@ -1009,7 +1009,35 @@ const handleSelectBatch = useCallback((id: string) => {
         if (generated.shopify_tags) updates.shopify_tags = generated.shopify_tags;
         if (generated.etsy_tags) updates.etsy_tags = generated.etsy_tags;
         if (generated.collections_tags) updates.collections_tags = generated.collections_tags;
+        
+        // CRITICAL: Also update AI-inferred fields (only if not already set on product)
+        if (!product.garment_type && generated.garment_type) {
+          updates.garment_type = generated.garment_type;
+        }
+        if (!product.fit && generated.fit) {
+          updates.fit = generated.fit;
+        }
+        if (!product.era && generated.era) {
+          updates.era = generated.era;
+        }
+        if (!product.condition && generated.condition) {
+          updates.condition = generated.condition;
+        }
+        if (!product.department && generated.department) {
+          updates.department = generated.department;
+        }
+        if (!product.flaws && generated.flaws) {
+          updates.flaws = generated.flaws;
+        }
+        if (!product.made_in && generated.made_in) {
+          updates.made_in = generated.made_in;
+        }
+        if (!product.pattern && generated.pattern) {
+          updates.pattern = generated.pattern;
+        }
       }
+      
+      console.log('[AI Detail] Updates to apply:', Object.keys(updates));
       
       // updateProduct uses the specific product ID - never affects other products
       await updateProduct(editingProductId, updates);

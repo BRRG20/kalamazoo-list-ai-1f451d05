@@ -350,16 +350,82 @@ serve(async (req) => {
       }
     }
 
-    // Ensure title is max 80 chars and has no punctuation
+    // Get the correct size to use in title (recommended_size takes priority, then label)
+    const correctSize = product.size_recommended || product.size_label || generated.size_recommended || generated.size_label;
+    
+    // Ensure title is max 80 chars, has no punctuation, and uses CORRECT size
     if (generated.title) {
       // Remove punctuation
       generated.title = generated.title.replace(/[,\-–—:;]/g, ' ').replace(/\s+/g, ' ').trim();
+      
+      // CRITICAL: Validate and fix size in title
+      if (correctSize) {
+        // Normalize size for comparison
+        const normalizeSize = (s: string) => {
+          const lower = s.toLowerCase().trim();
+          const sizeMap: Record<string, string> = {
+            'extra small': 'XS', 'xs': 'XS',
+            'small': 'S', 's': 'S',
+            'medium': 'M', 'm': 'M',
+            'large': 'L', 'l': 'L',
+            'extra large': 'XL', 'xl': 'XL',
+            'xxl': 'XXL', '2xl': 'XXL', 'extra extra large': 'XXL',
+            'xxxl': 'XXXL', '3xl': 'XXXL',
+          };
+          return sizeMap[lower] || s;
+        };
+        
+        const normalizedCorrect = normalizeSize(correctSize);
+        
+        // Check if title ends with Size X pattern
+        const sizePattern = /\bSize\s+([A-Z0-9]+)$/i;
+        const match = generated.title.match(sizePattern);
+        
+        if (match) {
+          const titleSize = normalizeSize(match[1]);
+          if (titleSize !== normalizedCorrect) {
+            // Wrong size in title - replace it
+            console.log(`[AI] Fixing title size: ${match[1]} -> ${normalizedCorrect}`);
+            generated.title = generated.title.replace(sizePattern, `Size ${normalizedCorrect}`);
+          }
+        } else {
+          // No size in title - add it
+          const titleWithoutSize = generated.title.replace(/\s+Size.*$/i, '').trim();
+          if (titleWithoutSize.length + 8 + normalizedCorrect.length <= 80) {
+            generated.title = `${titleWithoutSize} Size ${normalizedCorrect}`;
+          }
+        }
+      }
+      
       if (generated.title.length > 80) {
         generated.title = generated.title.substring(0, 80).trim();
       }
     }
+    
+    // Ensure all inferred fields are included
+    const finalGenerated = {
+      title: generated.title || null,
+      description_style_a: generated.description_style_a || null,
+      description_style_b: generated.description_style_b || null,
+      shopify_tags: generated.shopify_tags || null,
+      etsy_tags: generated.etsy_tags || null,
+      collections_tags: generated.collections_tags || null,
+      garment_type: generated.garment_type || null,
+      fit: generated.fit || null,
+      era: generated.era || null,
+      condition: generated.condition || null,
+      department: generated.department || null,
+      flaws: generated.flaws || null,
+      made_in: generated.made_in || null,
+      pattern: generated.pattern || null,
+      // Include size inference
+      size_label: generated.size_label || null,
+      size_recommended: generated.size_recommended || null,
+    };
+    
+    console.log("[AI] Final generated fields:", Object.keys(finalGenerated).filter(k => finalGenerated[k as keyof typeof finalGenerated]));
 
-    return new Response(JSON.stringify({ generated }), {
+    return new Response(JSON.stringify({ generated: finalGenerated }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
