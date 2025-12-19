@@ -43,6 +43,7 @@ interface ProductDetailPanelProps {
   regeneratingField?: string | null;
   isCreatingShopify?: boolean;
   isShopifyConfigured?: boolean;
+  autoStartRecording?: boolean; // NEW: Auto-start voice recording when panel opens
 }
 
 const UNSET_VALUE = '__unset__';
@@ -95,6 +96,7 @@ export function ProductDetailPanel({
   regeneratingField,
   isCreatingShopify,
   isShopifyConfigured,
+  autoStartRecording = false,
 }: ProductDetailPanelProps) {
   const [formData, setFormData] = useState<Partial<Product>>({});
   const [isListening, setIsListening] = useState(false);
@@ -134,9 +136,15 @@ export function ProductDetailPanel({
   });
   const recognitionRef = useRef<any>(null);
   const recorderMountRef = useRef(0);
+  
+  // Track unsaved changes
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const initialFormDataRef = useRef<Partial<Product>>({});
+  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSaveTimeRef = useRef<number>(0);
 
   useEffect(() => {
-    setFormData({
+    const initialData = {
       sku: product.sku,
       title: product.title,
       price: product.price,
@@ -164,8 +172,60 @@ export function ProductDetailPanel({
       listing_block: product.listing_block,
       raw_input_text: product.raw_input_text,
       notes: product.notes,
-    });
+    };
+    setFormData(initialData);
+    initialFormDataRef.current = initialData;
+    setHasUnsavedChanges(false);
   }, [product]);
+  
+  // Track changes to formData
+  useEffect(() => {
+    const hasChanges = Object.keys(formData).some(key => {
+      const k = key as keyof typeof formData;
+      return formData[k] !== initialFormDataRef.current[k];
+    });
+    setHasUnsavedChanges(hasChanges);
+    
+    // Auto-save draft with debounce (every 3 seconds if changes detected)
+    if (hasChanges && autoSaveTimerRef.current === null) {
+      autoSaveTimerRef.current = setTimeout(async () => {
+        const now = Date.now();
+        // Only auto-save if at least 3 seconds since last save
+        if (now - lastSaveTimeRef.current >= 3000) {
+          console.log('[AutoSave] Saving draft...');
+          try {
+            const updatedProduct = { ...product, ...formData };
+            const listingBlock = generateListingBlock(updatedProduct as Product);
+            await onSave({ ...formData, listing_block: listingBlock });
+            lastSaveTimeRef.current = now;
+            initialFormDataRef.current = formData;
+            setHasUnsavedChanges(false);
+          } catch (e) {
+            console.error('[AutoSave] Failed:', e);
+          }
+        }
+        autoSaveTimerRef.current = null;
+      }, 3000);
+    }
+    
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+        autoSaveTimerRef.current = null;
+      }
+    };
+  }, [formData, product, onSave]);
+  
+  // Auto-start recording when panel opens with autoStartRecording flag
+  useEffect(() => {
+    if (autoStartRecording && !isListening && !isParsingVoice) {
+      // Small delay to let UI settle
+      const timer = setTimeout(() => {
+        startVoiceInput();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [autoStartRecording]);
 
 
   const updateField = <K extends keyof Product>(field: K, value: Product[K]) => {

@@ -163,7 +163,7 @@ export function useAIGeneration({
         finalShopifyTags = allTags.join(', ');
       }
       
-      // Update product with generated content - include inferred fields if not already set
+      // Update product with generated content - include ALL inferred fields
       const updates: Partial<Product> = {
         status: 'generated',
         title: generated.title || product.title,
@@ -174,7 +174,8 @@ export function useAIGeneration({
         collections_tags: generated.collections_tags || product.collections_tags,
       };
       
-      // Only update inferred fields if they're not already set on the product
+      // CRITICAL: Update ALL inferred fields from AI (not just if empty)
+      // Only update if AI provided a value AND product doesn't already have one
       if (!product.garment_type && generated.garment_type) {
         updates.garment_type = generated.garment_type;
       }
@@ -190,6 +191,18 @@ export function useAIGeneration({
       if (!product.department && generated.department) {
         updates.department = generated.department;
       }
+      // NEW: Also update these fields if AI inferred them
+      if (!product.flaws && generated.flaws) {
+        updates.flaws = generated.flaws;
+      }
+      if (!product.made_in && generated.made_in) {
+        updates.made_in = generated.made_in;
+      }
+      if (!product.pattern && generated.pattern) {
+        updates.pattern = generated.pattern;
+      }
+      
+      console.log('[AI] Updates to save:', Object.keys(updates));
       
       await updateProduct(productId, updates);
       
