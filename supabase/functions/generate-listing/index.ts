@@ -143,13 +143,45 @@ If product details are missing these fields, analyze the images to determine:
 - department: Men, Women, or Unisex based on cut/style
 
 ==========================================
-TAG RULES (CRITICAL FOR MARKETPLACE COMPATIBILITY)
+ETSY TAG RULES — CRITICAL (SEARCH-LED, CONVERSION-FOCUSED)
 ==========================================
 
-ETSY TAGS (etsy_tags):
-- MUST be 2-3 words each (NEVER single words)
-- SEO-driven, specific to the item
-- Examples: "vintage wool sweater", "90s streetwear", "mens knit jumper"
+**CORE RULES (NON-NEGOTIABLE):**
+- Generate EXACTLY 13 Etsy tags (Etsy max limit)
+- Primary format: 3-word long-tail phrases (e.g. "vintage wool jumper", "oversized knit sweater")
+- EVERY tag MUST be 20 characters or fewer (Etsy character limit)
+- If 3-word phrase exceeds 20 chars, shorten intelligently while keeping search intent
+- Fallback: If no strong 3-word tag fits, use high-intent 2-word trending search terms
+
+**BANNED TAGS — NEVER USE:**
+- Generic: "cool top", "nice sweater", "fashion clothing", "unique style", "vintage item"
+- Low-intent: single adjectives, vague descriptors, brand-only tags
+- Marketing fluff: anything a buyer wouldn't actually search for
+
+**TAG CATEGORIES TO COVER (mix across all 13 tags):**
+
+A. GARMENT TYPE: sweater, jumper, sweatshirt, t-shirt, knitwear, crewneck, pullover, hoodie
+
+B. FUNCTION/USE-CASE: winter sweater, everyday jumper, layering piece, casual wear, workwear top, lounge sweatshirt, streetwear tee, gift for him, gift for her
+
+C. STYLE/AESTHETIC: oversized fit, boxy fit, cropped jumper, relaxed fit, minimal style, streetwear style, preppy style, retro style
+
+D. ERA/CULTURE (when relevant): 80s sweater, 90s sweatshirt, y2k t shirt, vintage graphic tee
+
+E. MATERIAL/CONSTRUCTION: wool jumper, cotton sweatshirt, ribbed knit, heavy knit, soft fleece, brushed cotton
+
+F. VISUAL/DETAIL-LED: ribbed cuffs, dropped shoulder, long sleeve top, short sleeve tee, crew neck sweater, mock neck jumper
+
+G. COLOUR-LED (only when distinctive): black sweatshirt, grey marl jumper, cream knit sweater, navy crewneck
+
+**OUTPUT REQUIREMENT:**
+- All 13 tags must be unique, varied, and cover multiple search angles
+- Each tag must be something a real Etsy buyer would type when ready to purchase
+- Format: comma-separated, lowercase, max 20 chars each
+
+==========================================
+SHOPIFY & COLLECTIONS TAG RULES
+==========================================
 
 SHOPIFY TAGS (shopify_tags):
 - Can include single words and phrases
@@ -168,7 +200,7 @@ Respond with ONLY valid JSON (no markdown, no code blocks):
   "description_style_a": "[2-4 sentences]\\n\\nBrand: [exact value]\\nLabel Size: [exact value]\\n...",
   "description_style_b": "[2-4 sentences, slightly more descriptive]\\n\\nBrand: [exact value]\\n...",
   "shopify_tags": "Brand, Type, Material, Era, Style",
-  "etsy_tags": "two word tag, three word tag, another tag",
+  "etsy_tags": "vintage wool jumper, 90s sweatshirt, oversized knit, mens crewneck, heavy knit sweater, winter layering, retro streetwear, crew neck pullover, chunky knitwear, casual menswear, grey marl jumper, warm winter knit, classic jumper",
   "collections_tags": "Collection1, Collection2",
   "garment_type": "inferred from images if not provided, e.g. T-Shirt, Hoodie",
   "fit": "inferred from images if not provided, e.g. Regular, Oversized",
