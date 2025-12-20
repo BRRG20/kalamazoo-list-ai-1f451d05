@@ -14,3 +14,24 @@ verify_jwt = true
 
 [functions.match-images]
 verify_jwt = true
+
+[functions.etsy-oauth-start]
+verify_jwt = true
+
+[functions.etsy-save-credentials]
+verify_jwt = true
+
+[functions.etsy-check-credentials]
+verify_jwt = true
+
+[functions.etsy-test-connection]
+verify_jwt = true
+
+[functions.etsy-disconnect]
+verify_jwt = true
+
+[functions.start-autopilot]
+verify_jwt = true
+
+[functions.process-autopilot-batch]
+verify_jwt = false

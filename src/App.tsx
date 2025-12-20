@@ -10,6 +10,8 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 import BatchesPage from "./pages/BatchesPage";
 import SettingsPage from "./pages/SettingsPage";
 import HelpPage from "./pages/HelpPage";
+import AutopilotPage from "./pages/AutopilotPage";
+import QCDashboardPage from "./pages/QCDashboardPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -50,6 +52,20 @@ const App = () => (
               <AuthGuard>
                 <ErrorBoundary fallbackMessage="Unable to load the help page.">
                   <HelpPage />
+                </ErrorBoundary>
+              </AuthGuard>
+            } />
+            <Route path="/autopilot" element={
+              <AuthGuard>
+                <ErrorBoundary fallbackMessage="Unable to load the autopilot page.">
+                  <AutopilotPage />
+                </ErrorBoundary>
+              </AuthGuard>
+            } />
+            <Route path="/qc-dashboard" element={
+              <AuthGuard>
+                <ErrorBoundary fallbackMessage="Unable to load the QC dashboard.">
+                  <QCDashboardPage />
                 </ErrorBoundary>
               </AuthGuard>
             } />
