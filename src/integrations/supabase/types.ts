@@ -32,6 +32,56 @@ export type Database = {
         }
         Relationships: []
       }
+      autopilot_runs: {
+        Row: {
+          batch_id: string
+          batch_size: number
+          created_at: string
+          current_batch: number
+          id: string
+          last_error: string | null
+          processed_cards: number
+          status: Database["public"]["Enums"]["autopilot_run_status"]
+          total_cards: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          batch_id: string
+          batch_size?: number
+          created_at?: string
+          current_batch?: number
+          id?: string
+          last_error?: string | null
+          processed_cards?: number
+          status?: Database["public"]["Enums"]["autopilot_run_status"]
+          total_cards?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          batch_id?: string
+          batch_size?: number
+          created_at?: string
+          current_batch?: number
+          id?: string
+          last_error?: string | null
+          processed_cards?: number
+          status?: Database["public"]["Enums"]["autopilot_run_status"]
+          total_cards?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "autopilot_runs_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       batches: {
         Row: {
           created_at: string
@@ -266,12 +316,14 @@ export type Database = {
       products: {
         Row: {
           batch_id: string
+          batch_number: number | null
           brand: string | null
           category_path: string | null
           collections_tags: string | null
           colour_main: string | null
           colour_secondary: string | null
           condition: Database["public"]["Enums"]["condition_type"] | null
+          confidence: number | null
           created_at: string
           currency: string
           deleted_at: string | null
@@ -286,8 +338,10 @@ export type Database = {
           etsy_listing_state: string | null
           etsy_tags: string | null
           fit: string | null
+          flags: Json | null
           flaws: string | null
           garment_type: string | null
+          generated_at: string | null
           id: string
           listing_block: string | null
           made_in: string | null
@@ -296,7 +350,9 @@ export type Database = {
           pattern: string | null
           pit_to_pit: string | null
           price: number | null
+          qc_status: Database["public"]["Enums"]["qc_status"] | null
           raw_input_text: string | null
+          run_id: string | null
           shopify_handle: string | null
           shopify_product_id: string | null
           shopify_tags: string | null
@@ -315,12 +371,14 @@ export type Database = {
         }
         Insert: {
           batch_id: string
+          batch_number?: number | null
           brand?: string | null
           category_path?: string | null
           collections_tags?: string | null
           colour_main?: string | null
           colour_secondary?: string | null
           condition?: Database["public"]["Enums"]["condition_type"] | null
+          confidence?: number | null
           created_at?: string
           currency?: string
           deleted_at?: string | null
@@ -335,8 +393,10 @@ export type Database = {
           etsy_listing_state?: string | null
           etsy_tags?: string | null
           fit?: string | null
+          flags?: Json | null
           flaws?: string | null
           garment_type?: string | null
+          generated_at?: string | null
           id?: string
           listing_block?: string | null
           made_in?: string | null
@@ -345,7 +405,9 @@ export type Database = {
           pattern?: string | null
           pit_to_pit?: string | null
           price?: number | null
+          qc_status?: Database["public"]["Enums"]["qc_status"] | null
           raw_input_text?: string | null
+          run_id?: string | null
           shopify_handle?: string | null
           shopify_product_id?: string | null
           shopify_tags?: string | null
@@ -364,12 +426,14 @@ export type Database = {
         }
         Update: {
           batch_id?: string
+          batch_number?: number | null
           brand?: string | null
           category_path?: string | null
           collections_tags?: string | null
           colour_main?: string | null
           colour_secondary?: string | null
           condition?: Database["public"]["Enums"]["condition_type"] | null
+          confidence?: number | null
           created_at?: string
           currency?: string
           deleted_at?: string | null
@@ -384,8 +448,10 @@ export type Database = {
           etsy_listing_state?: string | null
           etsy_tags?: string | null
           fit?: string | null
+          flags?: Json | null
           flaws?: string | null
           garment_type?: string | null
+          generated_at?: string | null
           id?: string
           listing_block?: string | null
           made_in?: string | null
@@ -394,7 +460,9 @@ export type Database = {
           pattern?: string | null
           pit_to_pit?: string | null
           price?: number | null
+          qc_status?: Database["public"]["Enums"]["qc_status"] | null
           raw_input_text?: string | null
+          run_id?: string | null
           shopify_handle?: string | null
           shopify_product_id?: string | null
           shopify_tags?: string | null
@@ -417,6 +485,13 @@ export type Database = {
             columns: ["batch_id"]
             isOneToOne: false
             referencedRelation: "batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "autopilot_runs"
             referencedColumns: ["id"]
           },
         ]
@@ -502,6 +577,12 @@ export type Database = {
       is_email_authorized: { Args: { check_email: string }; Returns: boolean }
     }
     Enums: {
+      autopilot_run_status:
+        | "running"
+        | "awaiting_qc"
+        | "publishing"
+        | "completed"
+        | "failed"
       condition_type: "Excellent" | "Very good" | "Good" | "Fair"
       department: "Women" | "Men" | "Unisex" | "Kids"
       era: "80s" | "90s" | "Y2K" | "Modern"
@@ -511,6 +592,15 @@ export type Database = {
         | "ready_for_shopify"
         | "created_in_shopify"
         | "error"
+      qc_status:
+        | "draft"
+        | "generating"
+        | "ready"
+        | "needs_review"
+        | "blocked"
+        | "approved"
+        | "published"
+        | "failed"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -638,6 +728,13 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      autopilot_run_status: [
+        "running",
+        "awaiting_qc",
+        "publishing",
+        "completed",
+        "failed",
+      ],
       condition_type: ["Excellent", "Very good", "Good", "Fair"],
       department: ["Women", "Men", "Unisex", "Kids"],
       era: ["80s", "90s", "Y2K", "Modern"],
@@ -647,6 +744,16 @@ export const Constants = {
         "ready_for_shopify",
         "created_in_shopify",
         "error",
+      ],
+      qc_status: [
+        "draft",
+        "generating",
+        "ready",
+        "needs_review",
+        "blocked",
+        "approved",
+        "published",
+        "failed",
       ],
     },
   },
