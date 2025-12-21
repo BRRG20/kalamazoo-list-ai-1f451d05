@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -98,6 +98,40 @@ export function useAutopilot(batchId: string | null) {
     }
   };
 
+  // Stop autopilot
+  const stopAutopilot = async () => {
+    if (!run || run.status !== 'running') return false;
+
+    try {
+      const { error } = await supabase
+        .from('autopilot_runs')
+        .update({ status: 'failed', last_error: 'Stopped by user' })
+        .eq('id', run.id);
+
+      if (error) {
+        console.error('Error stopping autopilot:', error);
+        toast.error('Failed to stop Autopilot');
+        return false;
+      }
+
+      // Also reset any products that are currently "generating" back to "draft"
+      await supabase
+        .from('products')
+        .update({ qc_status: 'draft' })
+        .eq('run_id', run.id)
+        .eq('qc_status', 'generating');
+
+      toast.success('Autopilot stopped');
+      setIsPolling(false);
+      await fetchRun();
+      return true;
+    } catch (err) {
+      console.error('Error stopping autopilot:', err);
+      toast.error('Failed to stop Autopilot');
+      return false;
+    }
+  };
+
   // Poll for updates when run is active
   useEffect(() => {
     if (!run || !isPolling) return;
@@ -123,6 +157,7 @@ export function useAutopilot(batchId: string | null) {
     isStarting,
     isPolling,
     startAutopilot,
+    stopAutopilot,
     refetch: fetchRun,
   };
 }
