@@ -85,6 +85,7 @@ interface BatchDetailProps {
   onBatchSizeChange: (size: BatchSizeOption) => void;
   onExcludeLast2All: () => void;
   onCreateInShopify: (productIds: string[]) => void;
+  onClearFailedStatus?: (productIds: string[]) => void;
   onEditProduct: (productId: string) => void;
   onDeleteProduct: (productId: string) => void;
   onToggleProductSelection: (productId: string) => void;
@@ -160,6 +161,7 @@ export function BatchDetail({
   lastBulkCount,
   onExcludeLast2All,
   onCreateInShopify,
+  onClearFailedStatus,
   onEditProduct,
   onDeleteProduct,
   onToggleProductSelection,
@@ -973,9 +975,38 @@ export function BatchDetail({
                     Uploaded: {shopifyStats.uploaded} / {shopifyStats.total}
                   </span>
                   {shopifyStats.failed > 0 && (
-                    <span className="text-sm text-destructive">
-                      • {shopifyStats.failed} failed
-                    </span>
+                    <>
+                      <span className="text-sm text-destructive">
+                        • {shopifyStats.failed} failed
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          // Select all failed products for retry
+                          const failedIds = products.filter(p => p.status === 'error').map(p => p.id);
+                          if (onBulkSelectProducts) {
+                            onBulkSelectProducts(failedIds);
+                          }
+                        }}
+                        className="h-6 px-2 text-xs text-amber-600 hover:text-amber-700"
+                      >
+                        Select for retry
+                      </Button>
+                      {onClearFailedStatus && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const failedIds = products.filter(p => p.status === 'error').map(p => p.id);
+                            onClearFailedStatus(failedIds);
+                          }}
+                          className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+                        >
+                          Clear failed
+                        </Button>
+                      )}
+                    </>
                   )}
                   <span className="text-sm text-muted-foreground">
                     • {shopifyStats.notUploaded} pending

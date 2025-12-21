@@ -1,6 +1,6 @@
 import { ReactNode, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Package, Settings, HelpCircle, Menu, X } from 'lucide-react';
+import { Package, Settings, HelpCircle, Menu, X, Zap, ClipboardCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -11,6 +11,8 @@ interface AppLayoutProps {
 
 const navItems = [
   { path: '/', label: 'Batches', icon: Package },
+  { path: '/autopilot', label: 'Autopilot', icon: Zap },
+  { path: '/qc-dashboard', label: 'QC Dashboard', icon: ClipboardCheck },
   { path: '/settings', label: 'Settings', icon: Settings },
   { path: '/help', label: 'Help', icon: HelpCircle },
 ];

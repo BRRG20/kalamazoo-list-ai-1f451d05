@@ -695,9 +695,23 @@ const handleSelectBatch = useCallback((id: string) => {
     try {
       // Prepare products and images for the edge function
       const uniqueProductIds = Array.from(new Set(productIds));
-      const productsToCreate = uniqueProductIds
+      const allProducts = uniqueProductIds
         .map(id => products.find(p => p.id === id))
         .filter(Boolean) as Product[];
+      
+      // IDEMPOTENCY CHECK: Filter out products that already have a Shopify ID
+      const alreadyUploaded = allProducts.filter(p => !!p.shopify_product_id || p.status === 'created_in_shopify');
+      const productsToCreate = allProducts.filter(p => !p.shopify_product_id && p.status !== 'created_in_shopify');
+      
+      if (alreadyUploaded.length > 0) {
+        toast.info(`Skipping ${alreadyUploaded.length} product(s) already uploaded to Shopify`);
+      }
+      
+      if (productsToCreate.length === 0) {
+        toast.success('All selected products are already uploaded to Shopify');
+        setIsCreatingShopify(false);
+        return;
+      }
       
       toast.info(`Preparing ${productsToCreate.length} products for Shopify...`);
       
@@ -1420,6 +1434,13 @@ const handleSelectBatch = useCallback((id: string) => {
               onBatchSizeChange={aiGeneration.setBatchSize}
               onExcludeLast2All={handleExcludeLast2All}
               onCreateInShopify={handleCreateInShopify}
+              onClearFailedStatus={async (productIds) => {
+                // Reset failed products to 'new' status so they can be retried
+                for (const id of productIds) {
+                  await updateProduct(id, { status: 'new' });
+                }
+                toast.success(`Cleared ${productIds.length} failed product(s) - ready for retry`);
+              }}
               onEditProduct={setEditingProductId}
               onDeleteProduct={async (productId) => {
                 await deleteProduct(productId);
