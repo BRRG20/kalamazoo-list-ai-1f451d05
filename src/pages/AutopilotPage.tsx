@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Zap, CheckCircle, AlertCircle, ArrowRight } from 'lucide-react';
+import { Loader2, Zap, CheckCircle, AlertCircle, ArrowRight, StopCircle } from 'lucide-react';
 import { useBatches } from '@/hooks/use-database';
 import { useAutopilot } from '@/hooks/use-autopilot';
 
@@ -18,7 +18,7 @@ export default function AutopilotPage() {
     searchParams.get('batch') || null
   );
 
-  const { run, isStarting, isPolling, startAutopilot } = useAutopilot(selectedBatchId);
+  const { run, isStarting, isPolling, startAutopilot, stopAutopilot } = useAutopilot(selectedBatchId);
 
   // Auto-select latest batch if none selected
   useEffect(() => {
@@ -116,6 +116,17 @@ export default function AutopilotPage() {
                   </>
                 )}
               </Button>
+
+              {run?.status === 'running' && (
+                <Button
+                  onClick={stopAutopilot}
+                  variant="destructive"
+                  size="lg"
+                >
+                  <StopCircle className="w-4 h-4 mr-2" />
+                  Stop
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>

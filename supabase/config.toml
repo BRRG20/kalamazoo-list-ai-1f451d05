@@ -4,7 +4,7 @@ project_id = "bembvdjhyrlgkdiqkfqr"
 verify_jwt = true
 
 [functions.generate-listing]
-verify_jwt = true
+verify_jwt = false
 
 [functions.parse-voice]
 verify_jwt = true
