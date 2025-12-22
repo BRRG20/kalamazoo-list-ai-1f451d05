@@ -365,6 +365,8 @@ export type Database = {
           style: string | null
           title: string | null
           updated_at: string
+          upload_error: string | null
+          uploaded_at: string | null
           user_id: string | null
           when_made: string | null
           who_made: string | null
@@ -420,6 +422,8 @@ export type Database = {
           style?: string | null
           title?: string | null
           updated_at?: string
+          upload_error?: string | null
+          uploaded_at?: string | null
           user_id?: string | null
           when_made?: string | null
           who_made?: string | null
@@ -475,6 +479,8 @@ export type Database = {
           style?: string | null
           title?: string | null
           updated_at?: string
+          upload_error?: string | null
+          uploaded_at?: string | null
           user_id?: string | null
           when_made?: string | null
           who_made?: string | null

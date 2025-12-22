@@ -57,6 +57,9 @@ export interface Product {
   shopify_product_id: string | null;
   shopify_handle: string | null;
   listing_block: string;
+  // Shopify upload tracking fields
+  uploaded_at?: string | null;
+  upload_error?: string | null;
   // Marketplace fields
   etsy_listing_id?: string | null;
   etsy_listing_state?: string | null;
