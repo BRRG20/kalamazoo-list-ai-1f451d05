@@ -20,6 +20,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { ImageGallery } from './ImageGallery';
+import { ShopifyStatusSection } from './ShopifyStatusSection';
 import { generateListingBlock } from '@/hooks/use-database';
 import type { Product, ProductImage, Department, Era, Condition } from '@/types';
 
@@ -43,7 +44,10 @@ interface ProductDetailPanelProps {
   regeneratingField?: string | null;
   isCreatingShopify?: boolean;
   isShopifyConfigured?: boolean;
-  autoStartRecording?: boolean; // NEW: Auto-start voice recording when panel opens
+  autoStartRecording?: boolean;
+  // Shopify status override props
+  onMarkAsUploaded?: (shopifyProductId?: string) => void;
+  onMarkAsPending?: () => void;
 }
 
 const UNSET_VALUE = '__unset__';
@@ -97,6 +101,8 @@ export function ProductDetailPanel({
   isCreatingShopify,
   isShopifyConfigured,
   autoStartRecording = false,
+  onMarkAsUploaded,
+  onMarkAsPending,
 }: ProductDetailPanelProps) {
   const [formData, setFormData] = useState<Partial<Product>>({});
   const [isListening, setIsListening] = useState(false);
@@ -1343,6 +1349,18 @@ export function ProductDetailPanel({
                   </div>
                 </div>
               </section>
+
+              {/* Shopify Upload Status */}
+              {onMarkAsUploaded && onMarkAsPending && (
+                <section>
+                  <h3 className="font-semibold text-foreground mb-3">Shopify Status</h3>
+                  <ShopifyStatusSection
+                    product={product}
+                    onMarkAsUploaded={onMarkAsUploaded}
+                    onMarkAsPending={onMarkAsPending}
+                  />
+                </section>
+              )}
 
               {/* Notes */}
               <section>

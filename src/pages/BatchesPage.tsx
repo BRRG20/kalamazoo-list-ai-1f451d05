@@ -1081,6 +1081,27 @@ const handleSelectBatch = useCallback((id: string) => {
     await handleCreateInShopify([editingProductId]);
   }, [editingProductId, handleCreateInShopify]);
 
+  // Shopify manual status override handlers
+  const handleMarkAsUploaded = useCallback(async (productId: string, shopifyProductId?: string) => {
+    await updateProduct(productId, {
+      status: 'created_in_shopify',
+      shopify_product_id: shopifyProductId || null,
+      uploaded_at: new Date().toISOString(),
+      upload_error: null,
+    });
+    toast.success('Marked as uploaded to Shopify');
+  }, [updateProduct]);
+
+  const handleMarkAsPending = useCallback(async (productId: string) => {
+    await updateProduct(productId, {
+      status: 'new',
+      uploaded_at: null,
+      upload_error: null,
+      // Keep shopify_product_id if it exists - don't delete it
+    });
+    toast.success('Marked as pending');
+  }, [updateProduct]);
+
   // Delete empty products (products with 0 images) - used in Birds Eye View cleanup
   // SAFETY: Only deletes product records that have NO images in the database
   const handleDeleteEmptyProducts = useCallback(async (productIds: string[]) => {
@@ -1476,6 +1497,8 @@ const handleSelectBatch = useCallback((id: string) => {
               uploadTotal={uploadTotal}
               uploadCompleted={uploadCompleted}
               onBack={() => setSelectedBatchId(null)}
+              onMarkAsUploaded={handleMarkAsUploaded}
+              onMarkAsPending={handleMarkAsPending}
               imageGroups={imageGroups}
               unassignedImages={unassignedImages}
               onUpdateImageGroups={setImageGroups}
@@ -1699,6 +1722,8 @@ const handleSelectBatch = useCallback((id: string) => {
             regeneratingField={regeneratingField}
             isCreatingShopify={isCreatingShopify}
             isShopifyConfigured={!!isShopifyConfigured}
+            onMarkAsUploaded={(shopifyProductId) => handleMarkAsUploaded(editingProductId, shopifyProductId)}
+            onMarkAsPending={() => handleMarkAsPending(editingProductId)}
           />
         </ErrorBoundary>
       )}

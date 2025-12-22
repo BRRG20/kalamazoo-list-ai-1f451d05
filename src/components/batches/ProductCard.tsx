@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Edit2, ImageIcon, Trash2, Eye, GripVertical, Sparkles, Undo2, Loader2, Check, AlertCircle } from 'lucide-react';
+import { Edit2, ImageIcon, Trash2, Eye, GripVertical, Sparkles, Undo2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { ImagePreviewModal } from './ImagePreviewModal';
+import { ShopifyStatusSection } from '@/components/products/ShopifyStatusSection';
 import type { Product, ProductImage } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -22,6 +23,9 @@ interface ProductCardProps {
   onUndoAI?: () => void;
   isGenerating?: boolean;
   hasUndoState?: boolean;
+  // Shopify status override props
+  onMarkAsUploaded?: (shopifyProductId?: string) => void;
+  onMarkAsPending?: () => void;
 }
 
 export function ProductCard({
@@ -38,6 +42,8 @@ export function ProductCard({
   onUndoAI,
   isGenerating,
   hasUndoState,
+  onMarkAsUploaded,
+  onMarkAsPending,
 }: ProductCardProps) {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewIndex, setPreviewIndex] = useState(0);
@@ -259,22 +265,7 @@ export function ProductCard({
                 <p className="text-xs text-muted-foreground">{product.sku}</p>
               )}
             </div>
-            <div className="flex flex-col items-end gap-1">
-              <StatusBadge status={product.status} />
-              {/* Shopify upload status badge */}
-              {product.status === 'created_in_shopify' && product.shopify_product_id && (
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-success/10 text-success">
-                  <Check className="w-3 h-3" />
-                  Uploaded
-                </span>
-              )}
-              {product.status === 'error' && (
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-destructive/10 text-destructive">
-                  <AlertCircle className="w-3 h-3" />
-                  Failed
-                </span>
-              )}
-            </div>
+            <StatusBadge status={product.status} />
           </div>
 
           {product.price > 0 && (
@@ -283,11 +274,21 @@ export function ProductCard({
             </p>
           )}
 
-          <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
             {product.garment_type && <span>{product.garment_type}</span>}
             {product.garment_type && product.department && <span>·</span>}
             {product.department && <span>{product.department}</span>}
           </div>
+
+          {/* Shopify Status Section */}
+          {onMarkAsUploaded && onMarkAsPending && (
+            <ShopifyStatusSection
+              product={product}
+              onMarkAsUploaded={onMarkAsUploaded}
+              onMarkAsPending={onMarkAsPending}
+              compact
+            />
+          )}
 
           {/* Action buttons */}
           <div className="flex gap-2">
