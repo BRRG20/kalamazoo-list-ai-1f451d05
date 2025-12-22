@@ -808,6 +808,8 @@ const handleSelectBatch = useCallback((id: string) => {
             status: 'created_in_shopify',
             shopify_product_id: result.shopifyProductId,
             shopify_handle: result.shopifyHandle,
+            uploaded_at: new Date().toISOString(),
+            upload_error: null,
           });
           
           // Log any image warnings
@@ -815,7 +817,10 @@ const handleSelectBatch = useCallback((id: string) => {
             console.warn(`Product ${result.productId}: ${result.error}`);
           }
         } else {
-          await updateProduct(result.productId, { status: 'error' });
+          await updateProduct(result.productId, { 
+            status: 'error',
+            upload_error: result.error || 'Unknown error',
+          });
           console.error(`Product ${result.productId} failed: ${result.error}`);
         }
       }

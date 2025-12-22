@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { useShopifyStats } from '@/hooks/use-shopify-stats';
 import {
   Upload, 
   Sparkles, 
@@ -271,13 +272,11 @@ export function BatchDetail({
   // Shopify filter state
   const [shopifyFilter, setShopifyFilter] = useState<'all' | 'uploaded' | 'not_uploaded' | 'failed'>('all');
 
-  // Calculate Shopify upload stats
-  const shopifyStats = {
-    uploaded: products.filter(p => !!p.shopify_product_id || p.status === 'created_in_shopify').length,
-    failed: products.filter(p => p.status === 'error').length,
-    notUploaded: products.filter(p => !p.shopify_product_id && p.status !== 'created_in_shopify' && p.status !== 'error').length,
-    total: products.length,
-  };
+  // Fetch Shopify stats from database (single source of truth)
+  const { stats: shopifyStats } = useShopifyStats(batch.id);
+  
+  // For filtering, we still need to use local product data
+  // but counters come from the database
 
   // Filter products based on search query, Shopify filter, and hidden products
   const filteredProducts = products.filter(product => {
