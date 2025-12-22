@@ -139,6 +139,9 @@ interface BatchDetailProps {
   onDeleteEmptyProducts?: (productIds: string[]) => Promise<void>;
   // Create product from image IDs (for Birds Eye View)
   onCreateProductFromImageIds?: (imageIds: string[]) => Promise<string | null>;
+  // Shopify status override
+  onMarkAsUploaded?: (productId: string, shopifyProductId?: string) => void;
+  onMarkAsPending?: (productId: string) => void;
 }
 
 export function BatchDetail({
@@ -210,6 +213,8 @@ export function BatchDetail({
   onOpenDeletedProducts,
   onDeleteEmptyProducts,
   onCreateProductFromImageIds,
+  onMarkAsUploaded,
+  onMarkAsPending,
 }: BatchDetailProps) {
   // Early return if batch is missing (defensive guard)
   if (!batch || !batch.id) {
@@ -1262,6 +1267,8 @@ export function BatchDetail({
                   onUndoAI={() => onUndoSingleProduct(product.id)}
                   isGenerating={isProductGenerating(product.id)}
                   hasUndoState={hasProductUndoState(product.id)}
+                  onMarkAsUploaded={(shopifyProductId) => onMarkAsUploaded?.(product.id, shopifyProductId)}
+                  onMarkAsPending={() => onMarkAsPending?.(product.id)}
                 />
               ))}
               {!imagesLoading && products.length > 0 && Object.keys(productImages).length === 0 && (
