@@ -154,8 +154,8 @@ export function BatchList({
                     <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sm truncate">{batch.name}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {formatDate(batch.created_at)} · {productCount} product{productCount !== 1 ? 's' : ''}
+                        <p className="text-xs text-muted-foreground mt-0.5 whitespace-nowrap">
+                          {productCount} product{productCount !== 1 ? 's' : ''} · {formatDate(batch.created_at)}
                         </p>
                       </div>
                       <DropdownMenu>
