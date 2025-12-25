@@ -1315,15 +1315,12 @@ const handleSelectBatch = useCallback((id: string) => {
         return null;
       }
 
-      // Step 2: Create a new product
-      const timestamp = Date.now();
-      const sku = `SKU-${timestamp}-${Math.random().toString(36).substr(2, 6)}`;
-
+      // Step 2: Create a new product (SKU will be generated after AI categorization)
       const { data: productData, error: productError } = await supabase
         .from('products')
         .insert({
           batch_id: selectedBatchId,
-          sku,
+          sku: null, // SKU generated after AI categorization
           status: 'new',
           currency: 'GBP',
           user_id: user.id,
