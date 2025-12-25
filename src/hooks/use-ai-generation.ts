@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 import type { Product } from '@/types';
 import { useAIUndo, ProductAIState } from './use-ai-undo';
+import { generateSKU } from '@/lib/sku-generator';
 
 // Batch size options for bulk generation
 export const BATCH_SIZE_OPTIONS = [5, 10, 20] as const;
@@ -200,6 +201,35 @@ export function useAIGeneration({
       }
       if (!product.pattern && generated.pattern) {
         updates.pattern = generated.pattern;
+      }
+      
+      // GENERATE SKU after AI categorization using the proper format
+      // Format: [CATEGORY]-[STYLE]-[SIZE]-[NUMBER]
+      const finalGarmentType = updates.garment_type || product.garment_type;
+      const finalEra = updates.era || product.era;
+      const finalSizeLabel = product.size_label;
+      const finalSizeRecommended = product.size_recommended;
+      
+      if (finalGarmentType) {
+        const skuResult = await generateSKU(
+          finalGarmentType,
+          finalSizeRecommended,
+          finalEra,
+          finalSizeLabel
+        );
+        
+        if (skuResult.sku) {
+          updates.sku = skuResult.sku;
+          console.log(`[AI] Generated SKU: ${skuResult.sku}`);
+        } else if (skuResult.error) {
+          console.warn(`[AI] SKU generation failed: ${skuResult.error}`);
+          // Add flag to notes for manual review
+          const existingNotes = product.notes || '';
+          const skuNote = `[SKU NEEDS REVIEW] ${skuResult.error}`;
+          if (!existingNotes.includes('[SKU NEEDS REVIEW]')) {
+            updates.notes = existingNotes ? `${existingNotes}\n${skuNote}` : skuNote;
+          }
+        }
       }
       
       console.log('[AI] Updates to save:', Object.keys(updates));
