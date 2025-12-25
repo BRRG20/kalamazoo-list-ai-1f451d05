@@ -142,6 +142,8 @@ interface BatchDetailProps {
   // Shopify status override
   onMarkAsUploaded?: (productId: string, shopifyProductId?: string) => void;
   onMarkAsPending?: (productId: string) => void;
+  // Hide product
+  onHideProduct?: (productId: string) => void;
 }
 
 export function BatchDetail({
@@ -215,6 +217,7 @@ export function BatchDetail({
   onCreateProductFromImageIds,
   onMarkAsUploaded,
   onMarkAsPending,
+  onHideProduct,
 }: BatchDetailProps) {
   // Early return if batch is missing (defensive guard)
   if (!batch || !batch.id) {
@@ -1269,6 +1272,7 @@ export function BatchDetail({
                   hasUndoState={hasProductUndoState(product.id)}
                   onMarkAsUploaded={(shopifyProductId) => onMarkAsUploaded?.(product.id, shopifyProductId)}
                   onMarkAsPending={() => onMarkAsPending?.(product.id)}
+                  onHide={() => onHideProduct?.(product.id)}
                 />
               ))}
               {!imagesLoading && products.length > 0 && Object.keys(productImages).length === 0 && (

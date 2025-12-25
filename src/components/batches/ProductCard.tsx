@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Edit2, ImageIcon, Trash2, Eye, GripVertical, Sparkles, Undo2, Loader2 } from 'lucide-react';
+import { Edit2, ImageIcon, Trash2, Eye, GripVertical, Sparkles, Undo2, Loader2, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -26,6 +26,8 @@ interface ProductCardProps {
   // Shopify status override props
   onMarkAsUploaded?: (shopifyProductId?: string) => void;
   onMarkAsPending?: () => void;
+  // Hide functionality
+  onHide?: () => void;
 }
 
 export function ProductCard({
@@ -44,6 +46,7 @@ export function ProductCard({
   hasUndoState,
   onMarkAsUploaded,
   onMarkAsPending,
+  onHide,
 }: ProductCardProps) {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewIndex, setPreviewIndex] = useState(0);
@@ -332,6 +335,22 @@ export function ProductCard({
                 className="px-2 text-amber-600 hover:text-amber-700 border-amber-300 hover:border-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950"
               >
                 <Undo2 className="w-3 h-3" />
+              </Button>
+            )}
+
+            {/* Hide/Uploaded button */}
+            {onHide && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onHide();
+                }}
+                title="Hide / Mark as Uploaded"
+                className="px-2 text-muted-foreground hover:text-foreground"
+              >
+                <EyeOff className="w-3 h-3" />
               </Button>
             )}
           </div>

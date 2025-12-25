@@ -71,6 +71,8 @@ export interface Product {
   who_made?: string;
   when_made?: string;
   category_path?: string;
+  // Hidden state - persisted in database
+  is_hidden?: boolean;
 }
 
 export interface ProductImage {

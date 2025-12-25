@@ -29,7 +29,7 @@ import type { Product, ProductImage } from '@/types';
 export default function BatchesPage() {
   const { batches, createBatch, updateBatch, deleteBatch, getProductCount } = useBatches();
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
-  const { products, createProduct, createProductWithImages, updateProduct, deleteProduct, deleteEmptyProducts, isMutating, acquireLock, releaseLock, refetch: refetchProducts } = useProducts(selectedBatchId);
+  const { products, createProduct, createProductWithImages, updateProduct, deleteProduct, deleteEmptyProducts, hideProduct, isMutating, acquireLock, releaseLock, refetch: refetchProducts } = useProducts(selectedBatchId);
   const { deletedProducts, recoverProduct, permanentlyDelete: permanentlyDeleteProduct, emptyTrash, refetch: refetchDeletedProducts } = useDeletedProducts(selectedBatchId);
   const { fetchImagesForProduct, fetchImagesForBatch, addImageToBatch, updateImage, excludeLastNImages, clearCache, deleteImage, updateImageProductIdByUrl } = useImages();
   const { settings } = useSettings();
@@ -1102,6 +1102,11 @@ const handleSelectBatch = useCallback((id: string) => {
     toast.success('Marked as pending');
   }, [updateProduct]);
 
+  // Hide product - permanently removes from visible list until explicitly unhidden
+  const handleHideProduct = useCallback(async (productId: string) => {
+    await hideProduct(productId);
+  }, [hideProduct]);
+
   // Delete empty products (products with 0 images) - used in Birds Eye View cleanup
   // SAFETY: Only deletes product records that have NO images in the database
   const handleDeleteEmptyProducts = useCallback(async (productIds: string[]) => {
@@ -1496,6 +1501,7 @@ const handleSelectBatch = useCallback((id: string) => {
               onBack={() => setSelectedBatchId(null)}
               onMarkAsUploaded={handleMarkAsUploaded}
               onMarkAsPending={handleMarkAsPending}
+              onHideProduct={handleHideProduct}
               imageGroups={imageGroups}
               unassignedImages={unassignedImages}
               onUpdateImageGroups={setImageGroups}
