@@ -244,7 +244,6 @@ export function BatchDetail({
   const [showBirdsEyeView, setShowBirdsEyeView] = useState(false);
   const [bulkSelectKey, setBulkSelectKey] = useState(0);
   const [showInfoDialog, setShowInfoDialog] = useState(false);
-  const [hiddenProductIds, setHiddenProductIds] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const shopifyConfigured = isShopifyConfigured();
   
@@ -286,13 +285,9 @@ export function BatchDetail({
   // For filtering, we still need to use local product data
   // but counters come from the database
 
-  // Filter products based on search query, Shopify filter, and hidden products
+  // Filter products based on search query and Shopify filter
+  // NOTE: is_hidden filter is applied at database level in useProducts hook
   const filteredProducts = products.filter(product => {
-    // Apply hidden filter first
-    if (hiddenProductIds.has(product.id)) {
-      return false;
-    }
-    
     // Apply Shopify filter
     // A product is "uploaded" if it has shopify_product_id OR status is 'created_in_shopify'
     const isUploaded = !!product.shopify_product_id || product.status === 'created_in_shopify';
@@ -321,21 +316,16 @@ export function BatchDetail({
     );
   });
 
-  // Hide selected products
-  const handleHideSelected = useCallback(() => {
-    if (selectedProductIds.size === 0) return;
-    setHiddenProductIds(prev => {
-      const newSet = new Set(prev);
-      selectedProductIds.forEach(id => newSet.add(id));
-      return newSet;
-    });
+  // Hide selected products - persists to database via onHideProduct
+  const handleHideSelected = useCallback(async () => {
+    if (selectedProductIds.size === 0 || !onHideProduct) return;
+    
+    // Hide each selected product (persisted to database)
+    for (const id of selectedProductIds) {
+      await onHideProduct(id);
+    }
     onDeselectAllProducts();
-  }, [selectedProductIds, onDeselectAllProducts]);
-
-  // Show all hidden products
-  const handleShowAllHidden = useCallback(() => {
-    setHiddenProductIds(new Set());
-  }, []);
+  }, [selectedProductIds, onDeselectAllProducts, onHideProduct]);
 
   // Update imagesPerProduct when settings load
   useEffect(() => {
@@ -1098,20 +1088,6 @@ export function BatchDetail({
                     >
                       <EyeOff className="w-4 h-4 mr-1" />
                       Hide ({selectedProductIds.size})
-                    </Button>
-                  )}
-                  
-                  {/* Show Hidden button */}
-                  {hiddenProductIds.size > 0 && (
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={handleShowAllHidden}
-                      type="button"
-                      className="text-amber-600 hover:text-amber-700 border-amber-300 hover:border-amber-400"
-                    >
-                      <Eye className="w-4 h-4 mr-1" />
-                      Show Hidden ({hiddenProductIds.size})
                     </Button>
                   )}
                   
