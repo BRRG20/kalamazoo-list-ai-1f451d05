@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface ShopifyStats {
@@ -16,6 +16,7 @@ export function useShopifyStats(batchId: string | null) {
     total: 0,
   });
   const [isLoading, setIsLoading] = useState(false);
+  const isMountedRef = useRef(true);
 
   const fetchStats = useCallback(async () => {
     if (!batchId) {
@@ -25,63 +26,58 @@ export function useShopifyStats(batchId: string | null) {
 
     setIsLoading(true);
     try {
-      // Query for uploaded: has shopify_product_id OR status = 'created_in_shopify'
-      const { count: uploadedCount, error: uploadedError } = await supabase
+      // Single query to get all products and compute stats client-side
+      // This is more efficient than 4 separate count queries
+      const { data: products, error } = await supabase
         .from('products')
-        .select('*', { count: 'exact', head: true })
-        .eq('batch_id', batchId)
-        .is('deleted_at', null)
-        .or('shopify_product_id.not.is.null,status.eq.created_in_shopify');
-
-      if (uploadedError) throw uploadedError;
-
-      // Query for failed: status = 'error'
-      const { count: failedCount, error: failedError } = await supabase
-        .from('products')
-        .select('*', { count: 'exact', head: true })
-        .eq('batch_id', batchId)
-        .is('deleted_at', null)
-        .eq('status', 'error');
-
-      if (failedError) throw failedError;
-
-      // Query for notUploaded: no shopify_product_id AND status != 'created_in_shopify' AND status != 'error'
-      const { count: notUploadedCount, error: notUploadedError } = await supabase
-        .from('products')
-        .select('*', { count: 'exact', head: true })
-        .eq('batch_id', batchId)
-        .is('deleted_at', null)
-        .is('shopify_product_id', null)
-        .not('status', 'eq', 'created_in_shopify')
-        .not('status', 'eq', 'error');
-
-      if (notUploadedError) throw notUploadedError;
-
-      // Query total
-      const { count: totalCount, error: totalError } = await supabase
-        .from('products')
-        .select('*', { count: 'exact', head: true })
+        .select('id, shopify_product_id, status')
         .eq('batch_id', batchId)
         .is('deleted_at', null);
 
-      if (totalError) throw totalError;
+      if (error) throw error;
+      if (!isMountedRef.current) return;
+
+      const allProducts = products || [];
+      let uploaded = 0;
+      let failed = 0;
+      let notUploaded = 0;
+
+      for (const product of allProducts) {
+        const isUploaded = product.shopify_product_id || product.status === 'created_in_shopify';
+        const isFailed = product.status === 'error';
+
+        if (isUploaded) {
+          uploaded++;
+        } else if (isFailed) {
+          failed++;
+        } else {
+          notUploaded++;
+        }
+      }
 
       setStats({
-        uploaded: uploadedCount || 0,
-        notUploaded: notUploadedCount || 0,
-        failed: failedCount || 0,
-        total: totalCount || 0,
+        uploaded,
+        notUploaded,
+        failed,
+        total: allProducts.length,
       });
     } catch (error) {
       console.error('Error fetching Shopify stats:', error);
+      // Don't crash - keep previous stats
     } finally {
-      setIsLoading(false);
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
     }
   }, [batchId]);
 
   // Fetch stats on mount and when batchId changes
   useEffect(() => {
+    isMountedRef.current = true;
     fetchStats();
+    return () => {
+      isMountedRef.current = false;
+    };
   }, [fetchStats]);
 
   // Subscribe to realtime updates for the products table
@@ -99,8 +95,12 @@ export function useShopifyStats(batchId: string | null) {
           filter: `batch_id=eq.${batchId}`,
         },
         () => {
-          // Refetch stats when any product in the batch changes
-          fetchStats();
+          // Debounce refetch to avoid rapid updates
+          setTimeout(() => {
+            if (isMountedRef.current) {
+              fetchStats();
+            }
+          }, 100);
         }
       )
       .subscribe();
