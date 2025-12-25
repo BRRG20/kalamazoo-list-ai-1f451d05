@@ -101,6 +101,8 @@ function mapProduct(row: any): Product {
     who_made: row.who_made || '',
     when_made: row.when_made || '',
     category_path: row.category_path || '',
+    // Hidden state - persisted in database
+    is_hidden: row.is_hidden || false,
   };
 }
 
@@ -293,6 +295,7 @@ export function useProducts(batchId: string | null) {
       .from('products')
       .select('*')
       .eq('batch_id', batchId)
+      .eq('is_hidden', false) // CRITICAL: Only fetch non-hidden products
       .order('created_at', { ascending: false });
     
     if (error) {
@@ -595,6 +598,48 @@ export function useProducts(batchId: string | null) {
     }
   };
 
+  /**
+   * Hide a product - permanently removes from visible list
+   * Can ONLY be unhidden via explicit user action
+   */
+  const hideProduct = async (id: string): Promise<boolean> => {
+    const { error } = await supabase
+      .from('products')
+      .update({ is_hidden: true })
+      .eq('id', id);
+    
+    if (error) {
+      console.error('Error hiding product:', error);
+      toast.error('Failed to hide product');
+      return false;
+    }
+    
+    // Remove from local state immediately
+    setProducts(prev => prev.filter(p => p.id !== id));
+    toast.success('Product hidden');
+    return true;
+  };
+
+  /**
+   * Unhide a product - only available in hidden products view
+   * Explicit user action required
+   */
+  const unhideProduct = async (id: string): Promise<boolean> => {
+    const { error } = await supabase
+      .from('products')
+      .update({ is_hidden: false })
+      .eq('id', id);
+    
+    if (error) {
+      console.error('Error unhiding product:', error);
+      toast.error('Failed to unhide product');
+      return false;
+    }
+    
+    toast.success('Product unhidden');
+    return true;
+  };
+
   return { 
     products, 
     loading,
@@ -607,6 +652,8 @@ export function useProducts(batchId: string | null) {
     deleteProduct, 
     permanentlyDeleteProduct, 
     deleteEmptyProducts,
+    hideProduct,
+    unhideProduct,
     refetch: fetchProducts 
   };
 }
@@ -709,6 +756,65 @@ export function useDeletedProducts(batchId: string | null) {
     permanentlyDelete, 
     emptyTrash, 
     refetch: fetchDeletedProducts 
+  };
+}
+
+// Hidden Products Hook (for viewing/unhiding hidden products)
+export function useHiddenProducts(batchId: string | null) {
+  const [hiddenProducts, setHiddenProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const fetchHiddenProducts = useCallback(async () => {
+    if (!batchId) {
+      setHiddenProducts([]);
+      return;
+    }
+    
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .eq('batch_id', batchId)
+      .eq('is_hidden', true)
+      .is('deleted_at', null)
+      .order('updated_at', { ascending: false });
+    
+    if (error) {
+      console.error('Error fetching hidden products:', error);
+      setLoading(false);
+      return;
+    }
+    
+    setHiddenProducts((data || []).map(mapProduct));
+    setLoading(false);
+  }, [batchId]);
+
+  useEffect(() => {
+    fetchHiddenProducts();
+  }, [fetchHiddenProducts]);
+
+  const unhideProduct = async (id: string): Promise<boolean> => {
+    const { error } = await supabase
+      .from('products')
+      .update({ is_hidden: false })
+      .eq('id', id);
+    
+    if (error) {
+      console.error('Error unhiding product:', error);
+      toast.error('Failed to unhide product');
+      return false;
+    }
+    
+    setHiddenProducts(prev => prev.filter(p => p.id !== id));
+    toast.success('Product unhidden');
+    return true;
+  };
+
+  return { 
+    hiddenProducts, 
+    loading, 
+    unhideProduct,
+    refetch: fetchHiddenProducts 
   };
 }
 

@@ -343,6 +343,7 @@ export type Database = {
           garment_type: string | null
           generated_at: string | null
           id: string
+          is_hidden: boolean
           listing_block: string | null
           made_in: string | null
           material: string | null
@@ -400,6 +401,7 @@ export type Database = {
           garment_type?: string | null
           generated_at?: string | null
           id?: string
+          is_hidden?: boolean
           listing_block?: string | null
           made_in?: string | null
           material?: string | null
@@ -457,6 +459,7 @@ export type Database = {
           garment_type?: string | null
           generated_at?: string | null
           id?: string
+          is_hidden?: boolean
           listing_block?: string | null
           made_in?: string | null
           material?: string | null
