@@ -1533,13 +1533,29 @@ const handleSelectBatch = useCallback((id: string) => {
               }}
               onDeleteImage={async (url) => {
                 // Find image in database by URL and delete it
-                const { data } = await supabase
+                // Use maybeSingle() instead of single() to avoid error when no rows found
+                const { data, error } = await supabase
                   .from('images')
                   .select('id')
                   .eq('url', url)
-                  .single();
+                  .maybeSingle();
+                
+                if (error) {
+                  console.error('Error finding image to delete:', error);
+                  // Still remove from local state even if DB lookup fails
+                  setUnassignedImages(prev => prev.filter(u => u !== url));
+                  return;
+                }
+                
                 if (data) {
-                  await deleteImage(data.id);
+                  const deleted = await deleteImage(data.id);
+                  if (deleted) {
+                    // Remove from local unassigned images state
+                    setUnassignedImages(prev => prev.filter(u => u !== url));
+                  }
+                } else {
+                  // Image not in DB yet - just remove from local state
+                  setUnassignedImages(prev => prev.filter(u => u !== url));
                 }
               }}
               onSaveGroups={async () => {
