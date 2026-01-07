@@ -62,12 +62,13 @@ This EXACT person must appear in every image. Do not change ANY facial features.
 };
 
 // Pose descriptions - cool, neutral, model-like poses (inspired by fashion editorials)
+// Reference: ASOS, Zara, high-end e-commerce with varied crops and angles
 const POSE_DESCRIPTIONS: Record<string, string> = {
-  'front_neutral': 'standing facing camera with cool, relaxed stance - weight slightly shifted, hands relaxed at sides or one hand in pocket. Natural model pose, not stiff. Face toward camera with neutral cool expression.',
-  'three_quarter': 'standing at 3/4 angle with effortless cool pose, body angled but face toward camera. One hand can be in pocket or relaxed at side. Confident, editorial feel.',
-  'relaxed': 'relaxed casual lean or stance, weight on one leg, arms natural - hands in pockets or thumbs hooked in belt loops. Cool, approachable but model-like.',
-  'arms_bent': 'cool stance with arms naturally bent - hand on hip, or crossed arms, or hands in jacket pockets. Editorial pose, confident but not stiff.',
-  'movement': 'captured mid-stride or walking pose, natural movement, dynamic but controlled. Cool candid street-style feel, face still visible.',
+  'front_neutral': `Standing facing camera with cool, relaxed stance - weight slightly shifted, one hand relaxed at side or gently resting on hip/thigh area. Natural model pose, not stiff. Face toward camera with neutral cool expression. Hair styled sleek (low bun, slicked back, or natural waves). Full body visible with natural soft shadow beneath feet.`,
+  'three_quarter': `Standing at 3/4 angle with effortless cool pose, body angled but face toward camera. One hand can be in pocket or relaxed at side, the other arm natural. Confident, editorial feel. Hair styled elegantly. Side profile shows clean silhouette of the outfit.`,
+  'relaxed': `Relaxed casual stance, weight on one leg creating natural S-curve in body. Arms natural - hands in pockets, thumbs hooked in waistband, or one arm relaxed while other touches hip. Cool, approachable but model-like. Confident posture.`,
+  'arms_bent': `Cool stance with arms naturally bent - hand on hip showing waistline, or arms bent with hands resting near pockets. Editorial pose, confident but not stiff. Shows garment fit around torso clearly. Can include subtle accessories on wrists (chunky silver or black bracelets, elegant watch).`,
+  'close_up_detail': `CLOSE-UP CROP: Frame from approximately chest/shoulder level down to mid-thigh. Focus on the garment's waist, hip, and torso area. Model's hands can be relaxed at sides, one hand touching pocket or waistband, or thumbs hooked in belt loops. Shows fabric texture, fit, and construction details clearly. Face may be partially visible or cropped at chin level.`,
 };
 
 // Outfit styling descriptions - rich, diverse, inspiration-driven
@@ -344,14 +345,16 @@ ABSOLUTE REQUIREMENTS FOR THE HERO GARMENT (CRITICAL - NO EXCEPTIONS):
 7. Preserve the EXACT fabric texture - matte cotton stays matte, wool stays wooly, etc.
 8. The garment must look like a real photo, not a digital render
 
-PHOTOGRAPHY STYLE:
+PHOTOGRAPHY STYLE (REFERENCE: ASOS, ZARA, HIGH-END E-COMMERCE):
 - Professional photography studio setting
-- Clean, neutral studio background (light grey, off-white, or soft gradient)
-- Professional studio lighting - softbox/beauty lighting setup
-- Full body shot showing the complete styled outfit
-- Sharp focus on the hero garment
-- Natural shadows and depth
-- High-end e-commerce/lookbook quality
+- BACKGROUND: Soft gradient backdrop - cream/warm beige on one side smoothly transitioning to cool grey/white on the other. NOT flat white, NOT solid grey. Subtle warmth and depth.
+- Professional studio lighting - softbox/beauty lighting setup with natural soft shadows
+- Full body shot OR close-up detail crop (waist to mid-thigh) showing the styled outfit
+- Sharp focus on the hero garment with natural fabric texture visible
+- Soft natural shadow beneath model's feet (not harsh, not dropped shadow effect)
+- High-end e-commerce/lookbook quality - think ASOS, Zara, Net-a-Porter
+- Model's hair should be styled elegantly: sleek low bun, slicked back, or natural polished waves
+- If accessories are added: chunky silver/chrome bracelets, statement watches, luxury leather tote bags (brown suede, black leather), pointed toe heels or clean minimalist sneakers
 
 WHAT NOT TO DO:
 - DO NOT alter the hero garment in ANY way
@@ -399,11 +402,14 @@ ABSOLUTE REQUIREMENTS - DO NOT VIOLATE (THE INPUT IMAGE IS THE SINGLE SOURCE OF 
 
 WHAT TO GENERATE:
 - A professional fashion photo with the model wearing this EXACT garment
-- Clean, neutral photography studio background (light grey, off-white, or soft gradient)
+- BACKGROUND: Soft gradient backdrop - cream/warm beige on one side smoothly transitioning to cool grey/white on the other. NOT flat white, NOT solid grey. Subtle warmth and depth like ASOS/Zara product shots.
 - Professional studio lighting - softbox/beauty lighting setup
-- Full or 3/4 body shot showing the complete garment
+- Full body shot OR close-up detail crop (from chest to mid-thigh) depending on pose
+- If close-up crop: focus on waist/hip area showing fit, fabric texture, and garment details
 - The model's body and pose as described above
-- High-end e-commerce/lookbook quality image
+- Soft natural shadow beneath model (not harsh drop shadow)
+- Hair styled elegantly: sleek low bun, slicked back, or natural polished waves
+- High-end e-commerce/lookbook quality image - think ASOS, Zara, Net-a-Porter
 
 WHAT NOT TO DO:
 - DO NOT generate a "similar" garment - use the EXACT one from the image
