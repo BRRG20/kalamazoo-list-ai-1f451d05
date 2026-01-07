@@ -65,6 +65,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import type { Batch, Product, ProductImage } from '@/types';
 
 interface BatchDetailProps {
@@ -240,7 +241,8 @@ export function BatchDetail({
   }
   
   const { settings, isShopifyConfigured } = useSettings();
-  const { isProcessing: isRemovingBg, progress: bgRemovalProgress, removeBackgroundBulk } = useBackgroundRemoval();
+  const { isProcessing: isRemovingBg, progress: bgRemovalProgress, removeBackgroundBulk, getUndoMap, canUndo: canUndoBgRemoval } = useBackgroundRemoval();
+  const [bgUndoData, setBgUndoData] = useState<Map<string, { imageId: string; originalUrl: string; newUrl: string }[]>>(new Map());
   const [imagesPerProduct, setImagesPerProduct] = useState(settings?.default_images_per_product || 9);
   const [productImages, setProductImages] = useState<Record<string, ProductImage[]>>({});
   const [imagesLoading, setImagesLoading] = useState(false);
@@ -469,21 +471,33 @@ export function BatchDetail({
   const handleBulkBackgroundRemoval = useCallback(async () => {
     if (selectedProductIds.size === 0) return;
     
-    // Gather all image URLs from selected products
-    const imageUrls: string[] = [];
+    // Gather all image URLs and their IDs from selected products
+    const imageData: { id: string; url: string; productId: string }[] = [];
     for (const productId of selectedProductIds) {
       const imgs = productImages[productId] || [];
-      imageUrls.push(...imgs.map(img => img.url));
+      imgs.forEach(img => {
+        imageData.push({ id: img.id, url: img.url, productId });
+      });
     }
     
-    if (imageUrls.length === 0) return;
+    if (imageData.length === 0) return;
     
-    await removeBackgroundBulk(imageUrls, batch.id, async (originalUrl, newUrl) => {
+    // Store undo data before processing
+    const undoEntries: { imageId: string; originalUrl: string; newUrl: string }[] = [];
+    
+    await removeBackgroundBulk(imageData.map(d => d.url), batch.id, async (originalUrl, newUrl) => {
+      // Find the image data for this URL
+      const imgInfo = imageData.find(d => d.url === originalUrl);
+      if (!imgInfo) return;
+      
+      // Store for undo
+      undoEntries.push({ imageId: imgInfo.id, originalUrl, newUrl });
+      
       // Update the image URL in the database
       const { error } = await supabase
         .from('images')
         .update({ url: newUrl })
-        .eq('url', originalUrl);
+        .eq('id', imgInfo.id);
       
       if (!error) {
         // Update local state
@@ -491,7 +505,7 @@ export function BatchDetail({
           const updated = { ...prev };
           for (const productId of Object.keys(updated)) {
             updated[productId] = updated[productId].map(img =>
-              img.url === originalUrl ? { ...img, url: newUrl } : img
+              img.id === imgInfo.id ? { ...img, url: newUrl } : img
             );
           }
           return updated;
@@ -499,9 +513,46 @@ export function BatchDetail({
       }
     });
     
+    // Store undo data for this batch operation
+    if (undoEntries.length > 0) {
+      setBgUndoData(prev => {
+        const next = new Map(prev);
+        next.set(batch.id, undoEntries);
+        return next;
+      });
+    }
+    
     // Refresh images after completion
     handleRefreshImages();
   }, [selectedProductIds, productImages, batch.id, removeBackgroundBulk]);
+
+  // Undo background removal
+  const handleUndoBackgroundRemoval = useCallback(async () => {
+    const undoEntries = bgUndoData.get(batch.id);
+    if (!undoEntries || undoEntries.length === 0) return;
+    
+    // Restore original URLs
+    for (const entry of undoEntries) {
+      await supabase
+        .from('images')
+        .update({ url: entry.originalUrl })
+        .eq('id', entry.imageId);
+    }
+    
+    // Clear undo data
+    setBgUndoData(prev => {
+      const next = new Map(prev);
+      next.delete(batch.id);
+      return next;
+    });
+    
+    // Refresh images
+    handleRefreshImages();
+    toast.success(`Restored ${undoEntries.length} images to original`);
+  }, [batch.id, bgUndoData]);
+
+  const hasBgUndoData = bgUndoData.has(batch.id) && (bgUndoData.get(batch.id)?.length || 0) > 0;
+
 
 
   return (
@@ -1154,6 +1205,20 @@ export function BatchDetail({
                           Remove BG ({selectedProductIds.size})
                         </>
                       )}
+                    </Button>
+                  )}
+                  
+                  {/* Undo Background Removal button */}
+                  {hasBgUndoData && (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={handleUndoBackgroundRemoval}
+                      type="button"
+                      className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                    >
+                      <Undo2 className="w-4 h-4 mr-1" />
+                      Undo BG ({bgUndoData.get(batch.id)?.length || 0})
                     </Button>
                   )}
                   
