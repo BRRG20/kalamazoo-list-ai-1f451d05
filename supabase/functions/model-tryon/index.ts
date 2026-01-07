@@ -17,20 +17,21 @@ interface RequestBody {
 
 const MAX_RETRIES = 2;
 
-// Model descriptions for consistent appearance
+// Model descriptions for consistent appearance - cool, neutral, fashion-forward
 const MODEL_DESCRIPTIONS: Record<string, string> = {
-  '11111111-1111-1111-1111-111111111111': 'Alex: A professional male model aged 30-35 years old with short dark hair, clean-shaven, athletic build, height 6ft, warm skin tone, neutral confident expression.',
-  '22222222-2222-2222-2222-222222222222': 'Marcus: A stylish male model aged 30-35 years old with medium-length brown hair, light stubble, lean athletic build, height 5ft11, fair skin tone, relaxed friendly expression.',
-  '33333333-3333-3333-3333-333333333333': 'Sophie: An elegant female model aged 30-35 years old with shoulder-length auburn hair, slim build, height 5ft8, light skin tone, professional composed expression.',
-  '44444444-4444-4444-4444-444444444444': 'Emma: A natural female model aged 30-35 years old with long dark wavy hair, average build, height 5ft7, medium skin tone, warm approachable expression.',
+  '11111111-1111-1111-1111-111111111111': 'Alex: A cool, fashion-forward male model aged 25-30 with modern styled short dark hair, clean-shaven, lean athletic build, height 6ft, warm skin tone. Expression: neutral, confident, effortlessly cool - subtle smoulder or slight knowing smile. Face MUST be clearly visible.',
+  '22222222-2222-2222-2222-222222222222': 'Marcus: A stylish, model-like male aged 25-30 with textured medium-length brown hair, light stubble, lean build, height 5ft11, fair skin tone. Expression: cool and relaxed, understated confidence, hint of a subtle smile. Face MUST be clearly visible.',
+  '33333333-3333-3333-3333-333333333333': 'Sophie: An effortlessly cool female model aged 25-30 with sleek shoulder-length hair (can be bob or straight), slim build, height 5ft8, light skin tone. Expression: neutral but approachable, cool confidence, can have subtle smile. Face MUST be clearly visible.',
+  '44444444-4444-4444-4444-444444444444': 'Emma: A natural, model-like female aged 25-30 with long flowing hair, slim-average build, height 5ft7, medium skin tone. Expression: relaxed confidence, warm but cool, natural slight smile allowed. Face MUST be clearly visible.',
 };
 
+// Pose descriptions - cool, neutral, model-like poses (inspired by fashion editorials)
 const POSE_DESCRIPTIONS: Record<string, string> = {
-  'front_neutral': 'standing straight facing the camera with arms relaxed at sides, feet shoulder-width apart',
-  'three_quarter': 'standing at a 3/4 angle to the camera, body turned slightly, face toward camera',
-  'relaxed': 'standing with a relaxed casual posture, slight weight shift to one leg, natural arm position',
-  'arms_bent': 'standing with arms slightly bent, hands loosely clasped or one hand on hip',
-  'movement': 'captured mid-stride or with subtle natural movement, dynamic but professional',
+  'front_neutral': 'standing facing camera with cool, relaxed stance - weight slightly shifted, hands relaxed at sides or one hand in pocket. Natural model pose, not stiff. Face toward camera with neutral cool expression.',
+  'three_quarter': 'standing at 3/4 angle with effortless cool pose, body angled but face toward camera. One hand can be in pocket or relaxed at side. Confident, editorial feel.',
+  'relaxed': 'relaxed casual lean or stance, weight on one leg, arms natural - hands in pockets or thumbs hooked in belt loops. Cool, approachable but model-like.',
+  'arms_bent': 'cool stance with arms naturally bent - hand on hip, or crossed arms, or hands in jacket pockets. Editorial pose, confident but not stiff.',
+  'movement': 'captured mid-stride or walking pose, natural movement, dynamic but controlled. Cool candid street-style feel, face still visible.',
 };
 
 // Outfit styling descriptions - these define complementary garments
@@ -125,6 +126,15 @@ ${modelDescription}
 POSE:
 ${poseDescription}
 
+MODEL APPEARANCE (CRITICAL):
+- Face MUST be clearly visible and in frame
+- Expression: cool, neutral, effortlessly confident - like a fashion editorial
+- Can have subtle knowing smile or relaxed neutral expression
+- NO exaggerated smiling, NO stiff poses
+- Think: cool street-style fashion photography, candid but composed
+- Model should look like they belong in a magazine or brand campaign
+- Natural soft lighting on face
+
 FIT STYLE FOR HERO GARMENT:
 ${fitInstructions}
 
@@ -147,11 +157,12 @@ ABSOLUTE REQUIREMENTS FOR THE HERO GARMENT:
 5. The hero garment is the SINGLE SOURCE OF TRUTH - copy it perfectly
 
 PHOTOGRAPHY STYLE:
-- Professional studio lighting
-- Plain off-white/light grey background
+- Professional fashion photography lighting
+- Urban street background OR clean studio - lifestyle feel
 - Full body shot showing the complete styled outfit
 - Sharp focus on the hero garment
 - Natural shadows and depth
+- Editorial/campaign quality
 
 WHAT NOT TO DO:
 - DO NOT alter the hero garment in ANY way
@@ -159,6 +170,7 @@ WHAT NOT TO DO:
 - DO NOT add distracting accessories
 - DO NOT over-style or create runway/editorial looks
 - DO NOT create costume-like or fantasy outfits
+- DO NOT make stiff or awkward poses
 - Keep it wearable and realistic`;
   } else {
     // Product-only mode - just the garment on model
@@ -169,6 +181,15 @@ ${modelDescription}
 
 POSE:
 ${poseDescription}
+
+MODEL APPEARANCE (CRITICAL):
+- Face MUST be clearly visible and in frame
+- Expression: cool, neutral, effortlessly confident - like a fashion editorial
+- Can have subtle knowing smile or relaxed neutral expression
+- NO exaggerated smiling, NO stiff poses
+- Think: cool street-style fashion photography, candid but composed
+- Model should look like they belong in a magazine or brand campaign
+- Natural soft lighting on face
 
 FIT STYLE:
 ${fitInstructions}
@@ -183,11 +204,12 @@ ABSOLUTE REQUIREMENTS - DO NOT VIOLATE:
 7. The garment is the SINGLE SOURCE OF TRUTH - the input image defines 100% of how the clothing looks
 
 WHAT TO GENERATE:
-- A professional studio photo with the model wearing this EXACT garment
-- Plain off-white/light grey background
-- Professional studio lighting
+- A professional fashion photo with the model wearing this EXACT garment
+- Urban street background OR clean neutral background - lifestyle editorial feel
+- Professional fashion photography lighting
 - Full or 3/4 body shot showing the complete garment
 - The model's body and pose as described above
+- Editorial/campaign quality image
 
 WHAT NOT TO DO:
 - DO NOT generate a "similar" garment - use the EXACT one from the image
@@ -196,6 +218,7 @@ WHAT NOT TO DO:
 - DO NOT add accessories or styling not in the original
 - DO NOT "improve" or "enhance" the garment design
 - DO NOT hallucinate or invent any garment details
+- DO NOT make stiff or awkward poses
 
 The input image is your ONLY reference for the garment. Copy it exactly onto the model.`;
   }
