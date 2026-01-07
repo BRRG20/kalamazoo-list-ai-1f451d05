@@ -1,16 +1,19 @@
 import { useState } from 'react';
-import { ChevronUp, ChevronDown, ImageIcon, Trash2, GripVertical, ZoomIn, Check, ChevronsUpDown, AlertTriangle } from 'lucide-react';
+import { ChevronUp, ChevronDown, ImageIcon, Trash2, GripVertical, ZoomIn, Check, ChevronsUpDown, AlertTriangle, Eraser, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { useBackgroundRemoval } from '@/hooks/use-background-removal';
+import { supabase } from '@/integrations/supabase/client';
 import type { ProductImage, Product } from '@/types';
 import { cn } from '@/lib/utils';
 
 interface ImageGalleryProps {
   images: ProductImage[];
+  batchId: string;
   onUpdateImage: (imageId: string, updates: Partial<ProductImage>) => void;
   onReorderImages: (imageId: string, newPosition: number) => void;
   onDeleteImage?: (imageId: string) => void;
@@ -21,6 +24,7 @@ interface ImageGalleryProps {
 
 export function ImageGallery({
   images,
+  batchId,
   onUpdateImage,
   onReorderImages,
   onDeleteImage,
@@ -28,6 +32,8 @@ export function ImageGallery({
   otherProducts = [],
   currentProductId,
 }: ImageGalleryProps) {
+  const { isProcessing: isRemovingBg, progress: bgProgress, removeBackgroundSingle } = useBackgroundRemoval();
+  const [processingImageId, setProcessingImageId] = useState<string | null>(null);
   const [draggedImageId, setDraggedImageId] = useState<string | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [previewImage, setPreviewImage] = useState<ProductImage | null>(null);
@@ -279,6 +285,31 @@ export function ImageGallery({
                     Image {image.position}
                   </span>
                   <div className="flex gap-1 flex-shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={async () => {
+                        setProcessingImageId(image.id);
+                        const newUrl = await removeBackgroundSingle(image.url, batchId);
+                        if (newUrl) {
+                          await supabase
+                            .from('images')
+                            .update({ url: newUrl })
+                            .eq('id', image.id);
+                          onUpdateImage(image.id, { url: newUrl } as any);
+                        }
+                        setProcessingImageId(null);
+                      }}
+                      disabled={isRemovingBg}
+                      title="Remove background"
+                    >
+                      {processingImageId === image.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Eraser className="w-4 h-4" />
+                      )}
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"

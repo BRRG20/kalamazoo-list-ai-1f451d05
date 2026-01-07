@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useShopifyStats } from '@/hooks/use-shopify-stats';
+import { useBackgroundRemoval } from '@/hooks/use-background-removal';
 import {
   Upload, 
   Sparkles, 
@@ -26,7 +27,8 @@ import {
   Undo2,
   HelpCircle,
   Info,
-  ChevronDown
+  ChevronDown,
+  Eraser
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -62,6 +64,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { supabase } from '@/integrations/supabase/client';
 import type { Batch, Product, ProductImage } from '@/types';
 
 interface BatchDetailProps {
@@ -237,6 +240,7 @@ export function BatchDetail({
   }
   
   const { settings, isShopifyConfigured } = useSettings();
+  const { isProcessing: isRemovingBg, progress: bgRemovalProgress, removeBackgroundBulk } = useBackgroundRemoval();
   const [imagesPerProduct, setImagesPerProduct] = useState(settings?.default_images_per_product || 9);
   const [productImages, setProductImages] = useState<Record<string, ProductImage[]>>({});
   const [imagesLoading, setImagesLoading] = useState(false);
@@ -460,6 +464,44 @@ export function BatchDetail({
       onCreateInShopify(ids);
     }
   };
+
+  // Bulk background removal for selected products
+  const handleBulkBackgroundRemoval = useCallback(async () => {
+    if (selectedProductIds.size === 0) return;
+    
+    // Gather all image URLs from selected products
+    const imageUrls: string[] = [];
+    for (const productId of selectedProductIds) {
+      const imgs = productImages[productId] || [];
+      imageUrls.push(...imgs.map(img => img.url));
+    }
+    
+    if (imageUrls.length === 0) return;
+    
+    await removeBackgroundBulk(imageUrls, batch.id, async (originalUrl, newUrl) => {
+      // Update the image URL in the database
+      const { error } = await supabase
+        .from('images')
+        .update({ url: newUrl })
+        .eq('url', originalUrl);
+      
+      if (!error) {
+        // Update local state
+        setProductImages(prev => {
+          const updated = { ...prev };
+          for (const productId of Object.keys(updated)) {
+            updated[productId] = updated[productId].map(img =>
+              img.url === originalUrl ? { ...img, url: newUrl } : img
+            );
+          }
+          return updated;
+        });
+      }
+    });
+    
+    // Refresh images after completion
+    handleRefreshImages();
+  }, [selectedProductIds, productImages, batch.id, removeBackgroundBulk]);
 
 
   return (
@@ -1101,6 +1143,21 @@ export function BatchDetail({
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={handleBulkBackgroundRemoval}
+                          disabled={isRemovingBg}
+                        >
+                          {isRemovingBg ? (
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          ) : (
+                            <Eraser className="w-4 h-4 mr-2" />
+                          )}
+                          {isRemovingBg 
+                            ? `Removing BG (${bgRemovalProgress.current}/${bgRemovalProgress.total})...`
+                            : `Remove Background (${selectedProductIds.size} products)`
+                          }
+                        </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuSub>
                           <DropdownMenuSubTrigger>
