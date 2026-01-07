@@ -322,30 +322,82 @@ serve(async (req) => {
     
     console.log("Raw AI response:", rawContent.substring(0, 500));
     
-    // Extract JSON from response - handle markdown code blocks
+    // Extract JSON from response - handle markdown code blocks and truncated responses
     let generated;
     try {
       generated = JSON.parse(rawContent);
     } catch {
-      // Try to extract JSON from markdown code blocks
       let jsonString = rawContent;
       
-      // Remove markdown code block markers
+      // Remove markdown code block markers (handle both complete and truncated blocks)
+      // First try complete code block
       const codeBlockMatch = rawContent.match(/```(?:json)?\s*([\s\S]*?)```/);
       if (codeBlockMatch) {
         jsonString = codeBlockMatch[1].trim();
       } else {
-        // Try to find raw JSON object
-        const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          jsonString = jsonMatch[0];
+        // Handle truncated code block (starts with ``` but no closing)
+        const truncatedBlockMatch = rawContent.match(/```(?:json)?\s*([\s\S]*)/);
+        if (truncatedBlockMatch) {
+          jsonString = truncatedBlockMatch[1].trim();
         }
       }
+      
+      // Try to find JSON object
+      const jsonMatch = jsonString.match(/\{[\s\S]*/);
+      if (jsonMatch) {
+        jsonString = jsonMatch[0];
+      }
+      
+      // Try to repair truncated JSON by closing incomplete strings and braces
+      const repairJson = (str: string): string => {
+        // Check if JSON appears truncated (doesn't end with })
+        if (!str.trim().endsWith('}')) {
+          console.log("[AI] Attempting to repair truncated JSON");
+          
+          // Count open braces and quotes
+          let inString = false;
+          let escapeNext = false;
+          let braceCount = 0;
+          
+          for (const char of str) {
+            if (escapeNext) {
+              escapeNext = false;
+              continue;
+            }
+            if (char === '\\') {
+              escapeNext = true;
+              continue;
+            }
+            if (char === '"' && !escapeNext) {
+              inString = !inString;
+            }
+            if (!inString) {
+              if (char === '{') braceCount++;
+              if (char === '}') braceCount--;
+            }
+          }
+          
+          // If we're in a string, close it
+          if (inString) {
+            str += '"';
+          }
+          
+          // Close any unclosed braces
+          while (braceCount > 0) {
+            str += '}';
+            braceCount--;
+          }
+        }
+        return str;
+      };
+      
+      jsonString = repairJson(jsonString);
       
       try {
         generated = JSON.parse(jsonString);
       } catch (parseError) {
-        console.error("Failed to parse JSON:", jsonString.substring(0, 300));
+        console.error("Failed to parse JSON after repair:", jsonString.substring(0, 500));
+        console.error("Parse error:", parseError);
         throw new Error("Could not parse AI response");
       }
     }
