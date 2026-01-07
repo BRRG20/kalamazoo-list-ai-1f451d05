@@ -2,6 +2,13 @@ import { useState, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 
+export type ShadowType = 'none' | 'light' | 'medium' | 'harsh';
+
+export interface BackgroundRemovalOptions {
+  secondPass?: boolean;
+  shadow?: ShadowType;
+}
+
 export interface BackgroundRemovalProgress {
   current: number;
   total: number;
@@ -56,7 +63,11 @@ export function useBackgroundRemoval() {
   };
 
   const removeBackgroundSingle = useCallback(
-    async (imageUrl: string, batchId: string): Promise<string | null> => {
+    async (
+      imageUrl: string, 
+      batchId: string,
+      options: BackgroundRemovalOptions = {}
+    ): Promise<string | null> => {
       setIsProcessing(true);
       setProgress({ current: 0, total: 1, status: 'processing' });
 
@@ -82,7 +93,11 @@ export function useBackgroundRemoval() {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${session.access_token}`,
             },
-            body: JSON.stringify({ imageUrl }),
+            body: JSON.stringify({ 
+              imageUrl,
+              secondPass: options.secondPass ?? false,
+              shadow: options.shadow ?? 'none',
+            }),
           }
         );
 
@@ -130,7 +145,8 @@ export function useBackgroundRemoval() {
     async (
       imageUrls: string[],
       batchId: string,
-      onImageProcessed?: (originalUrl: string, newUrl: string) => void
+      onImageProcessed?: (originalUrl: string, newUrl: string) => void,
+      options: BackgroundRemovalOptions = {}
     ): Promise<Map<string, string>> => {
       if (imageUrls.length === 0) return new Map();
 
@@ -172,7 +188,11 @@ export function useBackgroundRemoval() {
                   'Content-Type': 'application/json',
                   'Authorization': `Bearer ${session.access_token}`,
                 },
-                body: JSON.stringify({ imageUrl: url }),
+                body: JSON.stringify({ 
+                  imageUrl: url,
+                  secondPass: options.secondPass ?? false,
+                  shadow: options.shadow ?? 'none',
+                }),
               }
             );
 
