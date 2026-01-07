@@ -649,45 +649,97 @@ export function BatchDetail({
 
   const hasModelUndoData = modelUndoData.has(batch.id) && (modelUndoData.get(batch.id)?.length || 0) > 0;
 
-  // Bulk model try-on for selected products
+  // Bulk model try-on for selected products - ADDS new images instead of replacing
   const handleBulkModelTryOn = useCallback(async (modelId: string, poseId: PoseType, fitStyle: FitStyle) => {
     if (selectedProductIds.size === 0) return;
-    const imageData: { id: string; url: string }[] = [];
+    
+    // Gather image data with product ID so we can add new images to correct products
+    const imageData: { id: string; url: string; productId: string }[] = [];
     for (const productId of selectedProductIds) {
       const imgs = productImages[productId] || [];
-      imgs.forEach(img => imageData.push({ id: img.id, url: img.url }));
+      imgs.forEach(img => imageData.push({ id: img.id, url: img.url, productId }));
     }
     if (imageData.length === 0) return;
+    
     setShowModelTryOnDialog(false);
-    const undoEntries: { imageId: string; originalUrl: string; newUrl: string }[] = [];
+    const addedImageIds: string[] = [];
+    
     await processModelBulk(imageData, batch.id, modelId, poseId, fitStyle, async (originalUrl, newUrl) => {
       const imgInfo = imageData.find(d => d.url === originalUrl);
       if (!imgInfo) return;
-      undoEntries.push({ imageId: imgInfo.id, originalUrl, newUrl });
-      await supabase.from('images').update({ url: newUrl }).eq('id', imgInfo.id);
-      setProductImages(prev => {
-        const updated = { ...prev };
-        for (const pid of Object.keys(updated)) {
-          updated[pid] = updated[pid].map(img => img.id === imgInfo.id ? { ...img, url: newUrl } : img);
-        }
-        return updated;
-      });
+      
+      // Get current max position for the product
+      const currentImages = productImages[imgInfo.productId] || [];
+      const maxPosition = currentImages.length > 0 
+        ? Math.max(...currentImages.map(img => img.position || 0)) 
+        : 0;
+      
+      // INSERT new image instead of updating existing one
+      const { data: newImage, error } = await supabase
+        .from('images')
+        .insert({
+          url: newUrl,
+          product_id: imgInfo.productId,
+          batch_id: batch.id,
+          position: maxPosition + 1,
+          include_in_shopify: true
+        })
+        .select()
+        .single();
+      
+      if (!error && newImage) {
+        addedImageIds.push(newImage.id);
+        // Add new image to local state
+        setProductImages(prev => {
+          const updated = { ...prev };
+          if (updated[imgInfo.productId]) {
+            updated[imgInfo.productId] = [...updated[imgInfo.productId], newImage];
+          }
+          return updated;
+        });
+      }
     });
-    if (undoEntries.length > 0) {
-      setModelUndoData(prev => { const next = new Map(prev); next.set(batch.id, undoEntries); return next; });
+    
+    if (addedImageIds.length > 0) {
+      // Store added image IDs for undo (we'll delete them on undo)
+      setModelUndoData(prev => { 
+        const next = new Map(prev); 
+        next.set(batch.id, addedImageIds.map(id => ({ imageId: id, originalUrl: '', newUrl: '' }))); 
+        return next; 
+      });
+      toast.success(`Added ${addedImageIds.length} model images to products`);
     }
+    
     handleRefreshImages();
   }, [selectedProductIds, productImages, batch.id, processModelBulk]);
 
+  // Undo model try-on - DELETE the added images
   const handleUndoModelTryOn = useCallback(async () => {
     const undoEntries = modelUndoData.get(batch.id);
     if (!undoEntries?.length) return;
-    for (const entry of undoEntries) {
-      await supabase.from('images').update({ url: entry.originalUrl }).eq('id', entry.imageId);
+    
+    const imageIdsToDelete = undoEntries.map(e => e.imageId);
+    
+    // Delete the added model images from database
+    const { error } = await supabase
+      .from('images')
+      .delete()
+      .in('id', imageIdsToDelete);
+    
+    if (!error) {
+      // Remove from local state
+      setProductImages(prev => {
+        const updated = { ...prev };
+        for (const productId of Object.keys(updated)) {
+          updated[productId] = updated[productId].filter(img => !imageIdsToDelete.includes(img.id));
+        }
+        return updated;
+      });
     }
+    
     setModelUndoData(prev => { const next = new Map(prev); next.delete(batch.id); return next; });
     handleRefreshImages();
-    toast.success(`Restored ${undoEntries.length} images to original`);
+    toast.success(`Removed ${undoEntries.length} model images`);
   }, [batch.id, modelUndoData]);
 
 
