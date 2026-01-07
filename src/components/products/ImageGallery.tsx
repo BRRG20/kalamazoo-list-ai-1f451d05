@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { ChevronUp, ChevronDown, ImageIcon, Trash2, GripVertical, ZoomIn, Check, ChevronsUpDown, AlertTriangle, Eraser, Loader2, Undo2, Shirt, User } from 'lucide-react';
+import { ChevronUp, ChevronDown, ImageIcon, Trash2, GripVertical, ZoomIn, Check, ChevronsUpDown, AlertTriangle, Eraser, Loader2, Undo2, Shirt, User, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
@@ -55,6 +55,7 @@ export function ImageGallery({
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
   const [showModelDialog, setShowModelDialog] = useState(false);
   const [modelDialogImageId, setModelDialogImageId] = useState<string | null>(null);
+  const [regeneratingImageId, setRegeneratingImageId] = useState<string | null>(null);
   
   // Track original URLs for individual undo
   const originalUrlsRef = useRef<Map<string, string>>(new Map());
@@ -253,6 +254,64 @@ export function ImageGallery({
     setProcessingImageId(null);
     setProcessingType(null);
     setModelDialogImageId(null);
+  };
+
+  // Regenerate AI model image with new style
+  const handleRegenerateModel = async (image: ProductImage) => {
+    if ((image as any).source !== 'model_tryon') return;
+    
+    // Find the original product image (non-AI) to use as source
+    const originalImages = images.filter(img => (img as any).source !== 'model_tryon');
+    if (originalImages.length === 0) {
+      toast.error('No original product image found to regenerate from');
+      return;
+    }
+    
+    // Get current user for RLS
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      toast.error('You must be logged in');
+      return;
+    }
+    
+    setRegeneratingImageId(image.id);
+    
+    // Use default settings for regeneration (new style variation)
+    const modelIds = ['11111111-1111-1111-1111-111111111111', '22222222-2222-2222-2222-222222222222', '33333333-3333-3333-3333-333333333333', '44444444-4444-4444-4444-444444444444'];
+    const poses = ['front_neutral', 'three_quarter', 'relaxed', 'arms_bent', 'movement'];
+    
+    // Randomly pick pose for variety, keep same model category (male/female based on current)
+    const randomPose = poses[Math.floor(Math.random() * poses.length)] as PoseType;
+    // Keep model consistent - pick first male or female model
+    const defaultModelId = modelIds[0]; // Alex - default
+    
+    const newUrl = await processModelSingle(
+      originalImages[0].url, 
+      originalImages[0].id, 
+      batchId, 
+      defaultModelId, 
+      randomPose, 
+      'regular' as FitStyle
+    );
+    
+    if (newUrl) {
+      // Update the existing AI image with new URL
+      const { error } = await supabase
+        .from('images')
+        .update({ url: newUrl })
+        .eq('id', image.id);
+      
+      if (!error) {
+        onUpdateImage(image.id, { url: newUrl } as any);
+        toast.success('Model image regenerated with new style');
+      } else {
+        toast.error('Failed to update image');
+      }
+    } else {
+      toast.error('Regeneration failed');
+    }
+    
+    setRegeneratingImageId(null);
   };
 
   const handleUndoBackground = async (image: ProductImage) => {
@@ -467,6 +526,27 @@ export function ImageGallery({
                     Image {image.position}
                   </span>
                   <div className="flex gap-1 flex-shrink-0">
+                    {/* Regenerate button for AI model images */}
+                    {(image as any).source === 'model_tryon' && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            onClick={() => handleRegenerateModel(image)}
+                            disabled={isModelProcessing || regeneratingImageId === image.id}
+                          >
+                            {regeneratingImageId === image.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <RefreshCw className="w-4 h-4" />
+                            )}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Regenerate with new style</TooltipContent>
+                      </Tooltip>
+                    )}
                     {/* Undo button - always visible, disabled when nothing to undo */}
                     <Tooltip>
                       <TooltipTrigger asChild>
