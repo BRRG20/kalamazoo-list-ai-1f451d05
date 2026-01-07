@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { cn } from '@/lib/utils';
 import { 
   X, 
   ChevronLeft, 
@@ -1072,28 +1073,32 @@ export function ProductDetailPanel({
                   </Button>
                 )}
                 
-                {/* Undo Ghost Mannequin button */}
-                {ghostUndoData.length > 0 && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={async () => {
-                      for (const entry of ghostUndoData) {
-                        await supabase
-                          .from('images')
-                          .update({ url: entry.originalUrl })
-                          .eq('id', entry.imageId);
-                        onUpdateImage(entry.imageId, { url: entry.originalUrl } as any);
-                      }
-                      toast.success(`Restored ${ghostUndoData.length} images to original`);
-                      setGhostUndoData([]);
-                    }}
-                    className="w-full text-purple-600 hover:text-purple-700 hover:bg-purple-50"
-                  >
-                    <Undo2 className="w-4 h-4 mr-2" />
-                    Undo Ghost ({ghostUndoData.length})
-                  </Button>
-                )}
+                {/* Undo Ghost Mannequin button - always visible */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    for (const entry of ghostUndoData) {
+                      await supabase
+                        .from('images')
+                        .update({ url: entry.originalUrl })
+                        .eq('id', entry.imageId);
+                      onUpdateImage(entry.imageId, { url: entry.originalUrl } as any);
+                    }
+                    toast.success(`Restored ${ghostUndoData.length} images to original`);
+                    setGhostUndoData([]);
+                  }}
+                  disabled={ghostUndoData.length === 0}
+                  className={cn(
+                    "w-full",
+                    ghostUndoData.length > 0 
+                      ? "text-purple-600 hover:text-purple-700 hover:bg-purple-50" 
+                      : "text-muted-foreground"
+                  )}
+                >
+                  <Undo2 className="w-4 h-4 mr-2" />
+                  Undo Ghost {ghostUndoData.length > 0 ? `(${ghostUndoData.length})` : ''}
+                </Button>
               </div>
             )}
             <ImageGallery

@@ -1367,17 +1367,22 @@ export function BatchDetail({
                     </Tooltip>
                   )}
                   
-                  {/* Undo Ghost Mannequin button */}
-                  {hasGhostUndoData && (
+                  {/* Undo Ghost Mannequin button - always visible when products selected */}
+                  {selectedProductIds.size > 0 && (
                     <Button 
                       variant="outline" 
                       size="sm" 
                       onClick={handleUndoGhostMannequin}
+                      disabled={!hasGhostUndoData}
                       type="button"
-                      className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                      className={cn(
+                        hasGhostUndoData 
+                          ? "text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                          : "text-muted-foreground"
+                      )}
                     >
                       <Undo2 className="w-4 h-4 mr-1" />
-                      Undo Ghost ({ghostUndoData.get(batch.id)?.length || 0})
+                      Undo Ghost {hasGhostUndoData ? `(${ghostUndoData.get(batch.id)?.length || 0})` : ''}
                     </Button>
                   )}
                   
