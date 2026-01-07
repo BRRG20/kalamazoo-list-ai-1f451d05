@@ -1,15 +1,16 @@
-import { useState } from 'react';
-import { ChevronUp, ChevronDown, ImageIcon, Trash2, GripVertical, ZoomIn, Check, ChevronsUpDown, AlertTriangle, Eraser, Loader2 } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { ChevronUp, ChevronDown, ImageIcon, Trash2, GripVertical, ZoomIn, Check, ChevronsUpDown, AlertTriangle, Eraser, Loader2, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { useBackgroundRemoval } from '@/hooks/use-background-removal';
+import { useBackgroundRemoval, type BackgroundRemovalOptions } from '@/hooks/use-background-removal';
 import { supabase } from '@/integrations/supabase/client';
 import type { ProductImage, Product } from '@/types';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 interface ImageGalleryProps {
   images: ProductImage[];
@@ -20,6 +21,7 @@ interface ImageGalleryProps {
   onMoveImages?: (imageIds: string[], targetProductId: string) => void;
   otherProducts?: Product[];
   currentProductId?: string;
+  bgRemovalOptions?: BackgroundRemovalOptions;
 }
 
 export function ImageGallery({
@@ -31,8 +33,9 @@ export function ImageGallery({
   onMoveImages,
   otherProducts = [],
   currentProductId,
+  bgRemovalOptions = {},
 }: ImageGalleryProps) {
-  const { isProcessing: isRemovingBg, progress: bgProgress, removeBackgroundSingle } = useBackgroundRemoval();
+  const { isProcessing: isRemovingBg, removeBackgroundSingle } = useBackgroundRemoval();
   const [processingImageId, setProcessingImageId] = useState<string | null>(null);
   const [draggedImageId, setDraggedImageId] = useState<string | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
@@ -41,6 +44,9 @@ export function ImageGallery({
   const [moveTargetProductId, setMoveTargetProductId] = useState<string>('');
   const [moveDropdownOpen, setMoveDropdownOpen] = useState(false);
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
+  
+  // Track original URLs for individual undo
+  const originalUrlsRef = useRef<Map<string, string>>(new Map());
 
   const moveImage = (imageId: string, direction: 'up' | 'down') => {
     const image = images.find(i => i.id === imageId);
@@ -120,6 +126,47 @@ export function ImageGallery({
   const clearSelection = () => {
     setSelectedImageIds(new Set());
   };
+
+  const handleRemoveBackground = async (image: ProductImage) => {
+    setProcessingImageId(image.id);
+    
+    // Store original URL before processing for undo
+    originalUrlsRef.current.set(image.id, image.url);
+    
+    const newUrl = await removeBackgroundSingle(image.url, batchId, bgRemovalOptions);
+    if (newUrl) {
+      await supabase
+        .from('images')
+        .update({ url: newUrl })
+        .eq('id', image.id);
+      onUpdateImage(image.id, { url: newUrl } as any);
+    } else {
+      // If failed, remove from undo map
+      originalUrlsRef.current.delete(image.id);
+    }
+    setProcessingImageId(null);
+  };
+
+  const handleUndoBackground = async (image: ProductImage) => {
+    const originalUrl = originalUrlsRef.current.get(image.id);
+    if (!originalUrl) return;
+    
+    // Restore original URL
+    const { error } = await supabase
+      .from('images')
+      .update({ url: originalUrl })
+      .eq('id', image.id);
+    
+    if (!error) {
+      onUpdateImage(image.id, { url: originalUrl } as any);
+      originalUrlsRef.current.delete(image.id);
+      toast.success('Image restored to original');
+    } else {
+      toast.error('Failed to restore image');
+    }
+  };
+
+  const canUndo = (imageId: string) => originalUrlsRef.current.has(imageId);
 
   if (images.length === 0) {
     return (
@@ -285,22 +332,23 @@ export function ImageGallery({
                     Image {image.position}
                   </span>
                   <div className="flex gap-1 flex-shrink-0">
+                    {/* Undo BG button - only show if we can undo */}
+                    {canUndo(image.id) && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                        onClick={() => handleUndoBackground(image)}
+                        title="Undo background removal"
+                      >
+                        <Undo2 className="w-4 h-4" />
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7"
-                      onClick={async () => {
-                        setProcessingImageId(image.id);
-                        const newUrl = await removeBackgroundSingle(image.url, batchId);
-                        if (newUrl) {
-                          await supabase
-                            .from('images')
-                            .update({ url: newUrl })
-                            .eq('id', image.id);
-                          onUpdateImage(image.id, { url: newUrl } as any);
-                        }
-                        setProcessingImageId(null);
-                      }}
+                      onClick={() => handleRemoveBackground(image)}
                       disabled={isRemovingBg}
                       title="Remove background"
                     >
