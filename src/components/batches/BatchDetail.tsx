@@ -1726,7 +1726,7 @@ export function BatchDetail({
                 <ProductCard
                   key={product.id}
                   product={product}
-                  images={productImages[product.id] || []}
+                  images={(productImages[product.id] || []).slice().sort((a, b) => (a.position || 0) - (b.position || 0))}
                   isSelected={selectedProductIds.has(product.id)}
                   onToggleSelect={() => onToggleProductSelection(product.id)}
                   onEdit={() => onEditProduct(product.id)}
