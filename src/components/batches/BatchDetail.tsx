@@ -155,6 +155,8 @@ interface BatchDetailProps {
   onMarkAsPending?: (productId: string) => void;
   // Hide product
   onHideProduct?: (productId: string) => void;
+  // Delete single image by ID (for ProductCard)
+  onDeleteImageById?: (imageId: string, productId: string) => Promise<void>;
 }
 
 export function BatchDetail({
@@ -229,6 +231,7 @@ export function BatchDetail({
   onMarkAsUploaded,
   onMarkAsPending,
   onHideProduct,
+  onDeleteImageById,
 }: BatchDetailProps) {
   // Early return if batch is missing (defensive guard)
   if (!batch || !batch.id) {
@@ -1733,6 +1736,7 @@ export function BatchDetail({
                   onToggleSelect={() => onToggleProductSelection(product.id)}
                   onEdit={() => onEditProduct(product.id)}
                   onDelete={() => onDeleteProduct(product.id)}
+                  onDeleteImage={onDeleteImageById ? (imageId) => onDeleteImageById(imageId, product.id) : undefined}
                   onReceiveImage={(imageUrl, fromProductId) => 
                     onMoveImageBetweenProducts?.(imageUrl, fromProductId, product.id)
                   }
