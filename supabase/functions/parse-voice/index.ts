@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { verifyAuth, unauthorizedResponse, corsHeaders } from "../_shared/auth.ts";
 
 // Input validation
 const MAX_TRANSCRIPT_LENGTH = 5000;
@@ -19,11 +20,6 @@ function validateInput(transcript: unknown, existingCondition: unknown): { valid
   }
   return { valid: true };
 }
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
 
 const SYSTEM_PROMPT = `You are a voice input parser for a vintage clothing listing app. The speech recognition may produce garbled or unclear text, so you must INFER what the user meant based on context.
 
@@ -135,6 +131,12 @@ serve(async (req) => {
   }
 
   try {
+    // Verify authentication before processing
+    const authResult = await verifyAuth(req);
+    if (!authResult.authenticated) {
+      return unauthorizedResponse(authResult.error);
+    }
+
     const { transcript, existingCondition } = await req.json();
     
     // Validate inputs

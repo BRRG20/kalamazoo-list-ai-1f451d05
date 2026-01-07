@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { verifyAuth, unauthorizedResponse, corsHeaders } from "../_shared/auth.ts";
 
 // Input validation constants
 const MAX_PRODUCTS = 100;
@@ -51,11 +52,6 @@ function validateStoreUrl(url: unknown): { valid: boolean; error?: string; sanit
   const finalUrl = `https://${cleaned}`;
   return { valid: true, sanitized: finalUrl.replace(/\/$/, '') };
 }
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
 
 interface ProductPayload {
   id: string;
@@ -143,6 +139,12 @@ serve(async (req) => {
   }
 
   try {
+    // Verify authentication before processing
+    const authResult = await verifyAuth(req);
+    if (!authResult.authenticated) {
+      return unauthorizedResponse(authResult.error);
+    }
+
     const { products, images, shopifyStoreUrl } = await req.json();
 
     // Validate products array

@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { verifyAuth, unauthorizedResponse, corsHeaders } from "../_shared/auth.ts";
 
 // Input validation
 const MAX_IMAGE_URLS = 4;
@@ -30,11 +31,6 @@ function validateImageUrls(imageUrls: unknown): { valid: boolean; error?: string
   }
   return { valid: true, urls: validUrls };
 }
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
 
 const SYSTEM_PROMPT = `You are a vintage clothing expert analyzing product images for a resale listing app.
 
@@ -117,6 +113,12 @@ serve(async (req) => {
   }
 
   try {
+    // Verify authentication before processing
+    const authResult = await verifyAuth(req);
+    if (!authResult.authenticated) {
+      return unauthorizedResponse(authResult.error);
+    }
+
     const { imageUrls } = await req.json();
     
     // Validate inputs

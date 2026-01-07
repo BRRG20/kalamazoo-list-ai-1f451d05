@@ -1,10 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { encryptCredential } from "../_shared/crypto.ts";
+import { verifyAuth, unauthorizedResponse, corsHeaders } from "../_shared/auth.ts";
 
 serve(async (req: Request) => {
   // Handle CORS preflight
@@ -13,30 +10,12 @@ serve(async (req: Request) => {
   }
 
   try {
-    // Get the authorization header
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'Missing authorization header' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    // Verify authentication
+    const authResult = await verifyAuth(req);
+    if (!authResult.authenticated || !authResult.user) {
+      return unauthorizedResponse(authResult.error);
     }
-
-    // Create Supabase client with user's auth
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey, {
-      global: { headers: { Authorization: authHeader } }
-    });
-
-    // Verify user is authenticated
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    if (userError || !user) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    const user = authResult.user;
 
     // Parse request body
     const { app_key, shared_secret } = await req.json();
@@ -56,26 +35,21 @@ serve(async (req: Request) => {
       );
     }
 
-    // Store credentials securely using Supabase Vault or encrypted storage
-    // For now, we'll store them in a secure way via environment variable pattern
-    // In production, you would use Supabase Vault or similar
-    
-    // Create service role client to access vault
+    // Create service role client for database operations
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
-    // Store the credentials in a secure credentials table (encrypted)
-    // First, check if user already has credentials
+    // Check if user already has credentials
     const { data: existingCreds } = await adminClient
       .from('etsy_credentials')
       .select('id')
       .eq('user_id', user.id)
       .maybeSingle();
 
-    // Simple encryption using base64 encoding with a salt
-    // In production, use proper encryption with Supabase Vault
-    const encryptedAppKey = btoa(`${user.id}:${app_key}`);
-    const encryptedSecret = btoa(`${user.id}:${shared_secret}`);
+    // Encrypt credentials using AES-256-GCM
+    const encryptedAppKey = await encryptCredential(app_key);
+    const encryptedSecret = await encryptCredential(shared_secret);
 
     if (existingCreds) {
       // Update existing
