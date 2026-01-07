@@ -954,7 +954,9 @@ export function BirdsEyeView({
       
       const productId = product.id;
       const rawImages = safeProductImages[productId];
-      const images = Array.isArray(rawImages) ? rawImages.filter(img => img && img.id) : [];
+      const images = Array.isArray(rawImages) 
+        ? rawImages.filter(img => img && img.id).slice().sort((a, b) => (a.position || 0) - (b.position || 0)) 
+        : [];
       const hasSelectedImages = Array.from(selectedImages.values()).some(
         s => s && s.productId === productId
       );
