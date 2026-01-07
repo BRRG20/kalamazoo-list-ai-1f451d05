@@ -141,6 +141,75 @@ export function useBackgroundRemoval() {
     []
   );
 
+  const applyGhostMannequin = useCallback(
+    async (
+      imageUrl: string, 
+      batchId: string
+    ): Promise<string | null> => {
+      setIsProcessing(true);
+      setProgress({ current: 0, total: 1, status: 'processing' });
+
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          throw new Error('Not authenticated');
+        }
+
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          throw new Error('No active session');
+        }
+
+        const response = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ghost-mannequin`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({ imageUrl }),
+          }
+        );
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || `Processing failed: ${response.status}`);
+        }
+
+        const data = await response.json();
+        
+        if (!data.success || !data.processedImageUrl) {
+          throw new Error(data.error || 'No processed image returned');
+        }
+
+        setProgress({ current: 0, total: 1, status: 'uploading' });
+
+        const newUrl = await uploadProcessedImage(data.processedImageUrl, user.id, batchId);
+
+        processedImagesRef.current.set(imageUrl, {
+          originalUrl: imageUrl,
+          newUrl: newUrl,
+        });
+
+        setProgress({ current: 1, total: 1, status: 'complete' });
+        toast.success('Ghost mannequin applied successfully!');
+
+        return newUrl;
+      } catch (error) {
+        console.error('Ghost mannequin failed:', error);
+        setProgress({ current: 0, total: 0, status: 'error' });
+        toast.error(
+          error instanceof Error ? error.message : 'Ghost mannequin processing failed'
+        );
+        return null;
+      } finally {
+        setIsProcessing(false);
+      }
+    },
+    []
+  );
+
   const removeBackgroundBulk = useCallback(
     async (
       imageUrls: string[],
@@ -273,6 +342,7 @@ export function useBackgroundRemoval() {
     progress,
     removeBackgroundSingle,
     removeBackgroundBulk,
+    applyGhostMannequin,
     getUndoMap,
     canUndo,
     clearUndoHistory,

@@ -1,11 +1,12 @@
 import { useState, useRef } from 'react';
-import { ChevronUp, ChevronDown, ImageIcon, Trash2, GripVertical, ZoomIn, Check, ChevronsUpDown, AlertTriangle, Eraser, Loader2, Undo2 } from 'lucide-react';
+import { ChevronUp, ChevronDown, ImageIcon, Trash2, GripVertical, ZoomIn, Check, ChevronsUpDown, AlertTriangle, Eraser, Loader2, Undo2, Shirt } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useBackgroundRemoval, type BackgroundRemovalOptions } from '@/hooks/use-background-removal';
 import { supabase } from '@/integrations/supabase/client';
 import type { ProductImage, Product } from '@/types';
@@ -35,8 +36,9 @@ export function ImageGallery({
   currentProductId,
   bgRemovalOptions = {},
 }: ImageGalleryProps) {
-  const { isProcessing: isRemovingBg, removeBackgroundSingle } = useBackgroundRemoval();
+  const { isProcessing: isRemovingBg, removeBackgroundSingle, applyGhostMannequin } = useBackgroundRemoval();
   const [processingImageId, setProcessingImageId] = useState<string | null>(null);
+  const [processingType, setProcessingType] = useState<'bg' | 'ghost' | null>(null);
   const [draggedImageId, setDraggedImageId] = useState<string | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [previewImage, setPreviewImage] = useState<ProductImage | null>(null);
@@ -129,6 +131,7 @@ export function ImageGallery({
 
   const handleRemoveBackground = async (image: ProductImage) => {
     setProcessingImageId(image.id);
+    setProcessingType('bg');
     
     // Store original URL before processing for undo
     originalUrlsRef.current.set(image.id, image.url);
@@ -145,6 +148,28 @@ export function ImageGallery({
       originalUrlsRef.current.delete(image.id);
     }
     setProcessingImageId(null);
+    setProcessingType(null);
+  };
+
+  const handleGhostMannequin = async (image: ProductImage) => {
+    setProcessingImageId(image.id);
+    setProcessingType('ghost');
+    
+    // Store original URL before processing for undo
+    originalUrlsRef.current.set(image.id, image.url);
+    
+    const newUrl = await applyGhostMannequin(image.url, batchId);
+    if (newUrl) {
+      await supabase
+        .from('images')
+        .update({ url: newUrl })
+        .eq('id', image.id);
+      onUpdateImage(image.id, { url: newUrl } as any);
+    } else {
+      originalUrlsRef.current.delete(image.id);
+    }
+    setProcessingImageId(null);
+    setProcessingType(null);
   };
 
   const handleUndoBackground = async (image: ProductImage) => {
@@ -334,30 +359,56 @@ export function ImageGallery({
                   <div className="flex gap-1 flex-shrink-0">
                     {/* Undo BG button - only show if we can undo */}
                     {canUndo(image.id) && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
-                        onClick={() => handleUndoBackground(image)}
-                        title="Undo background removal"
-                      >
-                        <Undo2 className="w-4 h-4" />
-                      </Button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                            onClick={() => handleUndoBackground(image)}
+                          >
+                            <Undo2 className="w-4 h-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Undo changes</TooltipContent>
+                      </Tooltip>
                     )}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      onClick={() => handleRemoveBackground(image)}
-                      disabled={isRemovingBg}
-                      title="Remove background"
-                    >
-                      {processingImageId === image.id ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Eraser className="w-4 h-4" />
-                      )}
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => handleRemoveBackground(image)}
+                          disabled={isRemovingBg}
+                        >
+                          {processingImageId === image.id && processingType === 'bg' ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Eraser className="w-4 h-4" />
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Remove background</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => handleGhostMannequin(image)}
+                          disabled={isRemovingBg}
+                        >
+                          {processingImageId === image.id && processingType === 'ghost' ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Shirt className="w-4 h-4" />
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Ghost mannequin (remove hanger)</TooltipContent>
+                    </Tooltip>
                     <Button
                       variant="ghost"
                       size="icon"

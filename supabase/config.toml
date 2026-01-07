@@ -38,3 +38,6 @@ verify_jwt = false
 
 [functions.remove-background]
 verify_jwt = true
+
+[functions.ghost-mannequin]
+verify_jwt = true
