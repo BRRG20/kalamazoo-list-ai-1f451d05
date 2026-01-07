@@ -372,11 +372,13 @@ export function BatchDetail({
     // Handle empty products case
     if (products.length === 0) {
       setProductImages({});
+      setImagesLoading(false);
       lastFetchedRef.current = fetchKey;
       return;
     }
     
-    let cancelled = false;
+    // Mark the key immediately to prevent duplicate fetches from racing
+    lastFetchedRef.current = fetchKey;
     
     const fetchAllImages = async () => {
       setImagesLoading(true);
@@ -389,28 +391,21 @@ export function BatchDetail({
           })
         );
         
-        if (!cancelled) {
-          const imagesMap: Record<string, ProductImage[]> = {};
-          for (const { productId, images } of results) {
-            imagesMap[productId] = images;
-          }
-          setProductImages(imagesMap);
-          lastFetchedRef.current = fetchKey;
+        const imagesMap: Record<string, ProductImage[]> = {};
+        for (const { productId, images } of results) {
+          imagesMap[productId] = images;
         }
+        setProductImages(imagesMap);
       } catch (error) {
         console.error('Error fetching images:', error);
+        // Reset the key on error to allow retry
+        lastFetchedRef.current = '';
       } finally {
-        if (!cancelled) {
-          setImagesLoading(false);
-        }
+        setImagesLoading(false);
       }
     };
     
     fetchAllImages();
-    
-    return () => {
-      cancelled = true;
-    };
   }, [batch.id, products, getProductImages]);
 
   // Reset lastFetchedRef when batch changes to ensure fresh data
