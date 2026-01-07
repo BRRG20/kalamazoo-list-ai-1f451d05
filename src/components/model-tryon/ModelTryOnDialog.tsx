@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Loader2, User, UserCircle } from 'lucide-react';
+import { Loader2, User, UserCircle, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Switch } from '@/components/ui/switch';
 import {
   Dialog,
   DialogContent,
@@ -19,12 +20,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import type { AIFashionModel, PoseType, FitStyle } from '@/hooks/use-model-tryon';
+import type { AIFashionModel, PoseType, FitStyle, OutfitStyle } from '@/hooks/use-model-tryon';
 
 interface ModelTryOnDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onConfirm: (modelId: string, poseId: PoseType, fitStyle: FitStyle) => void;
+  onConfirm: (modelId: string, poseId: PoseType, fitStyle: FitStyle, styleOutfit: boolean, outfitStyle: OutfitStyle) => void;
   isProcessing?: boolean;
   imageCount?: number;
 }
@@ -50,6 +51,16 @@ const FIT_STYLES: { id: FitStyle; name: string; description: string }[] = [
   { id: 'tucked', name: 'Tucked', description: 'Tucked in look' },
 ];
 
+const OUTFIT_STYLES: { id: OutfitStyle; name: string; description: string }[] = [
+  { id: 'stylish_casual', name: 'Stylish Casual', description: 'Clean, modern, going-out friendly' },
+  { id: 'streetwear', name: 'Streetwear', description: 'Relaxed, urban, layered looks' },
+  { id: 'vintage', name: 'Vintage', description: 'Era-aware, retro silhouettes' },
+  { id: 'hipster', name: 'Hipster', description: 'Creative, indie, fashion-forward' },
+  { id: 'cool', name: 'Cool', description: 'Understated confidence, clean lines' },
+  { id: 'vibrant', name: 'Vibrant', description: 'Bolder colours, still tasteful' },
+  { id: 'chic', name: 'Chic', description: 'Polished, elevated casual' },
+];
+
 export function ModelTryOnDialog({
   open,
   onOpenChange,
@@ -60,9 +71,11 @@ export function ModelTryOnDialog({
   const [selectedModelId, setSelectedModelId] = useState<string>(MODELS[0].id);
   const [selectedPose, setSelectedPose] = useState<PoseType>('front_neutral');
   const [selectedFit, setSelectedFit] = useState<FitStyle>('regular');
+  const [styleOutfit, setStyleOutfit] = useState<boolean>(false);
+  const [outfitStyle, setOutfitStyle] = useState<OutfitStyle>('stylish_casual');
 
   const handleConfirm = () => {
-    onConfirm(selectedModelId, selectedPose, selectedFit);
+    onConfirm(selectedModelId, selectedPose, selectedFit, styleOutfit, outfitStyle);
   };
 
   const maleModels = MODELS.filter(m => m.gender === 'male');
@@ -70,7 +83,7 @@ export function ModelTryOnDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Place on Model</DialogTitle>
           <DialogDescription>
@@ -181,6 +194,45 @@ export function ModelTryOnDialog({
               ))}
             </RadioGroup>
           </div>
+
+          {/* Style Outfit Toggle */}
+          <div className="space-y-3 pt-2 border-t">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-amber-500" />
+                <Label className="text-sm font-medium">Style Outfit</Label>
+              </div>
+              <Switch 
+                checked={styleOutfit} 
+                onCheckedChange={setStyleOutfit}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Generate a complete styled outfit around your product. The product remains the hero item.
+            </p>
+
+            {/* Outfit Style Selection - only shown when styleOutfit is enabled */}
+            {styleOutfit && (
+              <div className="space-y-2 pt-2">
+                <Label className="text-sm font-medium">Outfit Style</Label>
+                <Select value={outfitStyle} onValueChange={(v) => setOutfitStyle(v as OutfitStyle)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select style" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {OUTFIT_STYLES.map((style) => (
+                      <SelectItem key={style.id} value={style.id}>
+                        <div className="flex flex-col">
+                          <span>{style.name}</span>
+                          <span className="text-xs text-muted-foreground">{style.description}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
         </div>
 
         <DialogFooter>
@@ -192,6 +244,11 @@ export function ModelTryOnDialog({
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                 Processing...
+              </>
+            ) : styleOutfit ? (
+              <>
+                <Sparkles className="w-4 h-4 mr-2" />
+                Place & Style
               </>
             ) : (
               <>Place on Model</>
