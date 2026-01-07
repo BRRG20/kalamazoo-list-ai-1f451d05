@@ -649,15 +649,20 @@ export function BatchDetail({
 
   const hasModelUndoData = modelUndoData.has(batch.id) && (modelUndoData.get(batch.id)?.length || 0) > 0;
 
-  // Bulk model try-on for selected products - ADDS new images instead of replacing
+  // Bulk model try-on for selected products - ADDS ONE model image per product (using first image as reference)
   const handleBulkModelTryOn = useCallback(async (modelId: string, poseId: PoseType, fitStyle: FitStyle) => {
     if (selectedProductIds.size === 0) return;
     
-    // Gather image data with product ID so we can add new images to correct products
+    // Only use FIRST image from each product for model try-on (one model image per product)
     const imageData: { id: string; url: string; productId: string }[] = [];
     for (const productId of selectedProductIds) {
       const imgs = productImages[productId] || [];
-      imgs.forEach(img => imageData.push({ id: img.id, url: img.url, productId }));
+      if (imgs.length > 0) {
+        // Sort by position and take the first image only
+        const sortedImgs = [...imgs].sort((a, b) => (a.position || 0) - (b.position || 0));
+        const firstImg = sortedImgs[0];
+        imageData.push({ id: firstImg.id, url: firstImg.url, productId });
+      }
     }
     if (imageData.length === 0) return;
     
@@ -674,7 +679,7 @@ export function BatchDetail({
         ? Math.max(...currentImages.map(img => img.position || 0)) 
         : 0;
       
-      // INSERT new image instead of updating existing one
+      // INSERT new model image at the end
       const { data: newImage, error } = await supabase
         .from('images')
         .insert({
@@ -707,7 +712,7 @@ export function BatchDetail({
         next.set(batch.id, addedImageIds.map(id => ({ imageId: id, originalUrl: '', newUrl: '' }))); 
         return next; 
       });
-      toast.success(`Added ${addedImageIds.length} model images to products`);
+      toast.success(`Added ${addedImageIds.length} model image(s) to ${selectedProductIds.size} product(s)`);
     }
     
     handleRefreshImages();
