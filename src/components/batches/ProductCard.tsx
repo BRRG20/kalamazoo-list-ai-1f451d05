@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Edit2, ImageIcon, Trash2, Eye, GripVertical, Sparkles, Undo2, Loader2, EyeOff, User } from 'lucide-react';
+import { Edit2, ImageIcon, Trash2, Eye, Sparkles, Undo2, Loader2, EyeOff, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -15,6 +15,7 @@ interface ProductCardProps {
   onToggleSelect: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onDeleteImage?: (imageId: string) => void;
   onReceiveImage?: (imageUrl: string, fromProductId: string) => void;
   onReorderImages?: (imageIds: string[]) => void;
   isDraggingImage?: boolean;
@@ -37,6 +38,7 @@ export function ProductCard({
   onToggleSelect,
   onEdit,
   onDelete,
+  onDeleteImage,
   onReceiveImage,
   onReorderImages,
   isDraggingImage,
@@ -219,7 +221,7 @@ export function ProductCard({
             {images.length} images
           </div>
 
-          {/* Mini image strip on hover - draggable & reorderable */}
+          {/* Mini image strip on hover - draggable & reorderable with delete buttons */}
           {images.length > 1 && !isGenerating && (
             <div className="absolute bottom-8 left-0 right-0 px-2 opacity-0 group-hover:opacity-100 transition-opacity">
               <div className="flex gap-1 overflow-x-auto py-1 bg-background/80 rounded px-1">
@@ -227,7 +229,7 @@ export function ProductCard({
                   <div
                     key={img.id}
                     className={cn(
-                      "flex-shrink-0 w-8 h-8 rounded border cursor-grab active:cursor-grabbing relative transition-all",
+                      "flex-shrink-0 w-10 h-10 rounded border cursor-grab active:cursor-grabbing relative transition-all group/img",
                       draggedImageUrl === img.url && "opacity-50 scale-95",
                       internalDragOverIndex === idx && "ring-2 ring-primary scale-110"
                     )}
@@ -237,18 +239,30 @@ export function ProductCard({
                     onDragOver={(e) => handleInternalDragOver(e, idx)}
                     onDrop={(e) => handleInternalDrop(e, idx)}
                     onClick={(e) => handleImageClick(e, idx)}
-                    title={`Drag to reorder or move • Click to preview`}
+                    title={`Drag to reorder • Click to preview`}
                   >
                     <img
                       src={img.url}
                       alt={`Image ${idx + 1}`}
                       className="w-full h-full object-cover rounded pointer-events-none"
                     />
-                    <GripVertical className="absolute -left-0.5 top-1/2 -translate-y-1/2 w-3 h-3 text-foreground/60 opacity-0 group-hover:opacity-100" />
+                    {/* Per-image delete button */}
+                    {onDeleteImage && (
+                      <button
+                        className="absolute -top-1 -right-1 p-0.5 rounded-full bg-destructive hover:bg-destructive/90 opacity-0 group-hover/img:opacity-100 transition-opacity z-10"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteImage(img.id);
+                        }}
+                        title="Delete this image"
+                      >
+                        <Trash2 className="w-2.5 h-2.5 text-white" />
+                      </button>
+                    )}
                   </div>
                 ))}
                 {images.length > 6 && (
-                  <div className="flex-shrink-0 w-8 h-8 rounded border bg-muted flex items-center justify-center text-xs text-muted-foreground">
+                  <div className="flex-shrink-0 w-10 h-10 rounded border bg-muted flex items-center justify-center text-xs text-muted-foreground">
                     +{images.length - 6}
                   </div>
                 )}

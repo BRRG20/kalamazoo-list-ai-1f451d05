@@ -959,6 +959,18 @@ const handleSelectBatch = useCallback((id: string) => {
     }
   }, [editingProductId, deleteImage, fetchImagesForProduct, updateImage]);
 
+  // Handler for deleting individual images from ProductCard (main grid view)
+  const handleDeleteImageById = useCallback(async (imageId: string, productId: string) => {
+    const success = await deleteImage(imageId);
+    if (success) {
+      // Clear cache for this product to force refresh
+      clearCache(productId);
+      toast.success('Image deleted');
+    } else {
+      toast.error('Failed to delete image');
+    }
+  }, [deleteImage, clearCache]);
+
   const handleGenerateProductAI = useCallback(async (regenerateOnly?: 'title' | 'style_a' | 'style_b' | 'all') => {
     if (!editingProductId) return;
     
@@ -1502,6 +1514,7 @@ const handleSelectBatch = useCallback((id: string) => {
               onMarkAsUploaded={handleMarkAsUploaded}
               onMarkAsPending={handleMarkAsPending}
               onHideProduct={handleHideProduct}
+              onDeleteImageById={handleDeleteImageById}
               imageGroups={imageGroups}
               unassignedImages={unassignedImages}
               onUpdateImageGroups={setImageGroups}
