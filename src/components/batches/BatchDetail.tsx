@@ -680,20 +680,26 @@ export function BatchDetail({
       const imgInfo = imageData.find(d => d.url === originalUrl);
       if (!imgInfo) return;
       
-      // Get current max position for the product
+      // Shift existing images to make room at position 0
       const currentImages = productImages[imgInfo.productId] || [];
-      const maxPosition = currentImages.length > 0 
-        ? Math.max(...currentImages.map(img => img.position || 0)) 
-        : 0;
+      if (currentImages.length > 0) {
+        // Increment all existing image positions by 1
+        for (const existingImg of currentImages) {
+          await supabase
+            .from('images')
+            .update({ position: (existingImg.position || 0) + 1 })
+            .eq('id', existingImg.id);
+        }
+      }
       
-      // INSERT new model image at the end (with user_id for RLS)
+      // INSERT new model image at position 0 (front of card)
       const { data: newImage, error } = await supabase
         .from('images')
         .insert({
           url: newUrl,
           product_id: imgInfo.productId,
           batch_id: batch.id,
-          position: maxPosition + 1,
+          position: 0,
           include_in_shopify: true,
           user_id: user.id
         })
@@ -702,11 +708,17 @@ export function BatchDetail({
       
       if (!error && newImage) {
         addedImageIds.push(newImage.id);
-        // Add new image to local state
+        // Update local state - add new image at front and shift others
         setProductImages(prev => {
           const updated = { ...prev };
           if (updated[imgInfo.productId]) {
-            updated[imgInfo.productId] = [...updated[imgInfo.productId], newImage];
+            const shifted = updated[imgInfo.productId].map(img => ({
+              ...img,
+              position: (img.position || 0) + 1
+            }));
+            updated[imgInfo.productId] = [newImage, ...shifted];
+          } else {
+            updated[imgInfo.productId] = [newImage];
           }
           return updated;
         });

@@ -17,10 +17,10 @@ const MAX_RETRIES = 2;
 
 // Model descriptions for consistent appearance
 const MODEL_DESCRIPTIONS: Record<string, string> = {
-  '11111111-1111-1111-1111-111111111111': 'Alex: A professional male model in his mid-30s with short dark hair, clean-shaven, athletic build, height 6ft, warm skin tone, neutral confident expression. Wearing the provided clothing item.',
-  '22222222-2222-2222-2222-222222222222': 'Marcus: A stylish male model in his early 30s with medium-length brown hair, light stubble, lean athletic build, height 5ft11, fair skin tone, relaxed friendly expression. Wearing the provided clothing item.',
-  '33333333-3333-3333-3333-333333333333': 'Sophie: An elegant female model in her mid-30s with shoulder-length auburn hair, slim build, height 5ft8, light skin tone, professional composed expression. Wearing the provided clothing item.',
-  '44444444-4444-4444-4444-444444444444': 'Emma: A natural female model in her early 30s with long dark wavy hair, average build, height 5ft7, medium skin tone, warm approachable expression. Wearing the provided clothing item.',
+  '11111111-1111-1111-1111-111111111111': 'Alex: A professional male model aged 30-35 years old with short dark hair, clean-shaven, athletic build, height 6ft, warm skin tone, neutral confident expression. Wearing the provided clothing item.',
+  '22222222-2222-2222-2222-222222222222': 'Marcus: A stylish male model aged 30-35 years old with medium-length brown hair, light stubble, lean athletic build, height 5ft11, fair skin tone, relaxed friendly expression. Wearing the provided clothing item.',
+  '33333333-3333-3333-3333-333333333333': 'Sophie: An elegant female model aged 30-35 years old with shoulder-length auburn hair, slim build, height 5ft8, light skin tone, professional composed expression. Wearing the provided clothing item.',
+  '44444444-4444-4444-4444-444444444444': 'Emma: A natural female model aged 30-35 years old with long dark wavy hair, average build, height 5ft7, medium skin tone, warm approachable expression. Wearing the provided clothing item.',
 };
 
 const POSE_DESCRIPTIONS: Record<string, string> = {
