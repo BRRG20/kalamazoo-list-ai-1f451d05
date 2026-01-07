@@ -151,6 +151,12 @@ export function useBackgroundRemoval() {
       setProgress({ current: 0, total: 1, status: 'loading-model' });
 
       try {
+        // Get current user for storage path
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          throw new Error('Not authenticated');
+        }
+
         // Load the image
         const img = await loadImage(imageUrl);
 
@@ -161,9 +167,9 @@ export function useBackgroundRemoval() {
 
         setProgress({ current: 0, total: 1, status: 'uploading' });
 
-        // Upload to Supabase storage
+        // Upload to Supabase storage with user folder for RLS compliance
         const fileName = `bg-removed-${Date.now()}-${Math.random().toString(36).substring(7)}.png`;
-        const filePath = `${batchId}/${fileName}`;
+        const filePath = `${user.id}/${batchId}/${fileName}`;
 
         const { error: uploadError } = await supabase.storage
           .from('product-images')
@@ -213,6 +219,12 @@ export function useBackgroundRemoval() {
       const results = new Map<string, string>();
 
       try {
+        // Get current user for storage path
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          throw new Error('Not authenticated');
+        }
+
         // Pre-load the model
         await getSegmenter();
 
@@ -234,8 +246,9 @@ export function useBackgroundRemoval() {
               status: 'uploading',
             });
 
+            // Use user folder for RLS compliance
             const fileName = `bg-removed-${Date.now()}-${Math.random().toString(36).substring(7)}.png`;
-            const filePath = `${batchId}/${fileName}`;
+            const filePath = `${user.id}/${batchId}/${fileName}`;
 
             const { error: uploadError } = await supabase.storage
               .from('product-images')
