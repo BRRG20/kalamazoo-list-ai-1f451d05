@@ -3,6 +3,8 @@ import { cn } from '@/lib/utils';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useShopifyStats } from '@/hooks/use-shopify-stats';
 import { useBackgroundRemoval, type ShadowType, type BackgroundRemovalOptions } from '@/hooks/use-background-removal';
+import { useModelTryOn, type PoseType, type FitStyle } from '@/hooks/use-model-tryon';
+import { ModelTryOnDialog } from '@/components/model-tryon/ModelTryOnDialog';
 import {
   Upload, 
   Sparkles, 
@@ -29,7 +31,8 @@ import {
   Info,
   ChevronDown,
   Eraser,
-  Shirt
+  Shirt,
+  User
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -246,8 +249,10 @@ export function BatchDetail({
   
   const { settings, isShopifyConfigured } = useSettings();
   const { isProcessing: isRemovingBg, progress: bgRemovalProgress, removeBackgroundBulk, applyGhostMannequinBulk, getUndoMap, canUndo: canUndoBgRemoval } = useBackgroundRemoval();
+  const { isProcessing: isModelProcessing, progress: modelProgress, processBulk: processModelBulk } = useModelTryOn();
   const [bgUndoData, setBgUndoData] = useState<Map<string, { imageId: string; originalUrl: string; newUrl: string }[]>>(new Map());
   const [ghostUndoData, setGhostUndoData] = useState<Map<string, { imageId: string; originalUrl: string; newUrl: string }[]>>(new Map());
+  const [modelUndoData, setModelUndoData] = useState<Map<string, { imageId: string; originalUrl: string; newUrl: string }[]>>(new Map());
   const [isGhostProcessing, setIsGhostProcessing] = useState(false);
   const [ghostProgress, setGhostProgress] = useState({ current: 0, total: 0 });
   const [bgRemovalOptions, setBgRemovalOptions] = useState<BackgroundRemovalOptions>({ secondPass: false, shadow: 'none' });
@@ -258,6 +263,7 @@ export function BatchDetail({
   const [showBirdsEyeView, setShowBirdsEyeView] = useState(false);
   const [bulkSelectKey, setBulkSelectKey] = useState(0);
   const [showInfoDialog, setShowInfoDialog] = useState(false);
+  const [showModelTryOnDialog, setShowModelTryOnDialog] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const shopifyConfigured = isShopifyConfigured();
   
@@ -641,9 +647,60 @@ export function BatchDetail({
     toast.success(`Restored ${undoEntries.length} images to original`);
   }, [batch.id, ghostUndoData]);
 
+  const hasModelUndoData = modelUndoData.has(batch.id) && (modelUndoData.get(batch.id)?.length || 0) > 0;
+
+  // Bulk model try-on for selected products
+  const handleBulkModelTryOn = useCallback(async (modelId: string, poseId: PoseType, fitStyle: FitStyle) => {
+    if (selectedProductIds.size === 0) return;
+    const imageData: { id: string; url: string }[] = [];
+    for (const productId of selectedProductIds) {
+      const imgs = productImages[productId] || [];
+      imgs.forEach(img => imageData.push({ id: img.id, url: img.url }));
+    }
+    if (imageData.length === 0) return;
+    setShowModelTryOnDialog(false);
+    const undoEntries: { imageId: string; originalUrl: string; newUrl: string }[] = [];
+    await processModelBulk(imageData, batch.id, modelId, poseId, fitStyle, async (originalUrl, newUrl) => {
+      const imgInfo = imageData.find(d => d.url === originalUrl);
+      if (!imgInfo) return;
+      undoEntries.push({ imageId: imgInfo.id, originalUrl, newUrl });
+      await supabase.from('images').update({ url: newUrl }).eq('id', imgInfo.id);
+      setProductImages(prev => {
+        const updated = { ...prev };
+        for (const pid of Object.keys(updated)) {
+          updated[pid] = updated[pid].map(img => img.id === imgInfo.id ? { ...img, url: newUrl } : img);
+        }
+        return updated;
+      });
+    });
+    if (undoEntries.length > 0) {
+      setModelUndoData(prev => { const next = new Map(prev); next.set(batch.id, undoEntries); return next; });
+    }
+    handleRefreshImages();
+  }, [selectedProductIds, productImages, batch.id, processModelBulk]);
+
+  const handleUndoModelTryOn = useCallback(async () => {
+    const undoEntries = modelUndoData.get(batch.id);
+    if (!undoEntries?.length) return;
+    for (const entry of undoEntries) {
+      await supabase.from('images').update({ url: entry.originalUrl }).eq('id', entry.imageId);
+    }
+    setModelUndoData(prev => { const next = new Map(prev); next.delete(batch.id); return next; });
+    handleRefreshImages();
+    toast.success(`Restored ${undoEntries.length} images to original`);
+  }, [batch.id, modelUndoData]);
+
 
   return (
     <div className="min-h-full flex flex-col">
+      {/* Model Try-On Dialog */}
+      <ModelTryOnDialog
+        open={showModelTryOnDialog}
+        onOpenChange={setShowModelTryOnDialog}
+        onConfirm={handleBulkModelTryOn}
+        isProcessing={isModelProcessing}
+        imageCount={Array.from(selectedProductIds).reduce((acc, pid) => acc + (productImages[pid]?.length || 0), 0)}
+      />
       {/* Header */}
       <div className="p-3 md:p-4 border-b border-border bg-card">
         <div className="flex items-center gap-3 mb-3 md:mb-4">
@@ -1383,6 +1440,54 @@ export function BatchDetail({
                     >
                       <Undo2 className="w-4 h-4 mr-1" />
                       Undo Ghost {hasGhostUndoData ? `(${ghostUndoData.get(batch.id)?.length || 0})` : ''}
+                    </Button>
+                  )}
+                  
+                  {/* Model Try-On button */}
+                  {selectedProductIds.size > 0 && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => setShowModelTryOnDialog(true)}
+                          disabled={isModelProcessing || isRemovingBg || isGhostProcessing}
+                          type="button"
+                          className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                        >
+                          {isModelProcessing ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                              {modelProgress.current}/{modelProgress.total}
+                            </>
+                          ) : (
+                            <>
+                              <User className="w-4 h-4 mr-1" />
+                              Model ({selectedProductIds.size})
+                            </>
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Place garments on AI fashion model</TooltipContent>
+                    </Tooltip>
+                  )}
+                  
+                  {/* Undo Model Try-On button */}
+                  {selectedProductIds.size > 0 && (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={handleUndoModelTryOn}
+                      disabled={!hasModelUndoData}
+                      type="button"
+                      className={cn(
+                        hasModelUndoData 
+                          ? "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                          : "text-muted-foreground"
+                      )}
+                    >
+                      <Undo2 className="w-4 h-4 mr-1" />
+                      Undo Model {hasModelUndoData ? `(${modelUndoData.get(batch.id)?.length || 0})` : ''}
                     </Button>
                   )}
                   

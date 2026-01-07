@@ -14,6 +14,68 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_fashion_models: {
+        Row: {
+          created_at: string
+          description: string | null
+          gender: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          gender: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          gender?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      ai_model_poses: {
+        Row: {
+          base_image_url: string
+          created_at: string
+          id: string
+          model_id: string
+          pose_description: string | null
+          pose_name: string
+          position: number
+        }
+        Insert: {
+          base_image_url: string
+          created_at?: string
+          id?: string
+          model_id: string
+          pose_description?: string | null
+          pose_name: string
+          position?: number
+        }
+        Update: {
+          base_image_url?: string
+          created_at?: string
+          id?: string
+          model_id?: string
+          pose_description?: string | null
+          pose_name?: string
+          position?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_model_poses_model_id_fkey"
+            columns: ["model_id"]
+            isOneToOne: false
+            referencedRelation: "ai_fashion_models"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       authorized_emails: {
         Row: {
           created_at: string

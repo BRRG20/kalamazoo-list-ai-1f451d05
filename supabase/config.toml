@@ -41,3 +41,6 @@ verify_jwt = true
 
 [functions.ghost-mannequin]
 verify_jwt = true
+
+[functions.model-tryon]
+verify_jwt = true
