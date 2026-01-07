@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { verifyAuth, unauthorizedResponse, corsHeaders } from "../_shared/auth.ts";
 
 // Input validation
 const MAX_STRING_LENGTH = 1000;
@@ -55,11 +56,6 @@ function validateImageUrls(urls: unknown): string[] {
     )
     .slice(0, MAX_IMAGE_URLS);
 }
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
 
 const SYSTEM_PROMPT = `You are generating product listings for Kalamazoo, a vintage clothing app.
 
@@ -216,6 +212,12 @@ serve(async (req) => {
   }
 
   try {
+    // Verify authentication before processing
+    const authResult = await verifyAuth(req);
+    if (!authResult.authenticated) {
+      return unauthorizedResponse(authResult.error);
+    }
+
     const { product, imageUrls, regenerateOnly } = await req.json();
     
     // Validate product input

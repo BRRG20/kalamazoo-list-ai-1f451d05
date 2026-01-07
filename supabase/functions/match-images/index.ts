@@ -1,9 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { verifyAuth, unauthorizedResponse, corsHeaders } from "../_shared/auth.ts";
 
 const MAX_IMAGES = 500;
 const BATCH_SIZE = 15; // Process 15 images at a time for best AI accuracy
@@ -41,6 +37,12 @@ serve(async (req) => {
   }
 
   try {
+    // Verify authentication before processing
+    const authResult = await verifyAuth(req);
+    if (!authResult.authenticated) {
+      return unauthorizedResponse(authResult.error);
+    }
+
     const { imageUrls, imagesPerGroup } = await req.json();
     
     if (!Array.isArray(imageUrls) || imageUrls.length === 0) {
