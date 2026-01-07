@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 export type FitStyle = 'regular' | 'oversized' | 'tucked';
-export type PoseType = 'front_neutral' | 'three_quarter' | 'relaxed' | 'arms_bent' | 'movement';
+export type PoseType = 'front_neutral' | 'three_quarter' | 'relaxed' | 'arms_bent' | 'close_up_detail';
 export type OutfitStyle = 'stylish_casual' | 'streetwear' | 'vintage' | 'hipster' | 'cool' | 'vibrant' | 'chic' | 'eastern_fusion';
 
 export interface AIFashionModel {
@@ -27,11 +27,11 @@ const MODELS: AIFashionModel[] = [
 ];
 
 const POSES: { id: PoseType; name: string; description: string }[] = [
-  { id: 'front_neutral', name: 'Front Neutral', description: 'Standing straight facing camera' },
-  { id: 'three_quarter', name: '3/4 Angle', description: 'Body turned slightly' },
-  { id: 'relaxed', name: 'Relaxed', description: 'Casual relaxed stance' },
-  { id: 'arms_bent', name: 'Arms Bent', description: 'Arms slightly bent' },
-  { id: 'movement', name: 'Movement', description: 'Subtle dynamic pose' },
+  { id: 'front_neutral', name: 'Front Neutral', description: 'Standing straight facing camera, full body' },
+  { id: 'three_quarter', name: '3/4 Angle', description: 'Body turned slightly, elegant profile' },
+  { id: 'relaxed', name: 'Relaxed', description: 'Casual relaxed stance with natural S-curve' },
+  { id: 'arms_bent', name: 'Arms Bent', description: 'Hand on hip, showing waistline and fit' },
+  { id: 'close_up_detail', name: 'Close-Up Detail', description: 'Waist-to-thigh crop showing fit and texture' },
 ];
 
 export function useModelTryOn() {

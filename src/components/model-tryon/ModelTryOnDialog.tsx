@@ -42,7 +42,7 @@ const POSES: { id: PoseType; name: string }[] = [
   { id: 'three_quarter', name: '3/4 Angle' },
   { id: 'relaxed', name: 'Relaxed' },
   { id: 'arms_bent', name: 'Arms Bent' },
-  { id: 'movement', name: 'Movement' },
+  { id: 'close_up_detail', name: 'Close-Up Detail' },
 ];
 
 const FIT_STYLES: { id: FitStyle; name: string; description: string }[] = [
