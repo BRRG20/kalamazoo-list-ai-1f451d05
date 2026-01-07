@@ -17,12 +17,48 @@ interface RequestBody {
 
 const MAX_RETRIES = 2;
 
-// Model descriptions for consistent appearance - cool, neutral, fashion-forward
+// FIXED MODEL APPEARANCES - These exact descriptions MUST be used for consistency
+// Each model has a FIXED, UNCHANGING appearance that MUST be identical every generation
 const MODEL_DESCRIPTIONS: Record<string, string> = {
-  '11111111-1111-1111-1111-111111111111': 'Alex: A cool, fashion-forward male model aged 30-35 with modern styled short dark hair, clean-shaven, lean athletic build, height 6ft, warm skin tone. Expression: neutral, confident, effortlessly cool - subtle smoulder or slight knowing smile. Face MUST be clearly visible.',
-  '22222222-2222-2222-2222-222222222222': 'Marcus: A stylish, model-like male aged 30-35 with textured medium-length brown hair, light stubble, lean build, height 5ft11, fair skin tone. Expression: cool and relaxed, understated confidence, hint of a subtle smile. Face MUST be clearly visible.',
-  '33333333-3333-3333-3333-333333333333': 'Sophie: An effortlessly cool female model aged 30-35 with sleek shoulder-length hair (can be bob or straight), slim build, height 5ft8, light skin tone. Expression: neutral but approachable, cool confidence, can have subtle smile. Face MUST be clearly visible.',
-  '44444444-4444-4444-4444-444444444444': 'Emma: A natural, model-like female aged 30-35 with long flowing hair, slim-average build, height 5ft7, medium skin tone. Expression: relaxed confidence, warm but cool, natural slight smile allowed. Face MUST be clearly visible.',
+  '11111111-1111-1111-1111-111111111111': `Alex: A male fashion model, EXACTLY aged 32 years old.
+FIXED APPEARANCE (DO NOT DEVIATE):
+- Hair: Short, neatly styled dark brown hair, side-parted to the left, approximately 2 inches on top
+- Eyes: Brown eyes
+- Face: Clean-shaven, strong jawline, straight nose
+- Skin: Warm olive/tan skin tone
+- Build: Lean athletic, height 6ft (183cm)
+- Expression: Neutral confidence, slight knowing smile, relaxed brow
+This EXACT person must appear in every image. Do not change ANY facial features.`,
+
+  '22222222-2222-2222-2222-222222222222': `Marcus: A male fashion model, EXACTLY aged 33 years old.
+FIXED APPEARANCE (DO NOT DEVIATE):
+- Hair: Medium-length textured light brown hair, swept back casually, approximately 3 inches
+- Eyes: Blue-grey eyes
+- Face: Light stubble (3-day beard), defined cheekbones, slightly rounded chin
+- Skin: Fair/light skin tone with subtle freckles
+- Build: Lean, height 5ft11 (180cm)
+- Expression: Cool and relaxed, understated confidence, minimal smile
+This EXACT person must appear in every image. Do not change ANY facial features.`,
+
+  '33333333-3333-3333-3333-333333333333': `Sophie: A female fashion model, EXACTLY aged 31 years old.
+FIXED APPEARANCE (DO NOT DEVIATE):
+- Hair: Sleek black straight bob, chin-length, center-parted
+- Eyes: Dark brown eyes
+- Face: High cheekbones, delicate features, full lips
+- Skin: Light/fair skin tone with porcelain complexion
+- Build: Slim, height 5ft8 (173cm)
+- Expression: Neutral but approachable, cool confidence, closed-mouth subtle smile
+This EXACT person must appear in every image. Do not change ANY facial features.`,
+
+  '44444444-4444-4444-4444-444444444444': `Emma: A female fashion model, EXACTLY aged 34 years old.
+FIXED APPEARANCE (DO NOT DEVIATE):
+- Hair: Long flowing chestnut brown hair, loose waves, past shoulders
+- Eyes: Hazel/green eyes
+- Face: Soft features, natural brows, warm smile lines
+- Skin: Medium/golden skin tone
+- Build: Slim-average, height 5ft7 (170cm)
+- Expression: Relaxed confidence, warm natural smile, approachable
+This EXACT person must appear in every image. Do not change ANY facial features.`,
 };
 
 // Pose descriptions - cool, neutral, model-like poses (inspired by fashion editorials)
