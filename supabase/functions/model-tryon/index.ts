@@ -1,0 +1,223 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "npm:@supabase/supabase-js@2";
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+interface RequestBody {
+  garmentImageUrl: string;
+  modelId: string;
+  poseId?: string;
+  fitStyle?: 'regular' | 'oversized' | 'tucked';
+}
+
+const MAX_RETRIES = 2;
+
+// Model descriptions for consistent appearance
+const MODEL_DESCRIPTIONS: Record<string, string> = {
+  '11111111-1111-1111-1111-111111111111': 'Alex: A professional male model in his mid-30s with short dark hair, clean-shaven, athletic build, height 6ft, warm skin tone, neutral confident expression. Wearing the provided clothing item.',
+  '22222222-2222-2222-2222-222222222222': 'Marcus: A stylish male model in his early 30s with medium-length brown hair, light stubble, lean athletic build, height 5ft11, fair skin tone, relaxed friendly expression. Wearing the provided clothing item.',
+  '33333333-3333-3333-3333-333333333333': 'Sophie: An elegant female model in her mid-30s with shoulder-length auburn hair, slim build, height 5ft8, light skin tone, professional composed expression. Wearing the provided clothing item.',
+  '44444444-4444-4444-4444-444444444444': 'Emma: A natural female model in her early 30s with long dark wavy hair, average build, height 5ft7, medium skin tone, warm approachable expression. Wearing the provided clothing item.',
+};
+
+const POSE_DESCRIPTIONS: Record<string, string> = {
+  'front_neutral': 'standing straight facing the camera with arms relaxed at sides, feet shoulder-width apart',
+  'three_quarter': 'standing at a 3/4 angle to the camera, body turned slightly, face toward camera',
+  'relaxed': 'standing with a relaxed casual posture, slight weight shift to one leg, natural arm position',
+  'arms_bent': 'standing with arms slightly bent, hands loosely clasped or one hand on hip',
+  'movement': 'captured mid-stride or with subtle natural movement, dynamic but professional',
+};
+
+async function processModelTryOn(
+  garmentImageUrl: string, 
+  modelId: string,
+  poseType: string,
+  fitStyle: string,
+  apiKey: string,
+  attempt: number = 1
+): Promise<string> {
+  const modelDescription = MODEL_DESCRIPTIONS[modelId] || MODEL_DESCRIPTIONS['11111111-1111-1111-1111-111111111111'];
+  const poseDescription = POSE_DESCRIPTIONS[poseType] || POSE_DESCRIPTIONS['front_neutral'];
+  
+  const fitInstructions = fitStyle === 'oversized' 
+    ? 'Style the garment with a slightly oversized, relaxed fit.'
+    : fitStyle === 'tucked'
+    ? 'If applicable, show the garment tucked in for a polished look.'
+    : 'Style the garment with a natural regular fit.';
+
+  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'google/gemini-2.5-flash-image-preview',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: `Create a professional product photography image of a fashion model wearing this exact clothing item.
+
+MODEL IDENTITY (MUST BE CONSISTENT):
+${modelDescription}
+
+POSE:
+${poseDescription}
+
+FIT STYLE:
+${fitInstructions}
+
+CRITICAL GARMENT REQUIREMENTS:
+- The clothing MUST be the EXACT item from the reference image - same color, pattern, texture, fabric
+- Preserve ALL original details: logos, text, graphics, prints, labels, buttons, zippers - do NOT alter or regenerate any text/graphics
+- Maintain the garment's authentic worn character if present (fading, texture variations)
+- The clothing should fit naturally on the model's body without distortion
+
+PHOTOGRAPHY STYLE:
+- Clean studio lighting, professional product photography
+- Plain neutral background (off-white or light grey)
+- Full body shot showing the complete garment
+- Sharp focus on the clothing
+- No props, accessories, or additional styling unless part of the original garment
+
+OUTPUT:
+Generate a realistic, professional product photo of this model wearing this exact clothing item. The result should look like authentic fashion photography suitable for e-commerce.`
+            },
+            {
+              type: 'image_url',
+              image_url: {
+                url: garmentImageUrl
+              }
+            }
+          ]
+        }
+      ],
+      modalities: ['image', 'text']
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`AI API error (attempt ${attempt}):`, response.status, errorText);
+    throw new Error(`AI processing failed (${response.status}): ${errorText}`);
+  }
+
+  const data = await response.json();
+  console.log(`Model try-on response structure (attempt ${attempt}):`, JSON.stringify({
+    hasChoices: !!data.choices,
+    choicesLength: data.choices?.length,
+    hasMessage: !!data.choices?.[0]?.message,
+    hasImages: !!data.choices?.[0]?.message?.images,
+    imagesLength: data.choices?.[0]?.message?.images?.length,
+  }));
+  
+  // Try multiple paths to find the image
+  let generatedImage = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+  
+  if (!generatedImage && data.choices?.[0]?.message?.images?.[0]?.url) {
+    generatedImage = data.choices[0].message.images[0].url;
+  }
+  
+  if (!generatedImage && data.choices?.[0]?.message?.images?.[0]) {
+    const img = data.choices[0].message.images[0];
+    if (typeof img === 'string' && img.startsWith('data:')) {
+      generatedImage = img;
+    }
+  }
+  
+  if (!generatedImage) {
+    console.error(`No image found in response (attempt ${attempt}). Full response:`, JSON.stringify(data).substring(0, 500));
+    
+    if (attempt < MAX_RETRIES) {
+      console.log(`Retrying model try-on (attempt ${attempt + 1})...`);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      return processModelTryOn(garmentImageUrl, modelId, poseType, fitStyle, apiKey, attempt + 1);
+    }
+    
+    throw new Error('No processed image returned from AI after retries');
+  }
+
+  return generatedImage;
+}
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    if (!LOVABLE_API_KEY) {
+      throw new Error('LOVABLE_API_KEY is not configured');
+    }
+
+    const { garmentImageUrl, modelId, poseId, fitStyle = 'regular' }: RequestBody = await req.json();
+    
+    if (!garmentImageUrl) {
+      throw new Error('garmentImageUrl is required');
+    }
+    
+    if (!modelId) {
+      throw new Error('modelId is required');
+    }
+
+    // Determine pose type - default to front_neutral
+    const poseType = poseId || 'front_neutral';
+
+    console.log('Processing model try-on:', {
+      garment: garmentImageUrl.substring(0, 50) + '...',
+      modelId,
+      poseType,
+      fitStyle
+    });
+
+    const processedImage = await processModelTryOn(
+      garmentImageUrl, 
+      modelId, 
+      poseType, 
+      fitStyle,
+      LOVABLE_API_KEY
+    );
+    
+    console.log('Model try-on processing complete');
+
+    return new Response(JSON.stringify({ 
+      processedImageUrl: processedImage,
+      success: true 
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+
+  } catch (error) {
+    console.error('Error in model-tryon function:', error);
+    
+    const errorMessage = error instanceof Error ? error.message : 'Model try-on processing failed';
+    
+    if (errorMessage.includes('429')) {
+      return new Response(JSON.stringify({ error: 'Rate limit exceeded. Please try again later.', success: false }), {
+        status: 429,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    if (errorMessage.includes('402')) {
+      return new Response(JSON.stringify({ error: 'AI credits exhausted. Please add credits to continue.', success: false }), {
+        status: 402,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    
+    return new Response(JSON.stringify({ 
+      error: errorMessage,
+      success: false 
+    }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+});
