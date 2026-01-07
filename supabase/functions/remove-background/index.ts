@@ -11,10 +11,13 @@ interface RequestBody {
   shadow?: 'none' | 'light' | 'medium' | 'harsh';
 }
 
+const MAX_RETRIES = 2;
+
 async function processBackgroundRemoval(
   imageUrl: string, 
   apiKey: string,
-  addShadow: 'none' | 'light' | 'medium' | 'harsh' = 'none'
+  addShadow: 'none' | 'light' | 'medium' | 'harsh' = 'none',
+  attempt: number = 1
 ): Promise<string> {
   const shadowInstruction = addShadow !== 'none' 
     ? `After removing background, add a ${addShadow === 'light' ? 'subtle, soft' : addShadow === 'medium' ? 'moderate, natural' : 'strong, dramatic'} drop shadow at the bottom of the garment to give it depth and ground the product. The shadow should appear as if light is coming from above.`
@@ -64,14 +67,47 @@ Output a clean product cutout with ONLY the garment and hanger visible, against 
 
   if (!response.ok) {
     const errorText = await response.text();
+    console.error(`AI API error (attempt ${attempt}):`, response.status, errorText);
     throw new Error(`AI processing failed (${response.status}): ${errorText}`);
   }
 
   const data = await response.json();
-  const generatedImage = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+  console.log(`AI response structure (attempt ${attempt}):`, JSON.stringify({
+    hasChoices: !!data.choices,
+    choicesLength: data.choices?.length,
+    hasMessage: !!data.choices?.[0]?.message,
+    hasImages: !!data.choices?.[0]?.message?.images,
+    imagesLength: data.choices?.[0]?.message?.images?.length,
+    textContent: data.choices?.[0]?.message?.content?.substring?.(0, 100)
+  }));
+  
+  // Try multiple paths to find the image
+  let generatedImage = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+  
+  // Alternative path: sometimes image might be in a different structure
+  if (!generatedImage && data.choices?.[0]?.message?.images?.[0]?.url) {
+    generatedImage = data.choices[0].message.images[0].url;
+  }
+  
+  // Another alternative: base64 directly
+  if (!generatedImage && data.choices?.[0]?.message?.images?.[0]) {
+    const img = data.choices[0].message.images[0];
+    if (typeof img === 'string' && img.startsWith('data:')) {
+      generatedImage = img;
+    }
+  }
   
   if (!generatedImage) {
-    throw new Error('No processed image returned from AI');
+    console.error(`No image found in response (attempt ${attempt}). Full response:`, JSON.stringify(data).substring(0, 500));
+    
+    // Retry if we haven't exhausted attempts
+    if (attempt < MAX_RETRIES) {
+      console.log(`Retrying background removal (attempt ${attempt + 1})...`);
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
+      return processBackgroundRemoval(imageUrl, apiKey, addShadow, attempt + 1);
+    }
+    
+    throw new Error('No processed image returned from AI after retries');
   }
 
   return generatedImage;
@@ -126,9 +162,23 @@ Output the cleaned product image with perfect transparency where the background 
   }
 
   const data = await response.json();
-  const generatedImage = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+  
+  // Try multiple paths to find the image
+  let generatedImage = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+  
+  if (!generatedImage && data.choices?.[0]?.message?.images?.[0]?.url) {
+    generatedImage = data.choices[0].message.images[0].url;
+  }
+  
+  if (!generatedImage && data.choices?.[0]?.message?.images?.[0]) {
+    const img = data.choices[0].message.images[0];
+    if (typeof img === 'string' && img.startsWith('data:')) {
+      generatedImage = img;
+    }
+  }
   
   if (!generatedImage) {
+    console.error('Cleanup pass: No image in response:', JSON.stringify(data).substring(0, 500));
     throw new Error('No processed image returned from cleanup pass');
   }
 
