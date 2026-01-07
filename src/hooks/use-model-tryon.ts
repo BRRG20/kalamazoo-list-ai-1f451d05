@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 
 export type FitStyle = 'regular' | 'oversized' | 'tucked';
 export type PoseType = 'front_neutral' | 'three_quarter' | 'relaxed' | 'arms_bent' | 'movement';
-export type OutfitStyle = 'stylish_casual' | 'streetwear' | 'vintage' | 'hipster' | 'cool' | 'vibrant' | 'chic';
+export type OutfitStyle = 'stylish_casual' | 'streetwear' | 'vintage' | 'hipster' | 'cool' | 'vibrant' | 'chic' | 'eastern_fusion';
 
 export interface AIFashionModel {
   id: string;
