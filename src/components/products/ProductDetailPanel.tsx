@@ -15,7 +15,8 @@ import {
   ShoppingBag,
   Eraser,
   Undo2,
-  Shirt
+  Shirt,
+  User
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,6 +28,8 @@ import { ImageGallery } from './ImageGallery';
 import { ShopifyStatusSection } from './ShopifyStatusSection';
 import { generateListingBlock } from '@/hooks/use-database';
 import { useBackgroundRemoval } from '@/hooks/use-background-removal';
+import { useModelTryOn, type PoseType, type FitStyle } from '@/hooks/use-model-tryon';
+import { ModelTryOnDialog } from '@/components/model-tryon/ModelTryOnDialog';
 import { supabase } from '@/integrations/supabase/client';
 import type { Product, ProductImage, Department, Era, Condition } from '@/types';
 
@@ -113,6 +116,7 @@ export function ProductDetailPanel({
   onMarkAsPending,
 }: ProductDetailPanelProps) {
   const { isProcessing: isRemovingBg, progress: bgProgress, removeBackgroundBulk, applyGhostMannequinBulk } = useBackgroundRemoval();
+  const { isProcessing: isModelProcessing, progress: modelProgress, processBulk: processModelBulk } = useModelTryOn();
   const [formData, setFormData] = useState<Partial<Product>>({});
   const [isListening, setIsListening] = useState(false);
   const [isParsingVoice, setIsParsingVoice] = useState(false);
@@ -124,8 +128,10 @@ export function ProductDetailPanel({
   // Background removal undo state
   const [bgUndoData, setBgUndoData] = useState<{ imageId: string; originalUrl: string; newUrl: string }[]>([]);
   const [ghostUndoData, setGhostUndoData] = useState<{ imageId: string; originalUrl: string; newUrl: string }[]>([]);
+  const [modelUndoData, setModelUndoData] = useState<{ imageId: string; originalUrl: string; newUrl: string }[]>([]);
   const [isGhostProcessing, setIsGhostProcessing] = useState(false);
   const [ghostProgress, setGhostProgress] = useState({ current: 0, total: 0 });
+  const [showModelTryOnDialog, setShowModelTryOnDialog] = useState(false);
   const [descriptionStyle, setDescriptionStyle] = useState<'A' | 'B'>('A');
   const [debugEnabled, setDebugEnabled] = useState(false);
   const [recorderMountCount, setRecorderMountCount] = useState(0);
@@ -1099,6 +1105,54 @@ export function ProductDetailPanel({
                   <Undo2 className="w-4 h-4 mr-2" />
                   Undo Ghost {ghostUndoData.length > 0 ? `(${ghostUndoData.length})` : ''}
                 </Button>
+                
+                {/* Model Try-On button */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowModelTryOnDialog(true)}
+                  disabled={isModelProcessing || isRemovingBg || isGhostProcessing}
+                  className="w-full text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                >
+                  {isModelProcessing ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Model Try-On ({modelProgress.current}/{modelProgress.total})
+                    </>
+                  ) : (
+                    <>
+                      <User className="w-4 h-4 mr-2" />
+                      Place on Model ({images.length})
+                    </>
+                  )}
+                </Button>
+                
+                {/* Undo Model Try-On button */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    for (const entry of modelUndoData) {
+                      await supabase
+                        .from('images')
+                        .update({ url: entry.originalUrl })
+                        .eq('id', entry.imageId);
+                      onUpdateImage(entry.imageId, { url: entry.originalUrl } as any);
+                    }
+                    toast.success(`Restored ${modelUndoData.length} images to original`);
+                    setModelUndoData([]);
+                  }}
+                  disabled={modelUndoData.length === 0}
+                  className={cn(
+                    "w-full",
+                    modelUndoData.length > 0 
+                      ? "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" 
+                      : "text-muted-foreground"
+                  )}
+                >
+                  <Undo2 className="w-4 h-4 mr-2" />
+                  Undo Model {modelUndoData.length > 0 ? `(${modelUndoData.length})` : ''}
+                </Button>
               </div>
             )}
             <ImageGallery
@@ -1542,6 +1596,33 @@ export function ProductDetailPanel({
           </div>
         </div>
       </div>
+
+      {/* Model Try-On Dialog */}
+      <ModelTryOnDialog
+        open={showModelTryOnDialog}
+        onOpenChange={setShowModelTryOnDialog}
+        onConfirm={async (modelId, poseId, fitStyle) => {
+          setShowModelTryOnDialog(false);
+          const undoEntries: { imageId: string; originalUrl: string; newUrl: string }[] = [];
+          const imageData = images.map(img => ({ id: img.id, url: img.url }));
+          await processModelBulk(imageData, batchId, modelId, poseId, fitStyle, async (originalUrl, newUrl) => {
+            const img = images.find(i => i.url === originalUrl);
+            if (img) {
+              undoEntries.push({ imageId: img.id, originalUrl, newUrl });
+              await supabase
+                .from('images')
+                .update({ url: newUrl })
+                .eq('id', img.id);
+              onUpdateImage(img.id, { url: newUrl } as any);
+            }
+          });
+          if (undoEntries.length > 0) {
+            setModelUndoData(undoEntries);
+          }
+        }}
+        isProcessing={isModelProcessing}
+        imageCount={images.length}
+      />
     </div>
   );
 }

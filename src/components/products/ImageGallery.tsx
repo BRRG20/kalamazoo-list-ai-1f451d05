@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { ChevronUp, ChevronDown, ImageIcon, Trash2, GripVertical, ZoomIn, Check, ChevronsUpDown, AlertTriangle, Eraser, Loader2, Undo2, Shirt } from 'lucide-react';
+import { ChevronUp, ChevronDown, ImageIcon, Trash2, GripVertical, ZoomIn, Check, ChevronsUpDown, AlertTriangle, Eraser, Loader2, Undo2, Shirt, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
@@ -8,6 +8,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { useBackgroundRemoval, type BackgroundRemovalOptions } from '@/hooks/use-background-removal';
+import { useModelTryOn, type PoseType, type FitStyle } from '@/hooks/use-model-tryon';
+import { ModelTryOnDialog } from '@/components/model-tryon/ModelTryOnDialog';
 import { supabase } from '@/integrations/supabase/client';
 import type { ProductImage, Product } from '@/types';
 import { cn } from '@/lib/utils';
@@ -37,8 +39,9 @@ export function ImageGallery({
   bgRemovalOptions = {},
 }: ImageGalleryProps) {
   const { isProcessing: isRemovingBg, removeBackgroundSingle, applyGhostMannequin } = useBackgroundRemoval();
+  const { isProcessing: isModelProcessing, processSingle: processModelSingle } = useModelTryOn();
   const [processingImageId, setProcessingImageId] = useState<string | null>(null);
-  const [processingType, setProcessingType] = useState<'bg' | 'ghost' | null>(null);
+  const [processingType, setProcessingType] = useState<'bg' | 'ghost' | 'model' | null>(null);
   const [draggedImageId, setDraggedImageId] = useState<string | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [previewImage, setPreviewImage] = useState<ProductImage | null>(null);
@@ -46,6 +49,8 @@ export function ImageGallery({
   const [moveTargetProductId, setMoveTargetProductId] = useState<string>('');
   const [moveDropdownOpen, setMoveDropdownOpen] = useState(false);
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
+  const [showModelDialog, setShowModelDialog] = useState(false);
+  const [modelDialogImageId, setModelDialogImageId] = useState<string | null>(null);
   
   // Track original URLs for individual undo
   const originalUrlsRef = useRef<Map<string, string>>(new Map());
@@ -170,6 +175,41 @@ export function ImageGallery({
     }
     setProcessingImageId(null);
     setProcessingType(null);
+  };
+
+  const handleModelTryOn = (imageId: string) => {
+    setModelDialogImageId(imageId);
+    setShowModelDialog(true);
+  };
+
+  const handleModelTryOnConfirm = async (modelId: string, poseId: PoseType, fitStyle: FitStyle) => {
+    if (!modelDialogImageId) return;
+    
+    const image = images.find(i => i.id === modelDialogImageId);
+    if (!image) return;
+    
+    setShowModelDialog(false);
+    setProcessingImageId(modelDialogImageId);
+    setProcessingType('model');
+    
+    // Store original URL before processing for undo
+    originalUrlsRef.current.set(image.id, image.url);
+    
+    const newUrl = await processModelSingle(image.url, image.id, batchId, modelId, poseId, fitStyle);
+    if (newUrl) {
+      await supabase
+        .from('images')
+        .update({ url: newUrl })
+        .eq('id', image.id);
+      onUpdateImage(image.id, { url: newUrl } as any);
+      toast.success('Model try-on applied');
+    } else {
+      originalUrlsRef.current.delete(image.id);
+      toast.error('Model try-on failed');
+    }
+    setProcessingImageId(null);
+    setProcessingType(null);
+    setModelDialogImageId(null);
   };
 
   const handleUndoBackground = async (image: ProductImage) => {
@@ -404,7 +444,7 @@ export function ImageGallery({
                           size="icon"
                           className="h-7 w-7"
                           onClick={() => handleGhostMannequin(image)}
-                          disabled={isRemovingBg}
+                          disabled={isRemovingBg || isModelProcessing}
                         >
                           {processingImageId === image.id && processingType === 'ghost' ? (
                             <Loader2 className="w-4 h-4 animate-spin" />
@@ -414,6 +454,24 @@ export function ImageGallery({
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>Ghost mannequin (remove hanger)</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                          onClick={() => handleModelTryOn(image.id)}
+                          disabled={isRemovingBg || isModelProcessing}
+                        >
+                          {processingImageId === image.id && processingType === 'model' ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <User className="w-4 h-4" />
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Place on AI model</TooltipContent>
                     </Tooltip>
                     <Button
                       variant="ghost"
@@ -481,6 +539,15 @@ export function ImageGallery({
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Model Try-On Dialog */}
+      <ModelTryOnDialog
+        open={showModelDialog}
+        onOpenChange={setShowModelDialog}
+        onConfirm={handleModelTryOnConfirm}
+        isProcessing={isModelProcessing}
+        imageCount={1}
+      />
     </TooltipProvider>
   );
 }
