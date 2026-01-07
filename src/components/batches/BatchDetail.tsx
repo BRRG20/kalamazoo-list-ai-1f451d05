@@ -707,7 +707,8 @@ export function BatchDetail({
           batch_id: batch.id,
           position: 0,
           include_in_shopify: true,
-          user_id: user.id
+          user_id: user.id,
+          source: 'model_tryon'
         })
         .select()
         .single();
@@ -717,14 +718,15 @@ export function BatchDetail({
         // Update local state - add new image at front and shift others
         setProductImages(prev => {
           const updated = { ...prev };
+          const typedImage = { ...newImage, source: newImage.source as ProductImage['source'] };
           if (updated[imgInfo.productId]) {
             const shifted = updated[imgInfo.productId].map(img => ({
               ...img,
               position: (img.position || 0) + 1
             }));
-            updated[imgInfo.productId] = [newImage, ...shifted];
+            updated[imgInfo.productId] = [typedImage, ...shifted];
           } else {
-            updated[imgInfo.productId] = [newImage];
+            updated[imgInfo.productId] = [typedImage];
           }
           return updated;
         });

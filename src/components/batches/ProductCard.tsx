@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Edit2, ImageIcon, Trash2, Eye, GripVertical, Sparkles, Undo2, Loader2, EyeOff } from 'lucide-react';
+import { Edit2, ImageIcon, Trash2, Eye, GripVertical, Sparkles, Undo2, Loader2, EyeOff, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -148,15 +148,24 @@ export function ProductCard({
         {/* Thumbnail */}
         <div className="aspect-square bg-muted relative group">
           {thumbnail ? (
-            <img
-              src={thumbnail}
-              alt={product.title || 'Product image'}
-              className="w-full h-full object-cover cursor-pointer"
-              onClick={(e) => handleImageClick(e, 0)}
-              draggable
-              onDragStart={(e) => handleDragStart(e, thumbnail, 0)}
-              onDragEnd={handleDragEnd}
-            />
+            <>
+              <img
+                src={thumbnail}
+                alt={product.title || 'Product image'}
+                className="w-full h-full object-cover cursor-pointer"
+                onClick={(e) => handleImageClick(e, 0)}
+                draggable
+                onDragStart={(e) => handleDragStart(e, thumbnail, 0)}
+                onDragEnd={handleDragEnd}
+              />
+              {/* AI Model badge */}
+              {images[0]?.source === 'model_tryon' && (
+                <div className="absolute bottom-2 left-2 bg-emerald-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <User className="w-3 h-3" />
+                  AI Model
+                </div>
+              )}
+            </>
           ) : (
             <div className="w-full h-full flex items-center justify-center">
               <ImageIcon className="w-12 h-12 text-muted-foreground" />

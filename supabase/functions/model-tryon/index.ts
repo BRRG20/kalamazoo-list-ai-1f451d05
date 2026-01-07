@@ -157,12 +157,13 @@ ABSOLUTE REQUIREMENTS FOR THE HERO GARMENT:
 5. The hero garment is the SINGLE SOURCE OF TRUTH - copy it perfectly
 
 PHOTOGRAPHY STYLE:
-- Professional fashion photography lighting
-- Urban street background OR clean studio - lifestyle feel
+- Professional photography studio setting
+- Clean, neutral studio background (light grey, off-white, or soft gradient)
+- Professional studio lighting - softbox/beauty lighting setup
 - Full body shot showing the complete styled outfit
 - Sharp focus on the hero garment
 - Natural shadows and depth
-- Editorial/campaign quality
+- High-end e-commerce/lookbook quality
 
 WHAT NOT TO DO:
 - DO NOT alter the hero garment in ANY way
@@ -205,11 +206,11 @@ ABSOLUTE REQUIREMENTS - DO NOT VIOLATE:
 
 WHAT TO GENERATE:
 - A professional fashion photo with the model wearing this EXACT garment
-- Urban street background OR clean neutral background - lifestyle editorial feel
-- Professional fashion photography lighting
+- Clean, neutral photography studio background (light grey, off-white, or soft gradient)
+- Professional studio lighting - softbox/beauty lighting setup
 - Full or 3/4 body shot showing the complete garment
 - The model's body and pose as described above
-- Editorial/campaign quality image
+- High-end e-commerce/lookbook quality image
 
 WHAT NOT TO DO:
 - DO NOT generate a "similar" garment - use the EXACT one from the image
