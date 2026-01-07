@@ -28,7 +28,8 @@ import {
   HelpCircle,
   Info,
   ChevronDown,
-  Eraser
+  Eraser,
+  Shirt
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -244,8 +245,11 @@ export function BatchDetail({
   }
   
   const { settings, isShopifyConfigured } = useSettings();
-  const { isProcessing: isRemovingBg, progress: bgRemovalProgress, removeBackgroundBulk, getUndoMap, canUndo: canUndoBgRemoval } = useBackgroundRemoval();
+  const { isProcessing: isRemovingBg, progress: bgRemovalProgress, removeBackgroundBulk, applyGhostMannequinBulk, getUndoMap, canUndo: canUndoBgRemoval } = useBackgroundRemoval();
   const [bgUndoData, setBgUndoData] = useState<Map<string, { imageId: string; originalUrl: string; newUrl: string }[]>>(new Map());
+  const [ghostUndoData, setGhostUndoData] = useState<Map<string, { imageId: string; originalUrl: string; newUrl: string }[]>>(new Map());
+  const [isGhostProcessing, setIsGhostProcessing] = useState(false);
+  const [ghostProgress, setGhostProgress] = useState({ current: 0, total: 0 });
   const [bgRemovalOptions, setBgRemovalOptions] = useState<BackgroundRemovalOptions>({ secondPass: false, shadow: 'none' });
   const [imagesPerProduct, setImagesPerProduct] = useState(settings?.default_images_per_product || 9);
   const [productImages, setProductImages] = useState<Record<string, ProductImage[]>>({});
@@ -556,7 +560,86 @@ export function BatchDetail({
   }, [batch.id, bgUndoData]);
 
   const hasBgUndoData = bgUndoData.has(batch.id) && (bgUndoData.get(batch.id)?.length || 0) > 0;
+  const hasGhostUndoData = ghostUndoData.has(batch.id) && (ghostUndoData.get(batch.id)?.length || 0) > 0;
 
+  // Bulk ghost mannequin for selected products
+  const handleBulkGhostMannequin = useCallback(async () => {
+    if (selectedProductIds.size === 0) return;
+    
+    // Gather all image URLs and their IDs from selected products
+    const imageData: { id: string; url: string; productId: string }[] = [];
+    for (const productId of selectedProductIds) {
+      const imgs = productImages[productId] || [];
+      imgs.forEach(img => {
+        imageData.push({ id: img.id, url: img.url, productId });
+      });
+    }
+    
+    if (imageData.length === 0) return;
+    
+    setIsGhostProcessing(true);
+    setGhostProgress({ current: 0, total: imageData.length });
+    
+    const undoEntries: { imageId: string; originalUrl: string; newUrl: string }[] = [];
+    
+    await applyGhostMannequinBulk(imageData.map(d => d.url), batch.id, async (originalUrl, newUrl) => {
+      const imgInfo = imageData.find(d => d.url === originalUrl);
+      if (!imgInfo) return;
+      
+      undoEntries.push({ imageId: imgInfo.id, originalUrl, newUrl });
+      setGhostProgress(prev => ({ ...prev, current: prev.current + 1 }));
+      
+      const { error } = await supabase
+        .from('images')
+        .update({ url: newUrl })
+        .eq('id', imgInfo.id);
+      
+      if (!error) {
+        setProductImages(prev => {
+          const updated = { ...prev };
+          for (const productId of Object.keys(updated)) {
+            updated[productId] = updated[productId].map(img =>
+              img.id === imgInfo.id ? { ...img, url: newUrl } : img
+            );
+          }
+          return updated;
+        });
+      }
+    });
+    
+    if (undoEntries.length > 0) {
+      setGhostUndoData(prev => {
+        const next = new Map(prev);
+        next.set(batch.id, undoEntries);
+        return next;
+      });
+    }
+    
+    setIsGhostProcessing(false);
+    handleRefreshImages();
+  }, [selectedProductIds, productImages, batch.id, applyGhostMannequinBulk]);
+
+  // Undo ghost mannequin
+  const handleUndoGhostMannequin = useCallback(async () => {
+    const undoEntries = ghostUndoData.get(batch.id);
+    if (!undoEntries || undoEntries.length === 0) return;
+    
+    for (const entry of undoEntries) {
+      await supabase
+        .from('images')
+        .update({ url: entry.originalUrl })
+        .eq('id', entry.imageId);
+    }
+    
+    setGhostUndoData(prev => {
+      const next = new Map(prev);
+      next.delete(batch.id);
+      return next;
+    });
+    
+    handleRefreshImages();
+    toast.success(`Restored ${undoEntries.length} images to original`);
+  }, [batch.id, ghostUndoData]);
 
 
   return (
@@ -1252,6 +1335,49 @@ export function BatchDetail({
                     >
                       <Undo2 className="w-4 h-4 mr-1" />
                       Undo BG ({bgUndoData.get(batch.id)?.length || 0})
+                    </Button>
+                  )}
+                  
+                  {/* Ghost Mannequin button */}
+                  {selectedProductIds.size > 0 && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={handleBulkGhostMannequin}
+                          disabled={isGhostProcessing || isRemovingBg}
+                          type="button"
+                          className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                        >
+                          {isGhostProcessing ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                              {ghostProgress.current}/{ghostProgress.total}
+                            </>
+                          ) : (
+                            <>
+                              <Shirt className="w-4 h-4 mr-1" />
+                              Ghost ({selectedProductIds.size})
+                            </>
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Remove hangers &amp; infill necklines</TooltipContent>
+                    </Tooltip>
+                  )}
+                  
+                  {/* Undo Ghost Mannequin button */}
+                  {hasGhostUndoData && (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={handleUndoGhostMannequin}
+                      type="button"
+                      className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                    >
+                      <Undo2 className="w-4 h-4 mr-1" />
+                      Undo Ghost ({ghostUndoData.get(batch.id)?.length || 0})
                     </Button>
                   )}
                   

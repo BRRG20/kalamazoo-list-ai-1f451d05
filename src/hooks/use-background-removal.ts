@@ -210,6 +210,105 @@ export function useBackgroundRemoval() {
     []
   );
 
+  const applyGhostMannequinBulk = useCallback(
+    async (
+      imageUrls: string[],
+      batchId: string,
+      onImageProcessed?: (originalUrl: string, newUrl: string) => void
+    ): Promise<Map<string, string>> => {
+      if (imageUrls.length === 0) return new Map();
+
+      setIsProcessing(true);
+      setProgress({ current: 0, total: imageUrls.length, status: 'processing' });
+
+      const results = new Map<string, string>();
+      processedImagesRef.current.clear();
+
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          throw new Error('Not authenticated');
+        }
+
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          throw new Error('No active session');
+        }
+
+        for (let i = 0; i < imageUrls.length; i++) {
+          const url = imageUrls[i];
+          setProgress({
+            current: i,
+            total: imageUrls.length,
+            status: 'processing',
+          });
+
+          try {
+            const response = await fetch(
+              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ghost-mannequin`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${session.access_token}`,
+                },
+                body: JSON.stringify({ imageUrl: url }),
+              }
+            );
+
+            if (!response.ok) {
+              const errorData = await response.json().catch(() => ({}));
+              console.error(`Failed to process ${url}:`, errorData.error || response.status);
+              continue;
+            }
+
+            const data = await response.json();
+            
+            if (!data.success || !data.processedImageUrl) {
+              console.error(`No processed image for ${url}`);
+              continue;
+            }
+
+            setProgress({
+              current: i,
+              total: imageUrls.length,
+              status: 'uploading',
+            });
+
+            const newUrl = await uploadProcessedImage(data.processedImageUrl, user.id, batchId);
+
+            processedImagesRef.current.set(url, {
+              originalUrl: url,
+              newUrl: newUrl,
+            });
+
+            results.set(url, newUrl);
+            onImageProcessed?.(url, newUrl);
+          } catch (err) {
+            console.error(`Failed to process ${url}:`, err);
+          }
+        }
+
+        setProgress({
+          current: imageUrls.length,
+          total: imageUrls.length,
+          status: 'complete',
+        });
+
+        toast.success(`Ghost mannequin applied to ${results.size} of ${imageUrls.length} images`);
+        return results;
+      } catch (error) {
+        console.error('Bulk ghost mannequin failed:', error);
+        setProgress({ current: 0, total: 0, status: 'error' });
+        toast.error('Ghost mannequin processing failed');
+        return results;
+      } finally {
+        setIsProcessing(false);
+      }
+    },
+    []
+  );
+
   const removeBackgroundBulk = useCallback(
     async (
       imageUrls: string[],
@@ -343,6 +442,7 @@ export function useBackgroundRemoval() {
     removeBackgroundSingle,
     removeBackgroundBulk,
     applyGhostMannequin,
+    applyGhostMannequinBulk,
     getUndoMap,
     canUndo,
     clearUndoHistory,
