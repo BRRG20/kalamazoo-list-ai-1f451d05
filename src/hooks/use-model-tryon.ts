@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 
 export type FitStyle = 'regular' | 'oversized' | 'tucked';
 export type PoseType = 'front_neutral' | 'three_quarter' | 'relaxed' | 'arms_bent' | 'movement';
+export type OutfitStyle = 'stylish_casual' | 'streetwear' | 'vintage' | 'hipster' | 'cool' | 'vibrant' | 'chic';
 
 export interface AIFashionModel {
   id: string;
@@ -50,7 +51,9 @@ export function useModelTryOn() {
     imageUrl: string,
     modelId: string,
     poseId: PoseType = 'front_neutral',
-    fitStyle: FitStyle = 'regular'
+    fitStyle: FitStyle = 'regular',
+    styleOutfit: boolean = false,
+    outfitStyle: OutfitStyle = 'stylish_casual'
   ): Promise<string | null> => {
     try {
       const response = await fetch(
@@ -66,6 +69,8 @@ export function useModelTryOn() {
             modelId,
             poseId,
             fitStyle,
+            styleOutfit,
+            outfitStyle,
           }),
         }
       );
@@ -97,12 +102,14 @@ export function useModelTryOn() {
     batchId: string,
     modelId: string,
     poseId: PoseType = 'front_neutral',
-    fitStyle: FitStyle = 'regular'
+    fitStyle: FitStyle = 'regular',
+    styleOutfit: boolean = false,
+    outfitStyle: OutfitStyle = 'stylish_casual'
   ): Promise<string | null> => {
     setIsProcessing(true);
     
     try {
-      const processedUrl = await processImage(imageUrl, modelId, poseId, fitStyle);
+      const processedUrl = await processImage(imageUrl, modelId, poseId, fitStyle, styleOutfit, outfitStyle);
       
       if (processedUrl) {
         // Store undo data
@@ -128,6 +135,8 @@ export function useModelTryOn() {
     modelId: string,
     poseId: PoseType = 'front_neutral',
     fitStyle: FitStyle = 'regular',
+    styleOutfit: boolean = false,
+    outfitStyle: OutfitStyle = 'stylish_casual',
     onImageProcessed?: (originalUrl: string, newUrl: string) => Promise<void>
   ): Promise<ModelTryOnResult[]> => {
     if (images.length === 0) return [];
@@ -142,7 +151,7 @@ export function useModelTryOn() {
         const img = images[i];
         setProgress({ current: i + 1, total: images.length });
         
-        const processedUrl = await processImage(img.url, modelId, poseId, fitStyle);
+        const processedUrl = await processImage(img.url, modelId, poseId, fitStyle, styleOutfit, outfitStyle);
         
         if (processedUrl) {
           const result: ModelTryOnResult = {

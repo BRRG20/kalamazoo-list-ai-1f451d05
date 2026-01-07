@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useShopifyStats } from '@/hooks/use-shopify-stats';
 import { useBackgroundRemoval, type ShadowType, type BackgroundRemovalOptions } from '@/hooks/use-background-removal';
-import { useModelTryOn, type PoseType, type FitStyle } from '@/hooks/use-model-tryon';
+import { useModelTryOn, type PoseType, type FitStyle, type OutfitStyle } from '@/hooks/use-model-tryon';
 import { ModelTryOnDialog } from '@/components/model-tryon/ModelTryOnDialog';
 import {
   Upload, 
@@ -650,7 +650,13 @@ export function BatchDetail({
   const hasModelUndoData = modelUndoData.has(batch.id) && (modelUndoData.get(batch.id)?.length || 0) > 0;
 
   // Bulk model try-on for selected products - ADDS ONE model image per product (using first image as reference)
-  const handleBulkModelTryOn = useCallback(async (modelId: string, poseId: PoseType, fitStyle: FitStyle) => {
+  const handleBulkModelTryOn = useCallback(async (
+    modelId: string, 
+    poseId: PoseType, 
+    fitStyle: FitStyle,
+    styleOutfit: boolean,
+    outfitStyle: OutfitStyle
+  ) => {
     if (selectedProductIds.size === 0) return;
     
     // Get current user for RLS
@@ -676,7 +682,7 @@ export function BatchDetail({
     setShowModelTryOnDialog(false);
     const addedImageIds: string[] = [];
     
-    await processModelBulk(imageData, batch.id, modelId, poseId, fitStyle, async (originalUrl, newUrl) => {
+    await processModelBulk(imageData, batch.id, modelId, poseId, fitStyle, styleOutfit, outfitStyle, async (originalUrl, newUrl) => {
       const imgInfo = imageData.find(d => d.url === originalUrl);
       if (!imgInfo) return;
       

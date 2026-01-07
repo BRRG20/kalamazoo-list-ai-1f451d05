@@ -28,7 +28,7 @@ import { ImageGallery } from './ImageGallery';
 import { ShopifyStatusSection } from './ShopifyStatusSection';
 import { generateListingBlock } from '@/hooks/use-database';
 import { useBackgroundRemoval } from '@/hooks/use-background-removal';
-import { useModelTryOn, type PoseType, type FitStyle } from '@/hooks/use-model-tryon';
+import { useModelTryOn, type PoseType, type FitStyle, type OutfitStyle } from '@/hooks/use-model-tryon';
 import { ModelTryOnDialog } from '@/components/model-tryon/ModelTryOnDialog';
 import { supabase } from '@/integrations/supabase/client';
 import type { Product, ProductImage, Department, Era, Condition } from '@/types';
@@ -1601,11 +1601,11 @@ export function ProductDetailPanel({
       <ModelTryOnDialog
         open={showModelTryOnDialog}
         onOpenChange={setShowModelTryOnDialog}
-        onConfirm={async (modelId, poseId, fitStyle) => {
+        onConfirm={async (modelId, poseId, fitStyle, styleOutfit, outfitStyle) => {
           setShowModelTryOnDialog(false);
           const undoEntries: { imageId: string; originalUrl: string; newUrl: string }[] = [];
           const imageData = images.map(img => ({ id: img.id, url: img.url }));
-          await processModelBulk(imageData, batchId, modelId, poseId, fitStyle, async (originalUrl, newUrl) => {
+          await processModelBulk(imageData, batchId, modelId, poseId, fitStyle, styleOutfit, outfitStyle, async (originalUrl, newUrl) => {
             const img = images.find(i => i.url === originalUrl);
             if (img) {
               undoEntries.push({ imageId: img.id, originalUrl, newUrl });
