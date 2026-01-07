@@ -1800,12 +1800,24 @@ export function BatchDetail({
             for (const [productId, images] of Object.entries(productImages)) {
               const image = images.find(img => img.id === imageId);
               if (image) {
-                onDeleteImage(image.url);
+                // Delete from database
+                const { error } = await supabase
+                  .from('images')
+                  .delete()
+                  .eq('id', imageId);
+                
+                if (error) {
+                  console.error('Error deleting image:', error);
+                  toast.error('Failed to delete image');
+                  return;
+                }
+                
                 // Update local state
                 setProductImages(prev => ({
                   ...prev,
                   [productId]: prev[productId].filter(img => img.id !== imageId)
                 }));
+                toast.success('Image deleted');
                 break;
               }
             }
