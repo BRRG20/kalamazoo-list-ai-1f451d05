@@ -13,7 +13,8 @@ import {
   Camera,
   ShoppingBag,
   Eraser,
-  Undo2
+  Undo2,
+  Shirt
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -110,7 +111,7 @@ export function ProductDetailPanel({
   onMarkAsUploaded,
   onMarkAsPending,
 }: ProductDetailPanelProps) {
-  const { isProcessing: isRemovingBg, progress: bgProgress, removeBackgroundBulk } = useBackgroundRemoval();
+  const { isProcessing: isRemovingBg, progress: bgProgress, removeBackgroundBulk, applyGhostMannequinBulk } = useBackgroundRemoval();
   const [formData, setFormData] = useState<Partial<Product>>({});
   const [isListening, setIsListening] = useState(false);
   const [isParsingVoice, setIsParsingVoice] = useState(false);
@@ -121,6 +122,9 @@ export function ProductDetailPanel({
   const [localImages, setLocalImages] = useState<ProductImage[]>(images);
   // Background removal undo state
   const [bgUndoData, setBgUndoData] = useState<{ imageId: string; originalUrl: string; newUrl: string }[]>([]);
+  const [ghostUndoData, setGhostUndoData] = useState<{ imageId: string; originalUrl: string; newUrl: string }[]>([]);
+  const [isGhostProcessing, setIsGhostProcessing] = useState(false);
+  const [ghostProgress, setGhostProgress] = useState({ current: 0, total: 0 });
   const [descriptionStyle, setDescriptionStyle] = useState<'A' | 'B'>('A');
   const [debugEnabled, setDebugEnabled] = useState(false);
   const [recorderMountCount, setRecorderMountCount] = useState(0);
@@ -1002,6 +1006,48 @@ export function ProductDetailPanel({
                   )}
                 </Button>
                 
+                {/* Ghost Mannequin button */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    setIsGhostProcessing(true);
+                    setGhostProgress({ current: 0, total: images.length });
+                    const undoEntries: { imageId: string; originalUrl: string; newUrl: string }[] = [];
+                    const imageUrls = images.map(img => img.url);
+                    await applyGhostMannequinBulk(imageUrls, batchId, async (originalUrl, newUrl) => {
+                      const img = images.find(i => i.url === originalUrl);
+                      if (img) {
+                        undoEntries.push({ imageId: img.id, originalUrl, newUrl });
+                        setGhostProgress(prev => ({ ...prev, current: prev.current + 1 }));
+                        await supabase
+                          .from('images')
+                          .update({ url: newUrl })
+                          .eq('id', img.id);
+                        onUpdateImage(img.id, { url: newUrl } as any);
+                      }
+                    });
+                    if (undoEntries.length > 0) {
+                      setGhostUndoData(undoEntries);
+                    }
+                    setIsGhostProcessing(false);
+                  }}
+                  disabled={isGhostProcessing || isRemovingBg}
+                  className="w-full text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                >
+                  {isGhostProcessing ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Ghost Mannequin ({ghostProgress.current}/{ghostProgress.total})
+                    </>
+                  ) : (
+                    <>
+                      <Shirt className="w-4 h-4 mr-2" />
+                      Ghost Mannequin ({images.length})
+                    </>
+                  )}
+                </Button>
+                
                 {/* Undo Background Removal button */}
                 {bgUndoData.length > 0 && (
                   <Button
@@ -1023,6 +1069,29 @@ export function ProductDetailPanel({
                   >
                     <Undo2 className="w-4 h-4 mr-2" />
                     Undo BG Removal ({bgUndoData.length})
+                  </Button>
+                )}
+                
+                {/* Undo Ghost Mannequin button */}
+                {ghostUndoData.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      for (const entry of ghostUndoData) {
+                        await supabase
+                          .from('images')
+                          .update({ url: entry.originalUrl })
+                          .eq('id', entry.imageId);
+                        onUpdateImage(entry.imageId, { url: entry.originalUrl } as any);
+                      }
+                      toast.success(`Restored ${ghostUndoData.length} images to original`);
+                      setGhostUndoData([]);
+                    }}
+                    className="w-full text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                  >
+                    <Undo2 className="w-4 h-4 mr-2" />
+                    Undo Ghost ({ghostUndoData.length})
                   </Button>
                 )}
               </div>
