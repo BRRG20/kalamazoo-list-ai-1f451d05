@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { useBackgroundRemoval, type BackgroundRemovalOptions } from '@/hooks/use-background-removal';
 import { supabase } from '@/integrations/supabase/client';
 import type { ProductImage, Product } from '@/types';
@@ -205,7 +205,7 @@ export function ImageGallery({
   const availableProducts = otherProducts.filter(p => p.id !== currentProductId);
 
   return (
-    <>
+    <TooltipProvider delayDuration={300}>
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="font-semibold text-foreground">
@@ -475,6 +475,6 @@ export function ImageGallery({
           )}
         </DialogContent>
       </Dialog>
-    </>
+    </TooltipProvider>
   );
 }
