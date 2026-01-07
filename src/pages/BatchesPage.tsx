@@ -1724,6 +1724,7 @@ const handleSelectBatch = useCallback((id: string) => {
           <ProductDetailPanel
             product={editingProduct}
             images={editingProductImages}
+            batchId={selectedBatchId || ''}
             onClose={() => setEditingProductId(null)}
             onSave={handleSaveProduct}
             onUpdateImage={handleUpdateImage}

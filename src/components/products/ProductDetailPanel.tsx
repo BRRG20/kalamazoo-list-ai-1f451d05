@@ -27,6 +27,7 @@ import type { Product, ProductImage, Department, Era, Condition } from '@/types'
 interface ProductDetailPanelProps {
   product: Product;
   images: ProductImage[];
+  batchId: string;
   onClose: () => void;
   onSave: (updates: Partial<Product>) => void;
   onUpdateImage: (imageId: string, updates: Partial<ProductImage>) => void;
@@ -83,6 +84,7 @@ const VOICE_FIELD_KEYS = [
 export function ProductDetailPanel({
   product,
   images,
+  batchId,
   onClose,
   onSave,
   onUpdateImage,
@@ -953,6 +955,7 @@ export function ProductDetailPanel({
           <div className="md:h-auto md:w-1/3 border-b md:border-b-0 md:border-r border-border p-2 md:p-4 md:overflow-y-auto scrollbar-thin flex-shrink-0">
             <ImageGallery
               images={images}
+              batchId={batchId}
               onUpdateImage={onUpdateImage}
               onReorderImages={onReorderImages}
               onDeleteImage={onDeleteImage}
