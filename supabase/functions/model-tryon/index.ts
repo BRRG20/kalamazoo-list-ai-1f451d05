@@ -70,56 +70,205 @@ const POSE_DESCRIPTIONS: Record<string, string> = {
   'movement': 'captured mid-stride or walking pose, natural movement, dynamic but controlled. Cool candid street-style feel, face still visible.',
 };
 
-// Outfit styling descriptions - these define complementary garments
+// Outfit styling descriptions - rich, diverse, inspiration-driven
 const OUTFIT_STYLE_DESCRIPTIONS: Record<string, string> = {
-  'stylish_casual': `STYLING DIRECTION: Stylish Casual / Going Out
-- Clean, modern, wearable aesthetic
-- Simple well-fitted jeans or tailored trousers
-- Clean white or subtle neutral trainers/shoes
-- Minimal accessories (maybe a simple watch)
-- Overall: Smart casual, ready to go out, understated but intentional`,
+  'stylish_casual': `STYLING DIRECTION: Stylish Casual / Elevated Everyday
+INSPIRATION: Rihanna off-duty, A$AP Rocky casual moments, SoHo NYC daytime, Shoreditch creatives
+BOTTOMS (pick one at random each time for variety):
+- Straight-leg dark wash jeans
+- Pleated cream or khaki trousers
+- Relaxed-fit black chinos
+- Cropped ankle-length tailored pants
+FOOTWEAR (pick one at random):
+- Clean white leather sneakers (Common Projects style)
+- Black Chelsea boots
+- Cream/beige suede loafers
+- Minimalist running shoes (New Balance 550, Veja)
+LAYERS (optional, pick if appropriate):
+- Unstructured blazer in navy or camel
+- Light bomber jacket
+- Cashmere cardigan open
+ACCESSORIES:
+- Simple silver or gold watch
+- Minimal chain necklace (subtle, not chunky)
+- Clean leather belt
+STYLING RULES: Clean lines, quality fabrics, nothing loud. Colors coordinate - neutrals, earth tones, navy. Everything fits well but not tight.`,
 
-  'streetwear': `STYLING DIRECTION: Streetwear / Urban
-- Relaxed, urban aesthetic
-- Cargo pants, relaxed jeans, or joggers
-- Fresh sneakers (Jordan-style, Nike, Adidas)
-- Layering if appropriate (hoodie under/over, bomber jacket)
-- Overall: Street-ready, comfortable but stylish`,
+  'streetwear': `STYLING DIRECTION: Streetwear / Urban Commercial
+INSPIRATION: A$AP Rocky, Travis Scott, Brooklyn NYC, London streetwear scene, Supreme drops, Palace
+BOTTOMS (pick one at random each time for variety):
+- Baggy cargo pants (olive, black, or cream)
+- Wide-leg jeans with raw hem
+- Technical joggers with zip pockets
+- Vintage-wash Dickies or Carhartt work pants
+FOOTWEAR (pick one at random):
+- Air Jordan 1s (Chicago, Bred, or neutral colorway)
+- Nike Dunks (any color matching the fit)
+- New Balance 550 or 2002R
+- Adidas Samba or Gazelle
+- Nike Air Force 1 (white or black)
+LAYERS (pick one or two):
+- Oversized hoodie (can be under or over hero garment)
+- Puffer vest or jacket
+- Vintage denim jacket
+- Coach jacket or windbreaker
+ACCESSORIES (add 1-2):
+- Small crossbody bag or shoulder bag
+- Beanie or dad cap
+- Simple silver chain
+- Digital watch (Casio style)
+STYLING RULES: Relaxed proportions, intentional but effortless. Mix of hype and vintage. Colors can be bold but coordinated.`,
 
-  'vintage': `STYLING DIRECTION: Vintage / Era-Aware
-- Retro silhouettes matching the garment era
-- High-waisted trousers or classic denim
-- Era-appropriate footwear (loafers, vintage sneakers, boots)
-- Subtle nostalgic styling, not costume
-- Overall: Authentic vintage feel, wearable nostalgia`,
+  'vintage': `STYLING DIRECTION: Vintage / Era-Authentic
+INSPIRATION: 70s rock, 80s new wave, 90s grunge, Y2K styling, Northern Soul, vintage denim heads
+BOTTOMS (match to garment era, pick randomly):
+- High-waisted pleated trousers (70s/80s)
+- Relaxed straight-leg faded jeans (90s)
+- Corduroy wide-legs (70s)
+- Baggy carpenter jeans (Y2K)
+- Bootcut jeans (Y2K/70s)
+FOOTWEAR (era-appropriate, pick randomly):
+- Vintage leather boots (Chelsea or western)
+- Converse Chuck Taylor (70s)
+- Platform loafers (90s)
+- Retro running shoes (New Balance 574, Saucony)
+- Doc Martens boots
+LAYERS (pick if appropriate):
+- Vintage leather or suede jacket
+- Knitted cardigan or vest
+- Denim trucker jacket (faded, vintage wash)
+- Wool overcoat
+ACCESSORIES (add 1-2 for authenticity):
+- Vintage watch (leather strap)
+- Bandana (pocket or neck)
+- Vintage belt with interesting buckle
+- Period-accurate sunglasses
+STYLING RULES: Authentic to the era, not costume. Lived-in quality. Faded, worn textures welcome.`,
 
-  'hipster': `STYLING DIRECTION: Hipster / Shoreditch / Indie
-- Creative, fashion-forward choices
-- Interesting proportions and layering
-- Mix of textures (denim, corduroy, knits)
-- Unique footwear (Doc Martens, desert boots, retro runners)
-- Overall: Indie aesthetic, creative but not over-the-top`,
+  'hipster': `STYLING DIRECTION: Hipster / Shoreditch / Brooklyn Creative
+INSPIRATION: Shoreditch East London, Williamsburg Brooklyn, coffee shop DJs, indie label A&Rs, record store vibes
+BOTTOMS (pick one at random each time):
+- Slim-fit raw selvedge denim
+- Cropped chinos showing ankle
+- Brown or olive corduroy pants
+- Relaxed-fit vintage Levi's
+- High-waisted pleated trousers
+FOOTWEAR (pick one at random):
+- Doc Martens 1461 or 1490 boots
+- Desert boots (Clark's or similar)
+- Vintage running shoes (New Balance 990, ASICS Gel)
+- Leather moccasins or loafers
+- Suede Wallabees
+LAYERS (pick if appropriate):
+- Denim jacket (oversized vintage)
+- Wool or fleece overshirt
+- Quilted liner jacket
+- Vintage work jacket
+ACCESSORIES (important for this style - add 2-3):
+- Simple matte black or silver ring (on index or pinky finger)
+- Analogue watch with leather strap
+- Beanie or flat cap
+- Tote bag (canvas, natural)
+- Round or square prescription-style glasses
+- Thin gold or silver necklace
+STYLING RULES: Curated, not trying too hard. Mix of vintage finds and quality basics. Earth tones, olive, mustard, burgundy, forest green. Textures matter.`,
 
-  'cool': `STYLING DIRECTION: Cool / Understated
-- Understated confidence
-- Clean lines, neutral tones (black, grey, white, navy)
-- Well-fitted basics
-- Classic clean footwear
-- Overall: Effortlessly cool, minimal styling`,
+  'cool': `STYLING DIRECTION: Cool / Understated Minimal
+INSPIRATION: Scandinavian minimalism, COS campaigns, Japanese basics (MUJI, Uniqlo U), quiet luxury
+BOTTOMS (pick one at random):
+- Black straight-leg trousers
+- Dark navy or charcoal wool pants
+- Clean black jeans (no distressing)
+- Tailored jogger pants
+FOOTWEAR (pick one at random):
+- Clean white leather sneakers
+- Black leather derby shoes
+- Suede grey sneakers
+- Black Chelsea boots
+- White canvas shoes
+LAYERS (subtle, minimal):
+- Black or grey overcoat
+- Navy bomber jacket
+- Zip-up knit cardigan
+ACCESSORIES (minimal, quality):
+- Simple black leather watch
+- No jewelry or very subtle (thin chain only)
+- Clean leather belt
+STYLING RULES: Monochromatic or tonal. Black, white, grey, navy only. Impeccable fit. Clean lines. No logos visible. Quality over everything.`,
 
-  'vibrant': `STYLING DIRECTION: Vibrant / Bold Colour
-- Bolder but tasteful colour combinations
-- Complementary colours to the hero garment
-- Still wearable and coordinated
-- Clean styling with colour as the focus
-- Overall: Colourful but not clashing, intentional vibrancy`,
+  'vibrant': `STYLING DIRECTION: Vibrant / Bold Color Story
+INSPIRATION: Rihanna color blocking, Pharrell, Tyler the Creator, Italian street style, Lagos fashion scene
+BOTTOMS (pick to complement hero garment color):
+- Bold colored trousers (pick complementary to hero)
+- Bright white jeans or pants
+- Colored corduroy (mustard, teal, burgundy)
+- Primary colored chinos
+FOOTWEAR (can be bold):
+- Colorful sneakers matching the palette
+- Bright white clean sneakers
+- Patent leather boots in unexpected color
+- Colored suede loafers
+LAYERS:
+- Color-blocked jacket
+- Vibrant cardigan or sweater
+- Patterned shirt unbuttoned over hero
+ACCESSORIES:
+- Colored watch strap
+- Bold sunglasses
+- Interesting jewelry (chunky rings, statement necklace)
+STYLING RULES: Colors must WORK together - complementary or analogous, not random. One hero color, others support it. Still wearable, not costume.`,
 
-  'chic': `STYLING DIRECTION: Chic / Elevated Casual
-- Polished, elevated casual aesthetic
-- Clean silhouettes, refined proportions
-- Quality-looking basics
-- Elegant footwear (clean leather, minimal design)
-- Overall: Sophisticated casual, ready for any occasion`,
+  'chic': `STYLING DIRECTION: Chic / Elevated Luxury Casual
+INSPIRATION: Parisian style, Italian aperitivo hour, old money aesthetic, Loro Piana vibes, fashion week off-duty
+BOTTOMS (pick one at random):
+- Tailored cream or beige trousers
+- High-quality dark denim
+- Pleated wool trousers
+- Linen blend wide pants
+FOOTWEAR (quality leather):
+- Leather loafers (brown or black)
+- Suede driving shoes
+- Clean leather sneakers
+- Polished Chelsea boots
+LAYERS (refined):
+- Cashmere sweater draped over shoulders
+- Unstructured linen blazer
+- Fine knit polo or half-zip
+- Suede or leather jacket (butter-soft)
+ACCESSORIES (subtle luxury):
+- Quality leather belt
+- Elegant watch (leather strap or minimal metal)
+- Sunglasses (classic shapes)
+- Silk scarf (pocket square or light neck tie)
+STYLING RULES: Everything looks expensive even if it isn't. Neutral palette - cream, camel, navy, grey, white. Fabrics look luxe. Perfect tailoring.`,
+
+  'eastern_fusion': `STYLING DIRECTION: Eastern Fusion / Japanese-Korean Streetwear with Western Twist
+INSPIRATION: Tokyo Harajuku (toned down), Seoul streetwear, Korean fashion editorials, Japanese workwear brands (Kapital, Visvim), modern Americana with Eastern sensibility
+BOTTOMS (pick one at random):
+- Wide cropped trousers showing ankle
+- Relaxed tapered pants with pleats
+- Patchwork or artisan denim
+- Utility pants with interesting details
+- Hakama-inspired wide trousers (subtle)
+FOOTWEAR (pick one at random):
+- White minimalist sneakers
+- Leather sandals (if appropriate)
+- Canvas sneakers (Moonstar, Shoes Like Pottery)
+- Suede boots with interesting sole
+- New Balance Japanese exclusive colorways
+LAYERS (considered, architectural):
+- Oversized structured coat
+- Deconstructed blazer
+- Long cardigan or open robe jacket
+- Technical shell jacket (minimal branding)
+- Noragi or chore jacket
+ACCESSORIES (intentional details):
+- Leather or canvas tote bag
+- Minimal silver jewelry
+- Bucket hat or newsboy cap
+- Interesting socks showing above ankle
+- Simple beaded bracelet
+STYLING RULES: Proportions are intentional - oversized meets cropped. Textures mix interestingly. Earth tones with one pop element. Craftsmanship visible. Looks effortless but clearly considered. NOT costume - wearable Western interpretation of Eastern aesthetic.`,
 };
 
 async function processModelTryOn(

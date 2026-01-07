@@ -52,13 +52,14 @@ const FIT_STYLES: { id: FitStyle; name: string; description: string }[] = [
 ];
 
 const OUTFIT_STYLES: { id: OutfitStyle; name: string; description: string }[] = [
-  { id: 'stylish_casual', name: 'Stylish Casual', description: 'Clean, modern, going-out friendly' },
-  { id: 'streetwear', name: 'Streetwear', description: 'Relaxed, urban, layered looks' },
-  { id: 'vintage', name: 'Vintage', description: 'Era-aware, retro silhouettes' },
-  { id: 'hipster', name: 'Hipster', description: 'Creative, indie, fashion-forward' },
-  { id: 'cool', name: 'Cool', description: 'Understated confidence, clean lines' },
-  { id: 'vibrant', name: 'Vibrant', description: 'Bolder colours, still tasteful' },
-  { id: 'chic', name: 'Chic', description: 'Polished, elevated casual' },
+  { id: 'stylish_casual', name: 'Stylish Casual', description: 'Rihanna off-duty, SoHo NYC vibes' },
+  { id: 'streetwear', name: 'Streetwear', description: 'A$AP Rocky, Brooklyn, Supreme drops' },
+  { id: 'vintage', name: 'Vintage', description: 'Era-authentic, 70s-Y2K styling' },
+  { id: 'hipster', name: 'Hipster', description: 'Shoreditch London, Williamsburg creative' },
+  { id: 'cool', name: 'Cool', description: 'Scandinavian minimal, quiet luxury' },
+  { id: 'vibrant', name: 'Vibrant', description: 'Bold color blocking, Tyler style' },
+  { id: 'chic', name: 'Chic', description: 'Parisian elegance, old money aesthetic' },
+  { id: 'eastern_fusion', name: 'Eastern Fusion', description: 'Tokyo-Seoul meets Western street' },
 ];
 
 export function ModelTryOnDialog({
