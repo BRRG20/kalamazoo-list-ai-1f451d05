@@ -19,10 +19,10 @@ const MAX_RETRIES = 2;
 
 // Model descriptions for consistent appearance - cool, neutral, fashion-forward
 const MODEL_DESCRIPTIONS: Record<string, string> = {
-  '11111111-1111-1111-1111-111111111111': 'Alex: A cool, fashion-forward male model aged 25-30 with modern styled short dark hair, clean-shaven, lean athletic build, height 6ft, warm skin tone. Expression: neutral, confident, effortlessly cool - subtle smoulder or slight knowing smile. Face MUST be clearly visible.',
-  '22222222-2222-2222-2222-222222222222': 'Marcus: A stylish, model-like male aged 25-30 with textured medium-length brown hair, light stubble, lean build, height 5ft11, fair skin tone. Expression: cool and relaxed, understated confidence, hint of a subtle smile. Face MUST be clearly visible.',
-  '33333333-3333-3333-3333-333333333333': 'Sophie: An effortlessly cool female model aged 25-30 with sleek shoulder-length hair (can be bob or straight), slim build, height 5ft8, light skin tone. Expression: neutral but approachable, cool confidence, can have subtle smile. Face MUST be clearly visible.',
-  '44444444-4444-4444-4444-444444444444': 'Emma: A natural, model-like female aged 25-30 with long flowing hair, slim-average build, height 5ft7, medium skin tone. Expression: relaxed confidence, warm but cool, natural slight smile allowed. Face MUST be clearly visible.',
+  '11111111-1111-1111-1111-111111111111': 'Alex: A cool, fashion-forward male model aged 30-35 with modern styled short dark hair, clean-shaven, lean athletic build, height 6ft, warm skin tone. Expression: neutral, confident, effortlessly cool - subtle smoulder or slight knowing smile. Face MUST be clearly visible.',
+  '22222222-2222-2222-2222-222222222222': 'Marcus: A stylish, model-like male aged 30-35 with textured medium-length brown hair, light stubble, lean build, height 5ft11, fair skin tone. Expression: cool and relaxed, understated confidence, hint of a subtle smile. Face MUST be clearly visible.',
+  '33333333-3333-3333-3333-333333333333': 'Sophie: An effortlessly cool female model aged 30-35 with sleek shoulder-length hair (can be bob or straight), slim build, height 5ft8, light skin tone. Expression: neutral but approachable, cool confidence, can have subtle smile. Face MUST be clearly visible.',
+  '44444444-4444-4444-4444-444444444444': 'Emma: A natural, model-like female aged 30-35 with long flowing hair, slim-average build, height 5ft7, medium skin tone. Expression: relaxed confidence, warm but cool, natural slight smile allowed. Face MUST be clearly visible.',
 };
 
 // Pose descriptions - cool, neutral, model-like poses (inspired by fashion editorials)
@@ -149,12 +149,15 @@ STYLING RULES (CRITICAL):
 6. Fit must be realistic - no extreme proportions unless style demands it
 7. The styled outfit must look like something a real person would wear
 
-ABSOLUTE REQUIREMENTS FOR THE HERO GARMENT:
+ABSOLUTE REQUIREMENTS FOR THE HERO GARMENT (CRITICAL - NO EXCEPTIONS):
 1. COPY EXACTLY: every color, shade, pattern, texture from the input image
 2. COPY EXACTLY: all logos, text, graphics, prints - character for character
 3. COPY EXACTLY: all buttons, zippers, stitching, seams, labels, tags
 4. COPY EXACTLY: any wear, fading, distressing, vintage characteristics
 5. The hero garment is the SINGLE SOURCE OF TRUTH - copy it perfectly
+6. FABRIC MUST LOOK NATURAL: No high gloss, no artificial shine, no CGI look
+7. Preserve the EXACT fabric texture - matte cotton stays matte, wool stays wooly, etc.
+8. The garment must look like a real photo, not a digital render
 
 PHOTOGRAPHY STYLE:
 - Professional photography studio setting
@@ -172,7 +175,9 @@ WHAT NOT TO DO:
 - DO NOT over-style or create runway/editorial looks
 - DO NOT create costume-like or fantasy outfits
 - DO NOT make stiff or awkward poses
-- Keep it wearable and realistic`;
+- DO NOT add gloss, shine, or artificial enhancement to the fabric
+- DO NOT make the clothing look CGI or digitally rendered
+- Keep it wearable, natural, and realistic for real buyers`;
   } else {
     // Product-only mode - just the garment on model
     prompt = `TASK: Place this EXACT garment onto a fashion model for e-commerce product photography.
@@ -195,7 +200,7 @@ MODEL APPEARANCE (CRITICAL):
 FIT STYLE:
 ${fitInstructions}
 
-ABSOLUTE REQUIREMENTS - DO NOT VIOLATE:
+ABSOLUTE REQUIREMENTS - DO NOT VIOLATE (THE INPUT IMAGE IS THE SINGLE SOURCE OF TRUTH):
 1. The garment in the output MUST be a PIXEL-PERFECT representation of the input image
 2. DO NOT change, alter, redesign, or reimagine ANY aspect of the garment
 3. COPY EXACTLY: every color, every shade, every pattern, every texture
@@ -203,6 +208,9 @@ ABSOLUTE REQUIREMENTS - DO NOT VIOLATE:
 5. COPY EXACTLY: all buttons, zippers, stitching, seams, labels, tags
 6. COPY EXACTLY: any wear, fading, distressing, or vintage characteristics
 7. The garment is the SINGLE SOURCE OF TRUTH - the input image defines 100% of how the clothing looks
+8. FABRIC MUST LOOK NATURAL: No high gloss, no artificial shine, no CGI look
+9. Preserve the EXACT fabric texture - matte cotton stays matte, wool stays wooly, knit stays knit
+10. The garment must look like a real photograph, not a digital render or 3D model
 
 WHAT TO GENERATE:
 - A professional fashion photo with the model wearing this EXACT garment
@@ -220,8 +228,11 @@ WHAT NOT TO DO:
 - DO NOT "improve" or "enhance" the garment design
 - DO NOT hallucinate or invent any garment details
 - DO NOT make stiff or awkward poses
+- DO NOT add gloss, shine, or artificial enhancement to the fabric
+- DO NOT make the clothing look CGI or digitally rendered
+- The output must look like a real photo a buyer would trust
 
-The input image is your ONLY reference for the garment. Copy it exactly onto the model.`;
+The input image is your ONLY reference for the garment. Copy it exactly onto the model with natural, realistic fabric appearance.`;
   }
 
   const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
