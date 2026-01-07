@@ -40,7 +40,18 @@ serve(async (req) => {
             content: [
               {
                 type: 'text',
-                text: 'Remove the background from this clothing product image completely. Keep only the garment/clothing item and the hanger if present. Make the background completely transparent (alpha channel). The result should be a clean cutout suitable for e-commerce product photography. Remove any shadows, floor reflections, or background elements. Keep the clothing edges clean and sharp with no artifacts or patches.'
+                text: `Remove the background from this clothing product photo for e-commerce use.
+
+CRITICAL REQUIREMENTS:
+1. Keep ONLY the garment/clothing and the hanger (including the metal hook)
+2. Make the background 100% transparent (PNG with alpha channel)
+3. VERY IMPORTANT: The triangular or rectangular OPENING in the middle of the hanger where you can see through to the background - this visible area through the hanger opening MUST also be completely transparent, NOT gray or white
+4. Remove ALL background visible through any gaps, holes, or openings - including the space inside the hanger frame
+5. Ensure clean, crisp edges with NO stray pixels, artifacts, halos, or incomplete removal
+6. No remnant shadows or fringes around any edges
+7. Every single pixel that is not part of the actual clothing fabric or hanger material must be fully transparent
+
+Output a clean product cutout with ONLY the garment and hanger visible, against a 100% transparent background.`
               },
               {
                 type: 'image_url',
