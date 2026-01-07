@@ -1260,11 +1260,11 @@ export function BatchDetail({
                 </div>
               </div>
               
-              <div className="flex items-center justify-between sm:justify-start gap-2 flex-wrap">
-                <span className="text-sm text-muted-foreground">
-                  {selectedProductIds.size} selected
-                </span>
-                <div className="flex gap-1 items-center">
+              <div className="flex flex-col gap-2 w-full">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm text-muted-foreground whitespace-nowrap">
+                    {selectedProductIds.size} selected
+                  </span>
                   {/* Bulk select dropdown */}
                   <select
                     key={bulkSelectKey}
@@ -1313,9 +1313,12 @@ export function BatchDetail({
                   >
                     Clear
                   </Button>
-                  
-                  {/* Hide Selected button */}
-                  {selectedProductIds.size > 0 && (
+                </div>
+                
+                {/* Action buttons row - wraps on smaller screens */}
+                {selectedProductIds.size > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {/* Hide Selected button */}
                     <Button 
                       variant="outline" 
                       size="sm" 
@@ -1326,10 +1329,8 @@ export function BatchDetail({
                       <EyeOff className="w-4 h-4 mr-1" />
                       Hide ({selectedProductIds.size})
                     </Button>
-                  )}
-                  
-                  {/* Remove Background dropdown with options */}
-                  {selectedProductIds.size > 0 && (
+                    
+                    {/* Remove Background dropdown with options */}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button 
@@ -1379,24 +1380,22 @@ export function BatchDetail({
                         </DropdownMenuRadioGroup>
                       </DropdownMenuContent>
                     </DropdownMenu>
-                  )}
-                  
-                  {/* Undo Background Removal button */}
-                  {hasBgUndoData && (
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={handleUndoBackgroundRemoval}
-                      type="button"
-                      className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
-                    >
-                      <Undo2 className="w-4 h-4 mr-1" />
-                      Undo BG ({bgUndoData.get(batch.id)?.length || 0})
-                    </Button>
-                  )}
-                  
-                  {/* Ghost Mannequin button */}
-                  {selectedProductIds.size > 0 && (
+                    
+                    {/* Undo Background Removal button */}
+                    {hasBgUndoData && (
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={handleUndoBackgroundRemoval}
+                        type="button"
+                        className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                      >
+                        <Undo2 className="w-4 h-4 mr-1" />
+                        Undo BG ({bgUndoData.get(batch.id)?.length || 0})
+                      </Button>
+                    )}
+                    
+                    {/* Ghost Mannequin button */}
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button 
@@ -1422,10 +1421,8 @@ export function BatchDetail({
                       </TooltipTrigger>
                       <TooltipContent>Remove hangers &amp; infill necklines</TooltipContent>
                     </Tooltip>
-                  )}
-                  
-                  {/* Undo Ghost Mannequin button - always visible when products selected */}
-                  {selectedProductIds.size > 0 && (
+                    
+                    {/* Undo Ghost Mannequin button */}
                     <Button 
                       variant="outline" 
                       size="sm" 
@@ -1439,12 +1436,10 @@ export function BatchDetail({
                       )}
                     >
                       <Undo2 className="w-4 h-4 mr-1" />
-                      Undo Ghost {hasGhostUndoData ? `(${ghostUndoData.get(batch.id)?.length || 0})` : ''}
+                      Undo Ghost
                     </Button>
-                  )}
-                  
-                  {/* Model Try-On button */}
-                  {selectedProductIds.size > 0 && (
+                    
+                    {/* Model Try-On button */}
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button 
@@ -1470,10 +1465,8 @@ export function BatchDetail({
                       </TooltipTrigger>
                       <TooltipContent>Place garments on AI fashion model</TooltipContent>
                     </Tooltip>
-                  )}
-                  
-                  {/* Undo Model Try-On button */}
-                  {selectedProductIds.size > 0 && (
+                    
+                    {/* Undo Model Try-On button */}
                     <Button 
                       variant="outline" 
                       size="sm" 
@@ -1487,58 +1480,58 @@ export function BatchDetail({
                       )}
                     >
                       <Undo2 className="w-4 h-4 mr-1" />
-                      Undo Model {hasModelUndoData ? `(${modelUndoData.get(batch.id)?.length || 0})` : ''}
+                      Undo Model
                     </Button>
-                  )}
-                  
-                  {/* Three-dots menu with actions for selected products */}
-                  {selectedProductIds.size > 0 && onRegroupSelectedProducts && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                          <MoreVertical className="w-4 h-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onClick={handleBulkBackgroundRemoval}
-                          disabled={isRemovingBg}
-                        >
-                          {isRemovingBg ? (
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          ) : (
-                            <Eraser className="w-4 h-4 mr-2" />
-                          )}
-                          {isRemovingBg 
-                            ? `Removing BG (${bgRemovalProgress.current}/${bgRemovalProgress.total})...`
-                            : `Remove Background (${selectedProductIds.size} products)`
-                          }
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuSub>
-                          <DropdownMenuSubTrigger>
-                            <Layers className="w-4 h-4 mr-2" />
-                            Regroup Selected ({selectedProductIds.size})
-                          </DropdownMenuSubTrigger>
-                          <DropdownMenuSubContent>
-                            <DropdownMenuLabel>Images per product</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            {[2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15].map((num) => (
-                              <DropdownMenuItem
-                                key={num}
-                                onClick={() => onRegroupSelectedProducts(Array.from(selectedProductIds), num)}
-                              >
-                                {num} images per product
-                              </DropdownMenuItem>
-                            ))}
-                          </DropdownMenuSubContent>
-                        </DropdownMenuSub>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
-                </div>
+                    
+                    {/* Three-dots menu with actions for selected products */}
+                    {onRegroupSelectedProducts && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                            <MoreVertical className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={handleBulkBackgroundRemoval}
+                            disabled={isRemovingBg}
+                          >
+                            {isRemovingBg ? (
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            ) : (
+                              <Eraser className="w-4 h-4 mr-2" />
+                            )}
+                            {isRemovingBg 
+                              ? `Removing BG (${bgRemovalProgress.current}/${bgRemovalProgress.total})...`
+                              : `Remove Background (${selectedProductIds.size} products)`
+                            }
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuSub>
+                            <DropdownMenuSubTrigger>
+                              <Layers className="w-4 h-4 mr-2" />
+                              Regroup Selected ({selectedProductIds.size})
+                            </DropdownMenuSubTrigger>
+                            <DropdownMenuSubContent>
+                              <DropdownMenuLabel>Images per product</DropdownMenuLabel>
+                              <DropdownMenuSeparator />
+                              {[2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15].map((num) => (
+                                <DropdownMenuItem
+                                  key={num}
+                                  onClick={() => onRegroupSelectedProducts(Array.from(selectedProductIds), num)}
+                                >
+                                  {num} images per product
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuSubContent>
+                          </DropdownMenuSub>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </div>
+                )}
               </div>
               <Button
                 onClick={handleCreateInShopify}
