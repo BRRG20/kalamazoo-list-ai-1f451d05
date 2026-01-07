@@ -35,3 +35,6 @@ verify_jwt = true
 
 [functions.process-autopilot-batch]
 verify_jwt = false
+
+[functions.remove-background]
+verify_jwt = true
