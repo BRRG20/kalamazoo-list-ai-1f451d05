@@ -184,16 +184,71 @@ export function useAIGeneration({
         updates.fit = generated.fit;
       }
       if (!product.era && generated.era) {
-        updates.era = generated.era;
+        // Validate era is one of the allowed values
+        const validEras = ['80s', '90s', 'Y2K', 'Modern'];
+        if (validEras.includes(generated.era)) {
+          updates.era = generated.era;
+        }
       }
+      
+      // CRITICAL: Sanitize condition to match enum values
+      // Valid values: Excellent, Very good, Good, Fair
       if (!product.condition && generated.condition) {
-        updates.condition = generated.condition;
+        const conditionStr = String(generated.condition);
+        let sanitizedCondition: string | null = null;
+        let conditionDetails: string | null = null;
+        
+        // Extract the base condition and any details in parentheses
+        const conditionMatch = conditionStr.match(/^(Excellent|Very good|Good|Fair)/i);
+        if (conditionMatch) {
+          // Normalize the case
+          const baseCondition = conditionMatch[1].toLowerCase();
+          if (baseCondition === 'excellent') sanitizedCondition = 'Excellent';
+          else if (baseCondition === 'very good') sanitizedCondition = 'Very good';
+          else if (baseCondition === 'good') sanitizedCondition = 'Good';
+          else if (baseCondition === 'fair') sanitizedCondition = 'Fair';
+          
+          // Extract details in parentheses if any
+          const detailsMatch = conditionStr.match(/\(([^)]+)\)/);
+          if (detailsMatch) {
+            conditionDetails = detailsMatch[1].trim();
+          }
+        } else {
+          // Try to map common variations
+          const lowerCondition = conditionStr.toLowerCase();
+          if (lowerCondition.includes('excellent')) sanitizedCondition = 'Excellent';
+          else if (lowerCondition.includes('very good')) sanitizedCondition = 'Very good';
+          else if (lowerCondition.includes('good')) sanitizedCondition = 'Good';
+          else if (lowerCondition.includes('fair') || lowerCondition.includes('poor')) sanitizedCondition = 'Fair';
+        }
+        
+        if (sanitizedCondition) {
+          updates.condition = sanitizedCondition as any;
+          
+          // If there were condition details, add them to flaws
+          if (conditionDetails && !product.flaws) {
+            updates.flaws = conditionDetails;
+          }
+        }
       }
+      
       if (!product.department && generated.department) {
-        updates.department = generated.department;
+        // Validate department matches enum
+        const validDepartments = ['Women', 'Men', 'Unisex', 'Kids'];
+        const normalizedDept = generated.department.charAt(0).toUpperCase() + generated.department.slice(1).toLowerCase();
+        if (validDepartments.includes(normalizedDept)) {
+          updates.department = normalizedDept as any;
+        } else if (generated.department.toLowerCase().includes('men') && !generated.department.toLowerCase().includes('women')) {
+          updates.department = 'Men';
+        } else if (generated.department.toLowerCase().includes('women')) {
+          updates.department = 'Women';
+        } else if (generated.department.toLowerCase().includes('unisex')) {
+          updates.department = 'Unisex';
+        }
       }
+      
       // NEW: Also update these fields if AI inferred them
-      if (!product.flaws && generated.flaws) {
+      if (!product.flaws && generated.flaws && !updates.flaws) {
         updates.flaws = generated.flaws;
       }
       if (!product.made_in && generated.made_in) {
