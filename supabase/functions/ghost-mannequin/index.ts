@@ -30,40 +30,38 @@ async function processGhostMannequin(
           content: [
             {
               type: 'text',
-              text: `Transform this clothing product photo into a professional ghost mannequin / invisible mannequin style image.
+              text: `Edit this clothing photo to remove the hanger and fill in the gap naturally.
 
-CRITICAL REQUIREMENTS:
+STYLE REQUIREMENTS - MATCH THE ORIGINAL:
+- Keep the EXACT same image quality, tone, and aesthetic - do NOT enhance, sharpen, or add gloss
+- Match the original lighting conditions precisely - if it's soft/matte, keep it soft/matte
+- Preserve the natural, authentic look of the photo - avoid any artificial or over-processed appearance
+- The result should look like it was photographed without a hanger, not digitally altered
 
-1. HANGER REMOVAL & INFILL:
-   - Completely remove the hanger (plastic, wooden, or metal) from the image
-   - Intelligently infill the neckline/collar area where the hanger was
-   - The infill MUST seamlessly match the garment's fabric texture, color, pattern, and lighting
-   - Create a natural collar/neckline shape as if the garment is worn on an invisible form
-   - The neck opening should look natural and complete, not cut off or unfinished
+HANGER REMOVAL:
+- Remove the hanger completely
+- Fill in the neckline/collar area with fabric that matches the surrounding garment exactly
+- The infill must have the same texture, weave, color saturation, and wear/fading as the rest of the item
+- Create a natural collar shape as if worn on an invisible form
 
-2. FABRIC CONTINUITY:
-   - Match the exact fabric texture, weave pattern, and material appearance in all infilled areas
-   - Ensure color consistency - the infill should blend perfectly with the surrounding fabric
-   - If the garment has patterns (stripes, checks, prints), continue them naturally in infilled areas
+CRITICAL - DO NOT ALTER TEXT OR GRAPHICS:
+- Any text on labels, tags, or prints MUST remain exactly as shown - do NOT regenerate or modify any lettering
+- Logos, brand names, care labels - preserve them EXACTLY, character for character
+- If a label is cracked or folded, leave it as-is rather than creating gibberish text
+- Graphics, prints, and patterns must be preserved pixel-perfectly - do NOT redraw or approximate them
 
-3. STRUCTURAL REPAIRS:
-   - Fix any cracked, folded, or partially visible labels - make them look clean and complete
-   - If a hood is visible but partially hidden or folded awkwardly, complete it naturally
-   - Repair any missing back portions that should be visible (like the back of hoods)
-   - Ensure collar stays, ribbing, and trim details are complete and natural-looking
+FABRIC & TEXTURE:
+- Match the exact fabric texture and appearance in infilled areas
+- If the garment looks worn, faded, or has natural imperfections, the infill should match that character
+- Continue patterns (stripes, checks) naturally but do NOT modify existing pattern areas
 
-4. PROFESSIONAL FINISH:
-   - The final image should look like a high-end e-commerce product photo
-   - Maintain the exact same lighting, shadows, and overall mood
-   - Keep the transparent/white background as-is
-   - The garment should appear to float naturally as if on an invisible mannequin form
+PRESERVE:
+- Original image resolution and quality
+- Natural shadows and lighting
+- All garment details: buttons, zippers, pockets, stitching
+- The authentic, natural feel of the photo
 
-5. PRESERVE EVERYTHING ELSE:
-   - Do NOT alter the garment's overall shape, fit, or drape
-   - Keep all original details: buttons, zippers, pockets, logos, prints exactly as they are
-   - Only remove the hanger and fill in where needed
-
-Output the transformed ghost mannequin image with seamless infill and no visible hanger.`
+Output the edited image with hanger removed and natural infill only.`
             },
             {
               type: 'image_url',
