@@ -357,22 +357,28 @@ export function ImageGallery({
                     Image {image.position}
                   </span>
                   <div className="flex gap-1 flex-shrink-0">
-                    {/* Undo BG button - only show if we can undo */}
-                    {canUndo(image.id) && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
-                            onClick={() => handleUndoBackground(image)}
-                          >
-                            <Undo2 className="w-4 h-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Undo changes</TooltipContent>
-                      </Tooltip>
-                    )}
+                    {/* Undo button - always visible, disabled when nothing to undo */}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={cn(
+                            "h-7 w-7",
+                            canUndo(image.id) 
+                              ? "text-orange-600 hover:text-orange-700 hover:bg-orange-50" 
+                              : "text-muted-foreground/40"
+                          )}
+                          onClick={() => handleUndoBackground(image)}
+                          disabled={!canUndo(image.id)}
+                        >
+                          <Undo2 className="w-4 h-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {canUndo(image.id) ? 'Undo changes' : 'No changes to undo'}
+                      </TooltipContent>
+                    </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
