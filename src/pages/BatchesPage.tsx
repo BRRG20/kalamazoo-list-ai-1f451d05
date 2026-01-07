@@ -960,16 +960,18 @@ const handleSelectBatch = useCallback((id: string) => {
   }, [editingProductId, deleteImage, fetchImagesForProduct, updateImage]);
 
   // Handler for deleting individual images from ProductCard (main grid view)
+  // Note: The UI refreshes because refetchProducts triggers BatchDetail's image fetch effect
   const handleDeleteImageById = useCallback(async (imageId: string, productId: string) => {
     const success = await deleteImage(imageId);
     if (success) {
-      // Clear cache for this product to force refresh
+      // Clear cache and refetch products - the products array change will trigger BatchDetail image refetch
       clearCache(productId);
+      refetchProducts();
       toast.success('Image deleted');
     } else {
       toast.error('Failed to delete image');
     }
-  }, [deleteImage, clearCache]);
+  }, [deleteImage, clearCache, refetchProducts]);
 
   const handleGenerateProductAI = useCallback(async (regenerateOnly?: 'title' | 'style_a' | 'style_b' | 'all') => {
     if (!editingProductId) return;

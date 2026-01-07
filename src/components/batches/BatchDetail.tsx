@@ -1736,7 +1736,14 @@ export function BatchDetail({
                   onToggleSelect={() => onToggleProductSelection(product.id)}
                   onEdit={() => onEditProduct(product.id)}
                   onDelete={() => onDeleteProduct(product.id)}
-                  onDeleteImage={onDeleteImageById ? (imageId) => onDeleteImageById(imageId, product.id) : undefined}
+                  onDeleteImage={onDeleteImageById ? async (imageId) => {
+                    await onDeleteImageById(imageId, product.id);
+                    // Immediately update local state to remove the deleted image
+                    setProductImages(prev => ({
+                      ...prev,
+                      [product.id]: (prev[product.id] || []).filter(img => img.id !== imageId)
+                    }));
+                  } : undefined}
                   onReceiveImage={(imageUrl, fromProductId) => 
                     onMoveImageBetweenProducts?.(imageUrl, fromProductId, product.id)
                   }
