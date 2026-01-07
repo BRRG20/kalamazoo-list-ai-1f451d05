@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 interface ImageGalleryProps {
   images: ProductImage[];
   batchId: string;
+  productId?: string;
   onUpdateImage: (imageId: string, updates: Partial<ProductImage>) => void;
   onReorderImages: (imageId: string, newPosition: number) => void;
   onDeleteImage?: (imageId: string) => void;
@@ -25,11 +26,13 @@ interface ImageGalleryProps {
   otherProducts?: Product[];
   currentProductId?: string;
   bgRemovalOptions?: BackgroundRemovalOptions;
+  onImageAdded?: () => void;
 }
 
 export function ImageGallery({
   images,
   batchId,
+  productId,
   onUpdateImage,
   onReorderImages,
   onDeleteImage,
@@ -37,6 +40,7 @@ export function ImageGallery({
   otherProducts = [],
   currentProductId,
   bgRemovalOptions = {},
+  onImageAdded,
 }: ImageGalleryProps) {
   const { isProcessing: isRemovingBg, removeBackgroundSingle, applyGhostMannequin } = useBackgroundRemoval();
   const { isProcessing: isModelProcessing, processSingle: processModelSingle } = useModelTryOn();
@@ -188,23 +192,61 @@ export function ImageGallery({
     const image = images.find(i => i.id === modelDialogImageId);
     if (!image) return;
     
+    // Get current user for RLS
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      toast.error('You must be logged in to use this feature');
+      return;
+    }
+    
+    // Use the product ID from the image or from props
+    const targetProductId = productId || currentProductId || image.product_id;
+    if (!targetProductId) {
+      toast.error('Cannot determine product for this image');
+      return;
+    }
+    
     setShowModelDialog(false);
     setProcessingImageId(modelDialogImageId);
     setProcessingType('model');
     
-    // Store original URL before processing for undo
-    originalUrlsRef.current.set(image.id, image.url);
-    
     const newUrl = await processModelSingle(image.url, image.id, batchId, modelId, poseId, fitStyle);
     if (newUrl) {
-      await supabase
+      // Shift existing images to make room at position 0
+      for (const existingImg of images) {
+        await supabase
+          .from('images')
+          .update({ position: (existingImg.position || 0) + 1 })
+          .eq('id', existingImg.id);
+      }
+      
+      // INSERT new model image at position 0 (front of gallery) instead of replacing
+      const { data: newImage, error } = await supabase
         .from('images')
-        .update({ url: newUrl })
-        .eq('id', image.id);
-      onUpdateImage(image.id, { url: newUrl } as any);
-      toast.success('Model try-on applied');
+        .insert({
+          url: newUrl,
+          product_id: targetProductId,
+          batch_id: batchId,
+          position: 0,
+          include_in_shopify: true,
+          user_id: user.id
+        })
+        .select()
+        .single();
+      
+      if (!error && newImage) {
+        // Store for undo - we'll delete the new image on undo
+        originalUrlsRef.current.set(newImage.id, '__new_image__');
+        toast.success('Model image added');
+        // Notify parent to refresh images
+        if (onImageAdded) {
+          onImageAdded();
+        }
+      } else if (error) {
+        console.error('Failed to insert model image:', error);
+        toast.error('Failed to add model image');
+      }
     } else {
-      originalUrlsRef.current.delete(image.id);
       toast.error('Model try-on failed');
     }
     setProcessingImageId(null);
@@ -216,7 +258,27 @@ export function ImageGallery({
     const originalUrl = originalUrlsRef.current.get(image.id);
     if (!originalUrl) return;
     
-    // Restore original URL
+    // Check if this was a newly added model image (should be deleted instead of restored)
+    if (originalUrl === '__new_image__') {
+      // Delete the newly added model image
+      const { error } = await supabase
+        .from('images')
+        .delete()
+        .eq('id', image.id);
+      
+      if (!error) {
+        originalUrlsRef.current.delete(image.id);
+        toast.success('Model image removed');
+        if (onImageAdded) {
+          onImageAdded(); // Refresh to show updated list
+        }
+      } else {
+        toast.error('Failed to remove model image');
+      }
+      return;
+    }
+    
+    // Restore original URL for bg removal / ghost mannequin
     const { error } = await supabase
       .from('images')
       .update({ url: originalUrl })

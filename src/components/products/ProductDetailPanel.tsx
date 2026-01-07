@@ -1158,6 +1158,7 @@ export function ProductDetailPanel({
             <ImageGallery
               images={images}
               batchId={batchId}
+              productId={product.id}
               onUpdateImage={onUpdateImage}
               onReorderImages={onReorderImages}
               onDeleteImage={onDeleteImage}
@@ -1603,21 +1604,55 @@ export function ProductDetailPanel({
         onOpenChange={setShowModelTryOnDialog}
         onConfirm={async (modelId, poseId, fitStyle, styleOutfit, outfitStyle) => {
           setShowModelTryOnDialog(false);
-          const undoEntries: { imageId: string; originalUrl: string; newUrl: string }[] = [];
-          const imageData = images.map(img => ({ id: img.id, url: img.url }));
+          
+          // Get current user for RLS
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) {
+            toast.error('You must be logged in to use this feature');
+            return;
+          }
+          
+          const addedImageIds: string[] = [];
+          // Use only the first image as reference for model try-on
+          const firstImage = images.length > 0 ? images.sort((a, b) => (a.position || 0) - (b.position || 0))[0] : null;
+          if (!firstImage) return;
+          
+          const imageData = [{ id: firstImage.id, url: firstImage.url }];
+          
           await processModelBulk(imageData, batchId, modelId, poseId, fitStyle, styleOutfit, outfitStyle, async (originalUrl, newUrl) => {
-            const img = images.find(i => i.url === originalUrl);
-            if (img) {
-              undoEntries.push({ imageId: img.id, originalUrl, newUrl });
+            // Shift existing images to make room at position 0
+            for (const existingImg of images) {
               await supabase
                 .from('images')
-                .update({ url: newUrl })
-                .eq('id', img.id);
-              onUpdateImage(img.id, { url: newUrl } as any);
+                .update({ position: (existingImg.position || 0) + 1 })
+                .eq('id', existingImg.id);
+            }
+            
+            // INSERT new model image at position 0 (front of gallery)
+            const { data: newImage, error } = await supabase
+              .from('images')
+              .insert({
+                url: newUrl,
+                product_id: product.id,
+                batch_id: batchId,
+                position: 0,
+                include_in_shopify: true,
+                user_id: user.id
+              })
+              .select()
+              .single();
+            
+            if (!error && newImage) {
+              addedImageIds.push(newImage.id);
+              toast.success('Model image added');
+            } else if (error) {
+              console.error('Failed to insert model image:', error);
+              toast.error('Failed to add model image');
             }
           });
-          if (undoEntries.length > 0) {
-            setModelUndoData(undoEntries);
+          
+          if (addedImageIds.length > 0) {
+            setModelUndoData(addedImageIds.map(id => ({ imageId: id, originalUrl: '', newUrl: '' })));
           }
         }}
         isProcessing={isModelProcessing}
