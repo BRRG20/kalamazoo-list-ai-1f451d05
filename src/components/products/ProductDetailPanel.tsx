@@ -12,7 +12,8 @@ import {
   Loader2,
   Camera,
   ShoppingBag,
-  Eraser
+  Eraser,
+  Undo2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -118,6 +119,8 @@ export function ProductDetailPanel({
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [localImages, setLocalImages] = useState<ProductImage[]>(images);
+  // Background removal undo state
+  const [bgUndoData, setBgUndoData] = useState<{ imageId: string; originalUrl: string; newUrl: string }[]>([]);
   const [descriptionStyle, setDescriptionStyle] = useState<'A' | 'B'>('A');
   const [debugEnabled, setDebugEnabled] = useState(false);
   const [recorderMountCount, setRecorderMountCount] = useState(0);
@@ -960,15 +963,18 @@ export function ProductDetailPanel({
           <div className="md:h-auto md:w-1/3 border-b md:border-b-0 md:border-r border-border p-2 md:p-4 md:overflow-y-auto scrollbar-thin flex-shrink-0">
             {/* Remove All Backgrounds button */}
             {images.length > 0 && (
-              <div className="mb-3">
+              <div className="mb-3 space-y-2">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={async () => {
+                    const undoEntries: { imageId: string; originalUrl: string; newUrl: string }[] = [];
                     const imageUrls = images.map(img => img.url);
                     await removeBackgroundBulk(imageUrls, batchId, async (originalUrl, newUrl) => {
                       const img = images.find(i => i.url === originalUrl);
                       if (img) {
+                        // Store for undo
+                        undoEntries.push({ imageId: img.id, originalUrl, newUrl });
                         await supabase
                           .from('images')
                           .update({ url: newUrl })
@@ -976,6 +982,9 @@ export function ProductDetailPanel({
                         onUpdateImage(img.id, { url: newUrl } as any);
                       }
                     });
+                    if (undoEntries.length > 0) {
+                      setBgUndoData(undoEntries);
+                    }
                   }}
                   disabled={isRemovingBg}
                   className="w-full text-primary hover:text-primary hover:bg-primary/10"
@@ -992,6 +1001,30 @@ export function ProductDetailPanel({
                     </>
                   )}
                 </Button>
+                
+                {/* Undo Background Removal button */}
+                {bgUndoData.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      // Restore original URLs
+                      for (const entry of bgUndoData) {
+                        await supabase
+                          .from('images')
+                          .update({ url: entry.originalUrl })
+                          .eq('id', entry.imageId);
+                        onUpdateImage(entry.imageId, { url: entry.originalUrl } as any);
+                      }
+                      toast.success(`Restored ${bgUndoData.length} images to original`);
+                      setBgUndoData([]);
+                    }}
+                    className="w-full text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                  >
+                    <Undo2 className="w-4 h-4 mr-2" />
+                    Undo BG Removal ({bgUndoData.length})
+                  </Button>
+                )}
               </div>
             )}
             <ImageGallery
