@@ -1,5 +1,4 @@
 import { useState, useCallback, useRef } from 'react';
-import { removeBackground } from '@imgly/background-removal';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -8,9 +7,6 @@ export interface BackgroundRemovalProgress {
   total: number;
   status: 'idle' | 'loading-model' | 'processing' | 'uploading' | 'complete' | 'error';
 }
-
-// Store original URLs for undo functionality
-const originalUrlsMap = new Map<string, string>();
 
 export function useBackgroundRemoval() {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -23,10 +19,46 @@ export function useBackgroundRemoval() {
   // Track which images have been processed for undo
   const processedImagesRef = useRef<Map<string, { originalUrl: string; newUrl: string }>>(new Map());
 
+  // Convert base64 to blob and upload to storage
+  const uploadProcessedImage = async (
+    base64Data: string,
+    userId: string,
+    batchId: string
+  ): Promise<string> => {
+    // Extract base64 content (remove data:image/png;base64, prefix)
+    const base64Content = base64Data.replace(/^data:image\/\w+;base64,/, '');
+    const binaryString = atob(base64Content);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    const blob = new Blob([bytes], { type: 'image/png' });
+
+    const fileName = `bg-removed-${Date.now()}-${Math.random().toString(36).substring(7)}.png`;
+    const filePath = `${userId}/${batchId}/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('product-images')
+      .upload(filePath, blob, {
+        contentType: 'image/png',
+        upsert: false,
+      });
+
+    if (uploadError) {
+      throw new Error(`Upload failed: ${uploadError.message}`);
+    }
+
+    const { data: urlData } = supabase.storage
+      .from('product-images')
+      .getPublicUrl(filePath);
+
+    return urlData.publicUrl;
+  };
+
   const removeBackgroundSingle = useCallback(
     async (imageUrl: string, batchId: string): Promise<string | null> => {
       setIsProcessing(true);
-      setProgress({ current: 0, total: 1, status: 'loading-model' });
+      setProgress({ current: 0, total: 1, status: 'processing' });
 
       try {
         // Get current user for storage path
@@ -35,48 +67,51 @@ export function useBackgroundRemoval() {
           throw new Error('Not authenticated');
         }
 
-        setProgress({ current: 0, total: 1, status: 'processing' });
+        // Get session for auth token
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          throw new Error('No active session');
+        }
 
-        // Use @imgly/background-removal for professional quality
-        const processedBlob = await removeBackground(imageUrl, {
-          progress: (key, current, total) => {
-            console.log(`Background removal: ${key} - ${current}/${total}`);
-          },
-        });
+        // Call edge function for AI background removal
+        const response = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/remove-background`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({ imageUrl }),
+          }
+        );
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || `Processing failed: ${response.status}`);
+        }
+
+        const data = await response.json();
+        
+        if (!data.success || !data.processedImageUrl) {
+          throw new Error(data.error || 'No processed image returned');
+        }
 
         setProgress({ current: 0, total: 1, status: 'uploading' });
 
-        // Upload to Supabase storage with user folder for RLS compliance
-        const fileName = `bg-removed-${Date.now()}-${Math.random().toString(36).substring(7)}.png`;
-        const filePath = `${user.id}/${batchId}/${fileName}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from('product-images')
-          .upload(filePath, processedBlob, {
-            contentType: 'image/png',
-            upsert: false,
-          });
-
-        if (uploadError) {
-          throw new Error(`Upload failed: ${uploadError.message}`);
-        }
-
-        // Get public URL
-        const { data: urlData } = supabase.storage
-          .from('product-images')
-          .getPublicUrl(filePath);
+        // Upload the base64 image to storage
+        const newUrl = await uploadProcessedImage(data.processedImageUrl, user.id, batchId);
 
         // Store original URL for undo
-        originalUrlsMap.set(urlData.publicUrl, imageUrl);
         processedImagesRef.current.set(imageUrl, {
           originalUrl: imageUrl,
-          newUrl: urlData.publicUrl,
+          newUrl: newUrl,
         });
 
         setProgress({ current: 1, total: 1, status: 'complete' });
         toast.success('Background removed successfully!');
 
-        return urlData.publicUrl;
+        return newUrl;
       } catch (error) {
         console.error('Background removal failed:', error);
         setProgress({ current: 0, total: 0, status: 'error' });
@@ -100,7 +135,7 @@ export function useBackgroundRemoval() {
       if (imageUrls.length === 0) return new Map();
 
       setIsProcessing(true);
-      setProgress({ current: 0, total: imageUrls.length, status: 'loading-model' });
+      setProgress({ current: 0, total: imageUrls.length, status: 'processing' });
 
       const results = new Map<string, string>();
       // Clear previous batch tracking
@@ -113,6 +148,12 @@ export function useBackgroundRemoval() {
           throw new Error('Not authenticated');
         }
 
+        // Get session for auth token
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          throw new Error('No active session');
+        }
+
         for (let i = 0; i < imageUrls.length; i++) {
           const url = imageUrls[i];
           setProgress({
@@ -122,12 +163,31 @@ export function useBackgroundRemoval() {
           });
 
           try {
-            // Use @imgly/background-removal for professional quality
-            const processedBlob = await removeBackground(url, {
-              progress: (key, current, total) => {
-                console.log(`Image ${i + 1}: ${key} - ${current}/${total}`);
-              },
-            });
+            // Call edge function for AI background removal
+            const response = await fetch(
+              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/remove-background`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${session.access_token}`,
+                },
+                body: JSON.stringify({ imageUrl: url }),
+              }
+            );
+
+            if (!response.ok) {
+              const errorData = await response.json().catch(() => ({}));
+              console.error(`Failed to process ${url}:`, errorData.error || response.status);
+              continue;
+            }
+
+            const data = await response.json();
+            
+            if (!data.success || !data.processedImageUrl) {
+              console.error(`No processed image for ${url}`);
+              continue;
+            }
 
             setProgress({
               current: i,
@@ -135,35 +195,17 @@ export function useBackgroundRemoval() {
               status: 'uploading',
             });
 
-            // Use user folder for RLS compliance
-            const fileName = `bg-removed-${Date.now()}-${Math.random().toString(36).substring(7)}.png`;
-            const filePath = `${user.id}/${batchId}/${fileName}`;
-
-            const { error: uploadError } = await supabase.storage
-              .from('product-images')
-              .upload(filePath, processedBlob, {
-                contentType: 'image/png',
-                upsert: false,
-              });
-
-            if (uploadError) {
-              console.error(`Failed to upload ${url}:`, uploadError);
-              continue;
-            }
-
-            const { data: urlData } = supabase.storage
-              .from('product-images')
-              .getPublicUrl(filePath);
+            // Upload the base64 image to storage
+            const newUrl = await uploadProcessedImage(data.processedImageUrl, user.id, batchId);
 
             // Store original URL for undo
-            originalUrlsMap.set(urlData.publicUrl, url);
             processedImagesRef.current.set(url, {
               originalUrl: url,
-              newUrl: urlData.publicUrl,
+              newUrl: newUrl,
             });
 
-            results.set(url, urlData.publicUrl);
-            onImageProcessed?.(url, urlData.publicUrl);
+            results.set(url, newUrl);
+            onImageProcessed?.(url, newUrl);
           } catch (err) {
             console.error(`Failed to process ${url}:`, err);
           }
