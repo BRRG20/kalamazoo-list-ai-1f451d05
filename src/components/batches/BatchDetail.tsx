@@ -1133,6 +1133,30 @@ export function BatchDetail({
                     </Button>
                   )}
                   
+                  {/* Remove Background button - prominent placement */}
+                  {selectedProductIds.size > 0 && (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={handleBulkBackgroundRemoval}
+                      disabled={isRemovingBg}
+                      type="button"
+                      className="text-primary hover:text-primary hover:bg-primary/10"
+                    >
+                      {isRemovingBg ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                          {bgRemovalProgress.current}/{bgRemovalProgress.total}
+                        </>
+                      ) : (
+                        <>
+                          <Eraser className="w-4 h-4 mr-1" />
+                          Remove BG ({selectedProductIds.size})
+                        </>
+                      )}
+                    </Button>
+                  )}
+                  
                   {/* Three-dots menu with actions for selected products */}
                   {selectedProductIds.size > 0 && onRegroupSelectedProducts && (
                     <DropdownMenu>

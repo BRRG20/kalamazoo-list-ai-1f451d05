@@ -11,7 +11,8 @@ import {
   Save,
   Loader2,
   Camera,
-  ShoppingBag
+  ShoppingBag,
+  Eraser
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,6 +23,8 @@ import { toast } from 'sonner';
 import { ImageGallery } from './ImageGallery';
 import { ShopifyStatusSection } from './ShopifyStatusSection';
 import { generateListingBlock } from '@/hooks/use-database';
+import { useBackgroundRemoval } from '@/hooks/use-background-removal';
+import { supabase } from '@/integrations/supabase/client';
 import type { Product, ProductImage, Department, Era, Condition } from '@/types';
 
 interface ProductDetailPanelProps {
@@ -106,6 +109,7 @@ export function ProductDetailPanel({
   onMarkAsUploaded,
   onMarkAsPending,
 }: ProductDetailPanelProps) {
+  const { isProcessing: isRemovingBg, progress: bgProgress, removeBackgroundBulk } = useBackgroundRemoval();
   const [formData, setFormData] = useState<Partial<Product>>({});
   const [isListening, setIsListening] = useState(false);
   const [isParsingVoice, setIsParsingVoice] = useState(false);
@@ -113,6 +117,7 @@ export function ProductDetailPanel({
   const [voiceTranscript, setVoiceTranscript] = useState('');
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [localImages, setLocalImages] = useState<ProductImage[]>(images);
   const [descriptionStyle, setDescriptionStyle] = useState<'A' | 'B'>('A');
   const [debugEnabled, setDebugEnabled] = useState(false);
   const [recorderMountCount, setRecorderMountCount] = useState(0);
@@ -953,6 +958,42 @@ export function ProductDetailPanel({
         <div className="flex-1 flex flex-col md:flex-row md:overflow-hidden">
           {/* Left: Images */}
           <div className="md:h-auto md:w-1/3 border-b md:border-b-0 md:border-r border-border p-2 md:p-4 md:overflow-y-auto scrollbar-thin flex-shrink-0">
+            {/* Remove All Backgrounds button */}
+            {images.length > 0 && (
+              <div className="mb-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    const imageUrls = images.map(img => img.url);
+                    await removeBackgroundBulk(imageUrls, batchId, async (originalUrl, newUrl) => {
+                      const img = images.find(i => i.url === originalUrl);
+                      if (img) {
+                        await supabase
+                          .from('images')
+                          .update({ url: newUrl })
+                          .eq('id', img.id);
+                        onUpdateImage(img.id, { url: newUrl } as any);
+                      }
+                    });
+                  }}
+                  disabled={isRemovingBg}
+                  className="w-full text-primary hover:text-primary hover:bg-primary/10"
+                >
+                  {isRemovingBg ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Removing BG ({bgProgress.current}/{bgProgress.total})
+                    </>
+                  ) : (
+                    <>
+                      <Eraser className="w-4 h-4 mr-2" />
+                      Remove All Backgrounds ({images.length})
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
             <ImageGallery
               images={images}
               batchId={batchId}
