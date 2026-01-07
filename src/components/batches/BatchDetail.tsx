@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useShopifyStats } from '@/hooks/use-shopify-stats';
-import { useBackgroundRemoval } from '@/hooks/use-background-removal';
+import { useBackgroundRemoval, type ShadowType, type BackgroundRemovalOptions } from '@/hooks/use-background-removal';
 import {
   Upload, 
   Sparkles, 
@@ -57,6 +57,9 @@ import {
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
+  DropdownMenuCheckboxItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
 } from '@/components/ui/dropdown-menu';
 import {
   Tooltip,
@@ -243,6 +246,7 @@ export function BatchDetail({
   const { settings, isShopifyConfigured } = useSettings();
   const { isProcessing: isRemovingBg, progress: bgRemovalProgress, removeBackgroundBulk, getUndoMap, canUndo: canUndoBgRemoval } = useBackgroundRemoval();
   const [bgUndoData, setBgUndoData] = useState<Map<string, { imageId: string; originalUrl: string; newUrl: string }[]>>(new Map());
+  const [bgRemovalOptions, setBgRemovalOptions] = useState<BackgroundRemovalOptions>({ secondPass: false, shadow: 'none' });
   const [imagesPerProduct, setImagesPerProduct] = useState(settings?.default_images_per_product || 9);
   const [productImages, setProductImages] = useState<Record<string, ProductImage[]>>({});
   const [imagesLoading, setImagesLoading] = useState(false);
@@ -511,7 +515,7 @@ export function BatchDetail({
           return updated;
         });
       }
-    });
+    }, bgRemovalOptions);
     
     // Store undo data for this batch operation
     if (undoEntries.length > 0) {
@@ -1184,28 +1188,57 @@ export function BatchDetail({
                     </Button>
                   )}
                   
-                  {/* Remove Background button - prominent placement */}
+                  {/* Remove Background dropdown with options */}
                   {selectedProductIds.size > 0 && (
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={handleBulkBackgroundRemoval}
-                      disabled={isRemovingBg}
-                      type="button"
-                      className="text-primary hover:text-primary hover:bg-primary/10"
-                    >
-                      {isRemovingBg ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                          {bgRemovalProgress.current}/{bgRemovalProgress.total}
-                        </>
-                      ) : (
-                        <>
-                          <Eraser className="w-4 h-4 mr-1" />
-                          Remove BG ({selectedProductIds.size})
-                        </>
-                      )}
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          disabled={isRemovingBg}
+                          type="button"
+                          className="text-primary hover:text-primary hover:bg-primary/10"
+                        >
+                          {isRemovingBg ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                              {bgRemovalProgress.current}/{bgRemovalProgress.total}
+                            </>
+                          ) : (
+                            <>
+                              <Eraser className="w-4 h-4 mr-1" />
+                              Remove BG ({selectedProductIds.size})
+                              <ChevronDown className="w-3 h-3 ml-1" />
+                            </>
+                          )}
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-56">
+                        <DropdownMenuItem onClick={handleBulkBackgroundRemoval} disabled={isRemovingBg}>
+                          <Eraser className="w-4 h-4 mr-2" />
+                          Run Background Removal
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuLabel>Options</DropdownMenuLabel>
+                        <DropdownMenuCheckboxItem
+                          checked={bgRemovalOptions.secondPass}
+                          onCheckedChange={(checked) => setBgRemovalOptions(prev => ({ ...prev, secondPass: checked }))}
+                        >
+                          Second-pass cleanup
+                        </DropdownMenuCheckboxItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuLabel>Shadow</DropdownMenuLabel>
+                        <DropdownMenuRadioGroup 
+                          value={bgRemovalOptions.shadow || 'none'} 
+                          onValueChange={(value) => setBgRemovalOptions(prev => ({ ...prev, shadow: value as ShadowType }))}
+                        >
+                          <DropdownMenuRadioItem value="none">No shadow</DropdownMenuRadioItem>
+                          <DropdownMenuRadioItem value="light">Light shadow</DropdownMenuRadioItem>
+                          <DropdownMenuRadioItem value="medium">Medium shadow</DropdownMenuRadioItem>
+                          <DropdownMenuRadioItem value="harsh">Harsh shadow</DropdownMenuRadioItem>
+                        </DropdownMenuRadioGroup>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   )}
                   
                   {/* Undo Background Removal button */}
