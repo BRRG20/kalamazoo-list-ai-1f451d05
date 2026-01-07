@@ -62,9 +62,9 @@ async function processModelTryOn(
           content: [
             {
               type: 'text',
-              text: `Create a professional product photography image of a fashion model wearing this exact clothing item.
+              text: `TASK: Place this EXACT garment onto a fashion model for e-commerce product photography.
 
-MODEL IDENTITY (MUST BE CONSISTENT):
+MODEL TO USE:
 ${modelDescription}
 
 POSE:
@@ -73,21 +73,31 @@ ${poseDescription}
 FIT STYLE:
 ${fitInstructions}
 
-CRITICAL GARMENT REQUIREMENTS:
-- The clothing MUST be the EXACT item from the reference image - same color, pattern, texture, fabric
-- Preserve ALL original details: logos, text, graphics, prints, labels, buttons, zippers - do NOT alter or regenerate any text/graphics
-- Maintain the garment's authentic worn character if present (fading, texture variations)
-- The clothing should fit naturally on the model's body without distortion
+ABSOLUTE REQUIREMENTS - DO NOT VIOLATE:
+1. The garment in the output MUST be a PIXEL-PERFECT representation of the input image
+2. DO NOT change, alter, redesign, or reimagine ANY aspect of the garment
+3. COPY EXACTLY: every color, every shade, every pattern, every texture
+4. COPY EXACTLY: all logos, all text, all graphics, all prints - character for character, line for line
+5. COPY EXACTLY: all buttons, zippers, stitching, seams, labels, tags
+6. COPY EXACTLY: any wear, fading, distressing, or vintage characteristics
+7. The garment is the SINGLE SOURCE OF TRUTH - the input image defines 100% of how the clothing looks
 
-PHOTOGRAPHY STYLE:
-- Clean studio lighting, professional product photography
-- Plain neutral background (off-white or light grey)
-- Full body shot showing the complete garment
-- Sharp focus on the clothing
-- No props, accessories, or additional styling unless part of the original garment
+WHAT TO GENERATE:
+- A professional studio photo with the model wearing this EXACT garment
+- Plain off-white/light grey background
+- Professional studio lighting
+- Full or 3/4 body shot showing the complete garment
+- The model's body and pose as described above
 
-OUTPUT:
-Generate a realistic, professional product photo of this model wearing this exact clothing item. The result should look like authentic fashion photography suitable for e-commerce.`
+WHAT NOT TO DO:
+- DO NOT generate a "similar" garment - use the EXACT one from the image
+- DO NOT change colors or patterns
+- DO NOT remove or alter any text, logos, or graphics
+- DO NOT add accessories or styling not in the original
+- DO NOT "improve" or "enhance" the garment design
+- DO NOT hallucinate or invent any garment details
+
+The input image is your ONLY reference for the garment. Copy it exactly onto the model.`
             },
             {
               type: 'image_url',

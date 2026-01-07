@@ -653,6 +653,13 @@ export function BatchDetail({
   const handleBulkModelTryOn = useCallback(async (modelId: string, poseId: PoseType, fitStyle: FitStyle) => {
     if (selectedProductIds.size === 0) return;
     
+    // Get current user for RLS
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      toast.error('You must be logged in to use this feature');
+      return;
+    }
+    
     // Only use FIRST image from each product for model try-on (one model image per product)
     const imageData: { id: string; url: string; productId: string }[] = [];
     for (const productId of selectedProductIds) {
@@ -679,7 +686,7 @@ export function BatchDetail({
         ? Math.max(...currentImages.map(img => img.position || 0)) 
         : 0;
       
-      // INSERT new model image at the end
+      // INSERT new model image at the end (with user_id for RLS)
       const { data: newImage, error } = await supabase
         .from('images')
         .insert({
@@ -687,7 +694,8 @@ export function BatchDetail({
           product_id: imgInfo.productId,
           batch_id: batch.id,
           position: maxPosition + 1,
-          include_in_shopify: true
+          include_in_shopify: true,
+          user_id: user.id
         })
         .select()
         .single();
@@ -702,6 +710,8 @@ export function BatchDetail({
           }
           return updated;
         });
+      } else if (error) {
+        console.error('Failed to insert model image:', error);
       }
     });
     
