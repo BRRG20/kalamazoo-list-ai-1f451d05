@@ -81,6 +81,7 @@ export interface ProductImage {
   url: string;
   position: number;
   include_in_shopify: boolean;
+  source?: 'upload' | 'model_tryon' | 'background_removal' | 'ghost_mannequin';
 }
 
 export interface Settings {

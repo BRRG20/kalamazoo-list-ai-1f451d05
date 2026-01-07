@@ -245,6 +245,7 @@ export type Database = {
           include_in_shopify: boolean
           position: number
           product_id: string | null
+          source: string | null
           url: string
           user_id: string | null
         }
@@ -255,6 +256,7 @@ export type Database = {
           include_in_shopify?: boolean
           position?: number
           product_id?: string | null
+          source?: string | null
           url: string
           user_id?: string | null
         }
@@ -265,6 +267,7 @@ export type Database = {
           include_in_shopify?: boolean
           position?: number
           product_id?: string | null
+          source?: string | null
           url?: string
           user_id?: string | null
         }

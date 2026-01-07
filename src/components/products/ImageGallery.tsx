@@ -229,7 +229,8 @@ export function ImageGallery({
           batch_id: batchId,
           position: 0,
           include_in_shopify: true,
-          user_id: user.id
+          user_id: user.id,
+          source: 'model_tryon'
         })
         .select()
         .single();
@@ -448,6 +449,13 @@ export function ImageGallery({
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                       <ZoomIn className="w-5 h-5 text-white" />
                     </div>
+                    {/* Source badge */}
+                    {(image as any).source === 'model_tryon' && (
+                      <div className="absolute top-1 left-1 bg-emerald-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+                        <User className="w-2.5 h-2.5" />
+                        AI
+                      </div>
+                    )}
                   </>
                 )}
               </div>
