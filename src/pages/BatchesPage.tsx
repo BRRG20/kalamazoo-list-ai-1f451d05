@@ -10,6 +10,7 @@ import { ProductDetailPanel } from '@/components/products/ProductDetailPanel';
 import { ShopifySuccessDialog } from '@/components/batches/ShopifySuccessDialog';
 import { DeletedProductsPanel } from '@/components/batches/DeletedProductsPanel';
 import { DeletedImagesPanel } from '@/components/batches/DeletedImagesPanel';
+import { HiddenProductsPanel } from '@/components/batches/HiddenProductsPanel';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ImageGroup, MatchingProgress } from '@/components/batches/ImageGroupManager';
 import { 
@@ -20,6 +21,7 @@ import {
   useImageUpload,
   useDeletedProducts,
   useDeletedImages,
+  useHiddenProducts,
   generateListingBlock,
   validateProductForExport,
   UPLOAD_LIMITS,
@@ -40,6 +42,7 @@ export default function BatchesPage() {
   const { products, createProduct, createProductWithImages, updateProduct, deleteProduct, deleteEmptyProducts, hideProduct, isMutating, acquireLock, releaseLock, refetch: refetchProducts } = useProducts(selectedBatchId);
   const { deletedProducts, recoverProduct, permanentlyDelete: permanentlyDeleteProduct, emptyTrash, refetch: refetchDeletedProducts } = useDeletedProducts(selectedBatchId);
   const { deletedImages, recoverImage, permanentlyDelete: permanentlyDeleteImage, emptyImageTrash, recoverAllImages, refetch: refetchDeletedImages } = useDeletedImages(selectedBatchId);
+  const { hiddenProducts, unhideProduct, refetch: refetchHiddenProducts } = useHiddenProducts(selectedBatchId);
   const { fetchImagesForProduct, fetchImagesForBatch, addImageToBatch, updateImage, excludeLastNImages, clearCache, deleteImage, updateImageProductIdByUrl } = useImages();
   const { settings } = useSettings();
   const { uploadImages, uploading, progress, uploadStartTime, uploadTotal, uploadCompleted } = useImageUpload();
@@ -68,9 +71,10 @@ export default function BatchesPage() {
     }
   }, [products]);
   
-  // Deleted products/images panel state
+  // Deleted/hidden products/images panel state
   const [showDeletedProducts, setShowDeletedProducts] = useState(false);
   const [showDeletedImages, setShowDeletedImages] = useState(false);
+  const [showHiddenProducts, setShowHiddenProducts] = useState(false);
   
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
@@ -2049,8 +2053,10 @@ const handleSelectBatch = useCallback((id: string) => {
               lastUndoLabel={undoStack.length > 0 ? undoStack[undoStack.length - 1].label : undefined}
               deletedProductsCount={deletedProducts.length}
               deletedImagesCount={deletedImages.length}
+              hiddenProductsCount={hiddenProducts.length}
               onOpenDeletedProducts={() => setShowDeletedProducts(true)}
               onOpenDeletedImages={() => setShowDeletedImages(true)}
+              onOpenHiddenProducts={() => setShowHiddenProducts(true)}
               onDeleteEmptyProducts={handleDeleteEmptyProducts}
               onCreateProductFromImageIds={handleCreateProductFromImageIds}
               onCameraCapture={handleCameraCapture}
@@ -2134,6 +2140,23 @@ const handleSelectBatch = useCallback((id: string) => {
           refetchProducts();
           refetchDeletedImages();
           clearCache();
+        }}
+      />
+
+      {/* Hidden Products Panel */}
+      <HiddenProductsPanel
+        open={showHiddenProducts}
+        onClose={() => setShowHiddenProducts(false)}
+        hiddenProducts={hiddenProducts}
+        onUnhide={unhideProduct}
+        onUnhideAll={async () => {
+          for (const p of hiddenProducts) {
+            await unhideProduct(p.id);
+          }
+        }}
+        onProductsChanged={() => {
+          refetchProducts();
+          refetchHiddenProducts();
         }}
       />
     </AppLayout>
