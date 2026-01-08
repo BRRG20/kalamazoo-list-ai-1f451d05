@@ -244,7 +244,9 @@ export function useBatches() {
     const { count, error } = await supabase
       .from('products')
       .select('*', { count: 'exact', head: true })
-      .eq('batch_id', batchId);
+      .eq('batch_id', batchId)
+      .eq('is_hidden', false)
+      .is('deleted_at', null);
     
     if (error) return 0;
     return count || 0;
