@@ -19,7 +19,7 @@ interface RequestBody {
 const MAX_RETRIES = 2;
 
 // FIXED MODEL IDENTITIES based on actual reference images
-// 7 models: 4 male, 3 female - each with unique, specific features
+// 12 models: 6 male, 6 female - each with unique, specific features
 const MODEL_DESCRIPTIONS: Record<string, { description: string; gender: 'male' | 'female'; seed: string; referenceUrl: string }> = {
   // ALEX - Dark hair, olive skin, clean-shaven, handsome Mediterranean look
   // Reference: 30kalamazoo, 46kalamazoo, 51kalamazoo, 58kalamazoo
@@ -81,24 +81,64 @@ EXACT IDENTITY (DO NOT CHANGE):
 CRITICAL: Clean-shaven. Light eyes. Angular features. Tall and lean. Same person every shot.`
   },
 
-  // THEO - Curly light brown hair, youthful, slim, artistic look
-  // Reference: hero_decemebr-2 (right person)
+  // THEO - Long dark wavy hair, Mediterranean/Italian look, Nirvana t-shirt guy
+  // Reference: Screenshot_2026-01-08_at_00.25.15, Screenshot_2026-01-08_at_00.25.31
   '44444444-4444-4444-4444-444444444444': {
     gender: 'male',
     seed: 'THEO_MODEL_V1',
-    referenceUrl: '/models/zoe-theo-reference.jpg',
-    description: `MODEL: THEO - Youthful Artistic Male
+    referenceUrl: '/models/theo-reference-2.png',
+    description: `MODEL: THEO - Rugged Mediterranean Male
 EXACT IDENTITY (DO NOT CHANGE):
-- Age: 24-28 years old
-- Hair: Light brown/dirty blonde, natural curly/wavy texture, medium length, tousled
-- Eyes: Light green/hazel, soft expressive gaze
-- Face: CLEAN-SHAVEN or very light stubble, soft youthful features, defined but not angular, natural brows
-- Skin: Fair skin with warm peachy undertone, clear youthful complexion
-- Body: Slim lean build, 5'11" (180cm), narrow shoulders, artistic/musician physique
-- Expression: Gentle cool confidence, approachable, slight hint of a smile
-- Vibe: Brooklyn hipster, indie musician, Scandinavian minimalist
+- Age: 28-33 years old
+- Hair: Dark brown/black, medium-long length past ears, natural wavy/flowing texture, center-parted or swept back
+- Eyes: Brown, warm and relaxed gaze, hint of a smile in the eyes
+- Face: STUBBLE or LIGHT BEARD, strong defined features, straight nose, masculine jawline, friendly approachable look
+- Skin: Warm olive/tan Mediterranean skin tone, healthy natural glow
+- Body: Athletic lean build, 6'0" (183cm), good proportions
+- Expression: Relaxed confident, approachable, slight knowing smile
+- Vibe: Italian summer, surf culture, casual masculine cool
 
-CRITICAL: Curly/wavy hair. Youthful face. Slim build. Artistic vibe. Same person every shot.`
+CRITICAL: Long wavy dark hair. Stubble/light beard. Olive skin. Same person every shot.`
+  },
+
+  // RYAN - Brown wavy hair, olive shirt jacket, rugged outdoorsy
+  // Reference: Screenshot_2026-01-08_at_00.25.31
+  '88888888-8888-8888-8888-888888888888': {
+    gender: 'male',
+    seed: 'RYAN_MODEL_V1',
+    referenceUrl: '/models/ryan-reference.png',
+    description: `MODEL: RYAN - Rugged Outdoorsy Male
+EXACT IDENTITY (DO NOT CHANGE):
+- Age: 30-35 years old
+- Hair: Medium brown, wavy/slightly curly texture, medium length with volume, natural and tousled
+- Eyes: Blue-green, warm confident gaze
+- Face: STUBBLE (short neat facial hair), strong masculine features, defined jaw, natural brows
+- Skin: Fair to medium skin with warm undertone, healthy outdoor complexion
+- Body: Athletic build, 6'1" (185cm), broad shoulders, rugged physique
+- Expression: Relaxed confidence, approachable, hint of a smile
+- Vibe: Pacific Northwest outdoors, rugged Americana, workwear aesthetic
+
+CRITICAL: Brown wavy hair. Stubble. Blue-green eyes. Rugged look. Same person every shot.`
+  },
+
+  // DARNELL - Black male, short hair, no beard, athletic, grey sweatshirt
+  // Reference: Screenshot_2026-01-08_at_00.24.45
+  '99999999-9999-9999-9999-999999999999': {
+    gender: 'male',
+    seed: 'DARNELL_MODEL_V1',
+    referenceUrl: '/models/darnell-reference.png',
+    description: `MODEL: DARNELL - Athletic Black Male (Clean-Shaven)
+EXACT IDENTITY (DO NOT CHANGE):
+- Age: 27-32 years old
+- Hair: Black, short tight curls/fade, clean shaped up, natural texture
+- Eyes: Dark brown, confident direct gaze
+- Face: CLEAN-SHAVEN (no beard, no stubble), strong defined features, prominent cheekbones, full lips, strong jaw
+- Skin: Medium-dark brown skin tone, smooth clear complexion
+- Body: Athletic lean muscular build, 6'0" (183cm), well-defined physique
+- Expression: Cool editorial confidence, neutral but commanding, subtle intensity
+- Vibe: Modern sportswear, urban professional, clean aesthetic
+
+CRITICAL: Black skin. Clean-shaven. Short curly hair. Athletic. Same person every shot.`
   },
 
   // SOPHIE - Long straight brown hair, classic beauty, denim jacket girl
@@ -159,6 +199,66 @@ EXACT IDENTITY (DO NOT CHANGE):
 - Vibe: Japanese minimalism, Korean fashion editorial, quiet luxury aesthetic
 
 CRITICAL: Long black straight hair. East Asian features. Elegant minimal vibe. Same person every shot.`
+  },
+
+  // MEI - East Asian female, black bob, stylish casual
+  // Reference: Screenshot_2026-01-08_at_00.25.40
+  'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa': {
+    gender: 'female',
+    seed: 'MEI_MODEL_V1',
+    referenceUrl: '/models/mei-reference.png',
+    description: `MODEL: MEI - Modern East Asian Female
+EXACT IDENTITY (DO NOT CHANGE):
+- Age: 25-30 years old
+- Hair: Black, chin-length bob cut, straight and sleek, side-parted, modern clean cut
+- Eyes: Dark brown, almond-shaped, soft confident gaze
+- Face: Oval face, delicate East Asian features, natural brows, subtle lip color, high cheekbones
+- Skin: Fair/light East Asian skin tone, smooth clear complexion, natural healthy glow
+- Body: Slim athletic build, 5'6" (168cm), elegant proportions
+- Expression: Cool casual confidence, approachable, slight knowing look
+- Vibe: Korean street style, Tokyo casual, modern minimal chic
+
+CRITICAL: Black bob cut. East Asian features. Modern casual vibe. Same person every shot.`
+  },
+
+  // NINA - Black bob, tan/olive skin, streetwear queen
+  // Reference: Screenshot_2026-01-08_at_00.24.22
+  'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb': {
+    gender: 'female',
+    seed: 'NINA_MODEL_V1',
+    referenceUrl: '/models/nina-reference.png',
+    description: `MODEL: NINA - Streetwear Urban Female
+EXACT IDENTITY (DO NOT CHANGE):
+- Age: 24-29 years old
+- Hair: Black, straight chin-length bob, blunt cut, sleek and shiny, center or side-parted
+- Eyes: Dark brown, intense confident gaze, subtle winged eyeliner
+- Face: Strong defined features, high cheekbones, full lips, bold brows, striking beauty
+- Skin: Medium tan/olive skin tone, smooth warm complexion, healthy glow
+- Body: Slim athletic build, 5'7" (170cm), model proportions
+- Expression: Cool editorial confidence, slight intensity, urban edge
+- Vibe: Brooklyn streetwear, Supreme/Palace aesthetic, urban fashion forward
+
+CRITICAL: Black bob. Tan/olive skin. Streetwear edge. Same person every shot.`
+  },
+
+  // ELENA - Slicked back bun, Mediterranean/Latina beauty, elegant
+  // Reference: Screenshot_2026-01-07_at_23.54.41-2
+  'cccccccc-cccc-cccc-cccc-cccccccccccc': {
+    gender: 'female',
+    seed: 'ELENA_MODEL_V1',
+    referenceUrl: '/models/elena-reference.png',
+    description: `MODEL: ELENA - Elegant Mediterranean/Latina Female
+EXACT IDENTITY (DO NOT CHANGE):
+- Age: 26-32 years old
+- Hair: Dark brown/black, slicked back into a neat low bun, clean polished look, center-parted
+- Eyes: Dark brown, intense striking gaze, defined brows
+- Face: Striking angular features, high cheekbones, full lips, strong jaw, model bone structure
+- Skin: Medium olive/tan Mediterranean or Latina skin tone, smooth glowing complexion
+- Body: Tall slim model build, 5'9" (175cm), elegant statuesque proportions
+- Expression: Cool confident poise, high fashion editorial, commanding presence
+- Vibe: Zara campaign, European runway, elevated minimalist chic
+
+CRITICAL: Slicked back bun. Olive/tan skin. High fashion elegance. Same person every shot.`
   },
 };
 
