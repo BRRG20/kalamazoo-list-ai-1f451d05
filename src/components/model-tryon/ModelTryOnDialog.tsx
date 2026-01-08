@@ -31,10 +31,10 @@ interface ModelTryOnDialogProps {
 }
 
 const MODELS: AIFashionModel[] = [
-  { id: '11111111-1111-1111-1111-111111111111', name: 'Alex', gender: 'male', description: 'Professional, neutral styling' },
-  { id: '22222222-2222-2222-2222-222222222222', name: 'Marcus', gender: 'male', description: 'Stylish, relaxed demeanor' },
-  { id: '33333333-3333-3333-3333-333333333333', name: 'Sophie', gender: 'female', description: 'Elegant, professional' },
-  { id: '44444444-4444-4444-4444-444444444444', name: 'Emma', gender: 'female', description: 'Natural, approachable' },
+  { id: '11111111-1111-1111-1111-111111111111', name: 'Alex', gender: 'male', description: 'Handsome, 32, cool editorial vibe' },
+  { id: '22222222-2222-2222-2222-222222222222', name: 'Marcus', gender: 'male', description: 'Stylish, 33, Scandinavian cool' },
+  { id: '33333333-3333-3333-3333-333333333333', name: 'Sophie', gender: 'female', description: 'Beautiful, 31, Parisian chic' },
+  { id: '44444444-4444-4444-4444-444444444444', name: 'Emma', gender: 'female', description: 'Natural beauty, 34, California elegance' },
 ];
 
 const POSES: { id: PoseType; name: string }[] = [
@@ -43,6 +43,7 @@ const POSES: { id: PoseType; name: string }[] = [
   { id: 'relaxed', name: 'Relaxed' },
   { id: 'arms_bent', name: 'Arms Bent' },
   { id: 'close_up_detail', name: 'Close-Up Detail' },
+  { id: 'movement', name: 'Movement' },
 ];
 
 const FIT_STYLES: { id: FitStyle; name: string; description: string }[] = [
