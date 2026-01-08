@@ -511,6 +511,33 @@ IMPORTANT: Generate the SAME PERSON every time this seed ID is used. This is lik
     
     prompt = `TASK: Place this EXACT garment onto a specific fashion model AND style a complete outfit around it for e-commerce product photography.
 
+🔒🔒🔒 HARD RULE: CLOTHING LOCK (NON-NEGOTIABLE) 🔒🔒🔒
+The clothing must NOT change. This is an e-commerce image - customers must recognize the exact item they will receive.
+
+KEEP THE EXACT ORIGINAL:
+✅ Colour - exact same shades, no color correction
+✅ Fabric texture - cotton looks like cotton, not silk or vinyl
+✅ Fabric weight - heavy stays heavy, light stays light
+✅ Print / graphic - every detail pixel-perfect
+✅ Finish - matte stays matte, no added shine
+
+ABSOLUTELY FORBIDDEN (ZERO TOLERANCE):
+❌ NO glossing or artificial shine
+❌ NO "4D", hyper-rendered, plastic, or CGI finishes
+❌ NO fabric smoothing or artificial enhancement
+❌ NO texture "improvement" or stylisation
+❌ NO reinterpreting fabrics (cotton→silk, denim→vinyl, etc.)
+❌ NO "fashion editorial" effects that alter the garment
+
+REALISM STANDARD - THE GARMENT MUST LOOK:
+- MATTE / NATURAL (exactly as the fabric appears in reality)
+- PHYSICALLY REAL (not rendered or enhanced)
+- TRUE TO LIFE (exactly how customer would receive it)
+- If WORN → show worn. If FADED → show faded. If VINTAGE → show vintage.
+
+DO NOT "improve", "upgrade", or "beautify" the garment in ANY way.
+The customer must trust that what they see is what they get.
+
 ⚠️ CRITICAL: GARMENT ACCURACY IS NON-NEGOTIABLE ⚠️
 The garment in the input image is the SINGLE SOURCE OF TRUTH. You MUST:
 - COPY THE GARMENT EXACTLY AS IT APPEARS - pixel for pixel
@@ -547,15 +574,16 @@ STYLING RULES:
 2. COPY ALL GRAPHICS EXACTLY: Same position, same size, same colors, same details
 3. COPY EXACTLY: every color, shade, pattern, texture from the input image
 4. COPY EXACTLY: all logos, prints - line for line, shape for shape
-5. FABRIC MUST LOOK NATURAL: No high gloss, no artificial shine, no CGI look
-6. The garment must look like a real photo, not a digital render
+5. FABRIC MUST LOOK NATURAL: MATTE finish, no gloss, no artificial shine, no CGI look
+6. The garment must look like a REAL PHOTO of a REAL GARMENT, not a digital render
+7. If fabric is worn/faded/vintage - KEEP IT THAT WAY, do not "fix" it
 
-BACKGROUND (CREATIVE VARIATION ENCOURAGED):
-✅ VARY backgrounds between: soft cream/beige gradients, cool grey gradients, warm to cool transitions, subtle pastel undertones, clean studio white, soft textured backdrops
+BACKGROUND & LIGHTING (ONLY ALLOWED ADJUSTMENTS):
+✅ Background changes: soft cream/beige gradients, cool grey, warm to cool transitions, studio white
 ✅ Professional studio lighting with natural soft shadows
-✅ High-end e-commerce quality - think ASOS, Zara, Net-a-Porter
+✅ Lighting must NEVER add shine, change fabric behaviour, or alter colour accuracy
 
-WHAT CAN VARY (ENCOURAGED FOR BUYER CHOICE):
+WHAT CAN VARY:
 ✅ Background colors and gradients
 ✅ Outfit styling and complementary pieces  
 ✅ Pose variations within the cool/editorial range
@@ -564,13 +592,42 @@ WHAT CAN VARY (ENCOURAGED FOR BUYER CHOICE):
 ✅ Accessories and finishing touches
 
 WHAT CANNOT CHANGE (NON-NEGOTIABLE):
-❌ The hero garment - must be EXACT copy
+❌ The hero garment - must be EXACT copy with NATURAL matte finish
 ❌ Any text/graphics on the garment - copy CHARACTER FOR CHARACTER
+❌ Fabric texture, weight, colour, or finish
 ❌ The model's core identity (face structure, age range, beauty level)
-❌ Overall quality level - must remain high-end editorial`;
+
+🔒 FINAL LOCK: If conflict between "Making it look better" vs "Making it look REAL" → ALWAYS CHOOSE REAL. No exceptions.`;
   } else {
     // Product-only mode - just the garment on model
     prompt = `TASK: Place this EXACT garment onto a fashion model for e-commerce product photography.
+
+🔒🔒🔒 HARD RULE: CLOTHING LOCK (NON-NEGOTIABLE) 🔒🔒🔒
+The clothing must NOT change. This is an e-commerce image - customers must recognize the exact item they will receive.
+
+KEEP THE EXACT ORIGINAL:
+✅ Colour - exact same shades, no color correction
+✅ Fabric texture - cotton looks like cotton, not silk or vinyl
+✅ Fabric weight - heavy stays heavy, light stays light
+✅ Print / graphic - every detail pixel-perfect
+✅ Finish - matte stays matte, no added shine
+
+ABSOLUTELY FORBIDDEN (ZERO TOLERANCE):
+❌ NO glossing or artificial shine
+❌ NO "4D", hyper-rendered, plastic, or CGI finishes
+❌ NO fabric smoothing or artificial enhancement
+❌ NO texture "improvement" or stylisation
+❌ NO reinterpreting fabrics (cotton→silk, denim→vinyl, etc.)
+❌ NO "fashion editorial" effects that alter the garment
+
+REALISM STANDARD - THE GARMENT MUST LOOK:
+- MATTE / NATURAL (exactly as the fabric appears in reality)
+- PHYSICALLY REAL (not rendered or enhanced)
+- TRUE TO LIFE (exactly how customer would receive it)
+- If WORN → show worn. If FADED → show faded. If VINTAGE → show vintage.
+
+DO NOT "improve", "upgrade", or "beautify" the garment in ANY way.
+The customer must trust that what they see is what they get.
 
 ⚠️ CRITICAL: GARMENT ACCURACY IS NON-NEGOTIABLE ⚠️
 The garment in the input image is the SINGLE SOURCE OF TRUTH. You MUST:
@@ -593,25 +650,28 @@ ${fitInstructions}
 1. COPY ALL TEXT EXACTLY: If garment says "WANT", output says "WANT" - CHARACTER FOR CHARACTER
 2. COPY ALL GRAPHICS EXACTLY: Same position, same size, same colors, same details
 3. COPY EXACTLY: every color, shade, pattern, texture from the input image
-4. FABRIC MUST LOOK NATURAL: No high gloss, no artificial shine, no CGI look
-5. The garment must look like a real photograph, not a digital render
+4. FABRIC MUST LOOK NATURAL: MATTE finish, no gloss, no artificial shine, no CGI look
+5. The garment must look like a REAL PHOTOGRAPH of a REAL GARMENT, not a digital render
+6. If fabric is worn/faded/vintage - KEEP IT THAT WAY, do not "fix" it
 
-BACKGROUND (CREATIVE VARIATION ENCOURAGED):
-✅ VARY backgrounds between: soft cream/beige gradients, cool grey gradients, warm to cool transitions, subtle pastel undertones, clean studio white, soft textured backdrops
+BACKGROUND & LIGHTING (ONLY ALLOWED ADJUSTMENTS):
+✅ Background changes: soft cream/beige gradients, cool grey, warm to cool transitions, studio white
 ✅ Professional studio lighting with natural soft shadows
-✅ High-end e-commerce quality
+✅ Lighting must NEVER add shine, change fabric behaviour, or alter colour accuracy
 
-WHAT CAN VARY (ENCOURAGED FOR BUYER CHOICE):
+WHAT CAN VARY:
 ✅ Background colors and gradients
 ✅ Pose variations within the cool/editorial range
 ✅ Expression variations (all within cool/chic/confident range)
 ✅ Hair styling variations (always elegant)
 
 WHAT CANNOT CHANGE (NON-NEGOTIABLE):
-❌ The garment - must be EXACT copy of input
+❌ The garment - must be EXACT copy of input with NATURAL matte finish
 ❌ Any text/graphics on the garment - copy CHARACTER FOR CHARACTER
+❌ Fabric texture, weight, colour, or finish
 ❌ The model's core identity (face structure, age range 30-35, beauty level)
-❌ Overall quality level - must remain high-end editorial
+
+🔒 FINAL LOCK: If conflict between "Making it look better" vs "Making it look REAL" → ALWAYS CHOOSE REAL. No exceptions.
 
 The input image is your ONLY reference for the garment. Copy it EXACTLY - especially all text and graphics. Generate VARIATIONS in pose, expression, and background.`;
   }
