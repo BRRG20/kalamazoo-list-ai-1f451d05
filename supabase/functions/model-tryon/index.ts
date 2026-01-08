@@ -299,6 +299,16 @@ async function processModelTryOn(
     
     prompt = `TASK: Place this EXACT garment onto a fashion model AND style a complete outfit around it for e-commerce product photography.
 
+⚠️ CRITICAL: GARMENT ACCURACY IS NON-NEGOTIABLE ⚠️
+The garment in the input image is the SINGLE SOURCE OF TRUTH. You MUST:
+- COPY THE GARMENT EXACTLY AS IT APPEARS - pixel for pixel
+- ALL TEXT ON THE GARMENT MUST BE COPIED CHARACTER-FOR-CHARACTER
+- If the front says "WANT", output MUST say "WANT" - no alternatives, no reinterpretation
+- ALL graphics, logos, prints MUST be copied EXACTLY - same position, same size, same colors
+- DO NOT alter, reimagine, or "improve" ANY text or graphics
+- DO NOT substitute similar text or create alternative typography
+- If you cannot read the text clearly, leave it as visible marks rather than inventing text
+
 THE HERO PRODUCT (THIS IS THE MAIN FOCUS):
 The garment in the input image is the HERO ITEM. It MUST be:
 - PIXEL-PERFECT copy of the input image
@@ -306,19 +316,23 @@ The garment in the input image is the HERO ITEM. It MUST be:
 - The dominant visual element of the image
 - Clearly visible and not obscured by other items
 
-MODEL TO USE:
+MODEL TO USE (DO NOT CHANGE - LOCKED IDENTITY):
 ${modelDescription}
+⚠️ USE THIS EXACT MODEL - DO NOT INTRODUCE A NEW MODEL
+⚠️ DO NOT stylise, editorialise, or reinterpret the model
+⚠️ Same face, body type, proportions, age, expression EVERY TIME
 
-POSE:
+POSE (LOCKED - DO NOT CHANGE):
 ${poseDescription}
+⚠️ Keep the same cool, neutral, effortless energy
+⚠️ No new poses, no dramatic movement, no fashion-editorial exaggeration
+⚠️ This is a product-first image, not a concept shoot
 
-MODEL APPEARANCE (CRITICAL):
-- Face MUST be clearly visible and in frame
-- Expression: cool, neutral, effortlessly confident - like a fashion editorial
-- Can have subtle knowing smile or relaxed neutral expression
-- NO exaggerated smiling, NO stiff poses
+MODEL APPEARANCE (CRITICAL - DO NOT DEVIATE):
+- Face MUST match the model description EXACTLY
+- Expression: cool, neutral, effortlessly confident
+- Subtle knowing smile or relaxed neutral - NO exaggerated expressions
 - Think: cool street-style fashion photography, candid but composed
-- Model should look like they belong in a magazine or brand campaign
 - Natural soft lighting on face
 
 FIT STYLE FOR HERO GARMENT:
@@ -335,95 +349,103 @@ STYLING RULES (CRITICAL):
 6. Fit must be realistic - no extreme proportions unless style demands it
 7. The styled outfit must look like something a real person would wear
 
-ABSOLUTE REQUIREMENTS FOR THE HERO GARMENT (CRITICAL - NO EXCEPTIONS):
-1. COPY EXACTLY: every color, shade, pattern, texture from the input image
-2. COPY EXACTLY: all logos, text, graphics, prints - character for character
-3. COPY EXACTLY: all buttons, zippers, stitching, seams, labels, tags
-4. COPY EXACTLY: any wear, fading, distressing, vintage characteristics
-5. The hero garment is the SINGLE SOURCE OF TRUTH - copy it perfectly
-6. FABRIC MUST LOOK NATURAL: No high gloss, no artificial shine, no CGI look
-7. Preserve the EXACT fabric texture - matte cotton stays matte, wool stays wooly, etc.
-8. The garment must look like a real photo, not a digital render
+⚠️ ABSOLUTE REQUIREMENTS FOR THE HERO GARMENT (ZERO TOLERANCE FOR ERRORS):
+1. COPY ALL TEXT EXACTLY: If it says "WANT", output says "WANT" - CHARACTER FOR CHARACTER
+2. COPY ALL GRAPHICS EXACTLY: Same position, same size, same colors, same details
+3. COPY EXACTLY: every color, shade, pattern, texture from the input image
+4. COPY EXACTLY: all logos, prints - line for line, shape for shape
+5. COPY EXACTLY: all buttons, zippers, stitching, seams, labels, tags
+6. COPY EXACTLY: any wear, fading, distressing, vintage characteristics
+7. FABRIC MUST LOOK NATURAL: No high gloss, no artificial shine, no CGI look
+8. Preserve the EXACT fabric texture - matte cotton stays matte, wool stays wooly
+9. The garment must look like a real photo, not a digital render
 
-PHOTOGRAPHY STYLE (REFERENCE: ASOS, ZARA, HIGH-END E-COMMERCE):
-- Professional photography studio setting
-- BACKGROUND: Soft gradient backdrop - cream/warm beige on one side smoothly transitioning to cool grey/white on the other. NOT flat white, NOT solid grey. Subtle warmth and depth.
+BACKGROUND (ONLY THIS CAN VARY):
+- Soft gradient backdrop variations allowed
+- Options: cream/warm beige to cool grey, pure warm cream, soft grey gradient, subtle pastel undertones
 - Professional studio lighting - softbox/beauty lighting setup with natural soft shadows
-- Full body shot OR close-up detail crop (waist to mid-thigh) showing the styled outfit
-- Sharp focus on the hero garment with natural fabric texture visible
-- Soft natural shadow beneath model's feet (not harsh, not dropped shadow effect)
-- High-end e-commerce/lookbook quality - think ASOS, Zara, Net-a-Porter
-- Model's hair should be styled elegantly: sleek low bun, slicked back, or natural polished waves
-- If accessories are added: chunky silver/chrome bracelets, statement watches, luxury leather tote bags (brown suede, black leather), pointed toe heels or clean minimalist sneakers
+- Light texture is acceptable if minimal and modern
+- Soft natural shadow beneath model's feet
 
-WHAT NOT TO DO:
-- DO NOT alter the hero garment in ANY way
-- DO NOT generate a "similar" garment - use the EXACT one from the input
-- DO NOT add distracting accessories
-- DO NOT over-style or create runway/editorial looks
-- DO NOT create costume-like or fantasy outfits
-- DO NOT make stiff or awkward poses
-- DO NOT add gloss, shine, or artificial enhancement to the fabric
-- DO NOT make the clothing look CGI or digitally rendered
-- Keep it wearable, natural, and realistic for real buyers`;
+WHAT IS ALLOWED TO CHANGE:
+✅ Background gradient/color variations only
+✅ Subtle lighting adjustments to support the background
+
+WHAT IS NOT ALLOWED:
+❌ Changing the model's face, body, or appearance
+❌ Changing pose, styling, attitude, or coolness
+❌ Changing garment fit, scale, or any graphic/text
+❌ Adding props, narrative, or mood shifts
+❌ "Creative interpretation" of any kind
+❌ Altering ANY text on the garment - if it says "WANT" it MUST say "WANT"`;
   } else {
     // Product-only mode - just the garment on model
     prompt = `TASK: Place this EXACT garment onto a fashion model for e-commerce product photography.
 
-MODEL TO USE:
+⚠️ CRITICAL: GARMENT ACCURACY IS NON-NEGOTIABLE ⚠️
+The garment in the input image is the SINGLE SOURCE OF TRUTH. You MUST:
+- COPY THE GARMENT EXACTLY AS IT APPEARS - pixel for pixel
+- ALL TEXT ON THE GARMENT MUST BE COPIED CHARACTER-FOR-CHARACTER
+- If the front says "WANT", output MUST say "WANT" - no alternatives, no reinterpretation
+- ALL graphics, logos, prints MUST be copied EXACTLY - same position, same size, same colors
+- DO NOT alter, reimagine, or "improve" ANY text or graphics
+- DO NOT substitute similar text or create alternative typography
+- If you cannot read the text clearly, leave it as visible marks rather than inventing text
+
+MODEL TO USE (DO NOT CHANGE - LOCKED IDENTITY):
 ${modelDescription}
+⚠️ USE THIS EXACT MODEL - DO NOT INTRODUCE A NEW MODEL
+⚠️ DO NOT stylise, editorialise, or reinterpret the model
+⚠️ Same face, body type, proportions, age, expression EVERY TIME
 
-POSE:
+POSE (LOCKED - DO NOT CHANGE):
 ${poseDescription}
+⚠️ Keep the same cool, neutral, effortless energy
+⚠️ No new poses, no dramatic movement, no fashion-editorial exaggeration
+⚠️ This is a product-first image, not a concept shoot
 
-MODEL APPEARANCE (CRITICAL):
-- Face MUST be clearly visible and in frame
-- Expression: cool, neutral, effortlessly confident - like a fashion editorial
-- Can have subtle knowing smile or relaxed neutral expression
-- NO exaggerated smiling, NO stiff poses
+MODEL APPEARANCE (CRITICAL - DO NOT DEVIATE):
+- Face MUST match the model description EXACTLY
+- Expression: cool, neutral, effortlessly confident
+- Subtle knowing smile or relaxed neutral - NO exaggerated expressions
 - Think: cool street-style fashion photography, candid but composed
-- Model should look like they belong in a magazine or brand campaign
 - Natural soft lighting on face
 
 FIT STYLE:
 ${fitInstructions}
 
-ABSOLUTE REQUIREMENTS - DO NOT VIOLATE (THE INPUT IMAGE IS THE SINGLE SOURCE OF TRUTH):
-1. The garment in the output MUST be a PIXEL-PERFECT representation of the input image
-2. DO NOT change, alter, redesign, or reimagine ANY aspect of the garment
+⚠️ ABSOLUTE REQUIREMENTS - ZERO TOLERANCE FOR ERRORS:
+1. COPY ALL TEXT EXACTLY: If garment says "WANT", output says "WANT" - CHARACTER FOR CHARACTER
+2. COPY ALL GRAPHICS EXACTLY: Same position, same size, same colors, same details
 3. COPY EXACTLY: every color, every shade, every pattern, every texture
-4. COPY EXACTLY: all logos, all text, all graphics, all prints - character for character, line for line
+4. COPY EXACTLY: all logos, all prints - line for line, shape for shape
 5. COPY EXACTLY: all buttons, zippers, stitching, seams, labels, tags
 6. COPY EXACTLY: any wear, fading, distressing, or vintage characteristics
-7. The garment is the SINGLE SOURCE OF TRUTH - the input image defines 100% of how the clothing looks
-8. FABRIC MUST LOOK NATURAL: No high gloss, no artificial shine, no CGI look
-9. Preserve the EXACT fabric texture - matte cotton stays matte, wool stays wooly, knit stays knit
-10. The garment must look like a real photograph, not a digital render or 3D model
+7. FABRIC MUST LOOK NATURAL: No high gloss, no artificial shine, no CGI look
+8. Preserve the EXACT fabric texture - matte cotton stays matte, wool stays wooly, knit stays knit
+9. The garment must look like a real photograph, not a digital render or 3D model
 
-WHAT TO GENERATE:
-- A professional fashion photo with the model wearing this EXACT garment
-- BACKGROUND: Soft gradient backdrop - cream/warm beige on one side smoothly transitioning to cool grey/white on the other. NOT flat white, NOT solid grey. Subtle warmth and depth like ASOS/Zara product shots.
+BACKGROUND (ONLY THIS CAN VARY):
+- Soft gradient backdrop variations allowed
+- Options: cream/warm beige to cool grey, pure warm cream, soft grey gradient, subtle pastel undertones
 - Professional studio lighting - softbox/beauty lighting setup
-- Full body shot OR close-up detail crop (from chest to mid-thigh) depending on pose
-- If close-up crop: focus on waist/hip area showing fit, fabric texture, and garment details
-- The model's body and pose as described above
+- Light texture is acceptable if minimal and modern
 - Soft natural shadow beneath model (not harsh drop shadow)
-- Hair styled elegantly: sleek low bun, slicked back, or natural polished waves
-- High-end e-commerce/lookbook quality image - think ASOS, Zara, Net-a-Porter
 
-WHAT NOT TO DO:
-- DO NOT generate a "similar" garment - use the EXACT one from the image
-- DO NOT change colors or patterns
-- DO NOT remove or alter any text, logos, or graphics
-- DO NOT add accessories or styling not in the original
-- DO NOT "improve" or "enhance" the garment design
-- DO NOT hallucinate or invent any garment details
-- DO NOT make stiff or awkward poses
-- DO NOT add gloss, shine, or artificial enhancement to the fabric
-- DO NOT make the clothing look CGI or digitally rendered
-- The output must look like a real photo a buyer would trust
+WHAT IS ALLOWED TO CHANGE:
+✅ Background gradient/color variations only
+✅ Subtle lighting adjustments to support the background
 
-The input image is your ONLY reference for the garment. Copy it exactly onto the model with natural, realistic fabric appearance.`;
+WHAT IS NOT ALLOWED:
+❌ Changing the model's face, body, or appearance
+❌ Changing pose, styling, attitude, or coolness
+❌ Changing garment fit, scale, or any graphic/text
+❌ Adding props, narrative, or mood shifts
+❌ "Creative interpretation" of any kind
+❌ Altering ANY text on the garment - copy it EXACTLY
+❌ Generating a "similar" garment - use the EXACT one from the image
+
+The input image is your ONLY reference for the garment. Copy it EXACTLY onto the model - especially all text and graphics.`;
   }
 
   const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
