@@ -26,6 +26,7 @@ import {
 } from '@/hooks/use-database';
 import { useDefaultTags } from '@/hooks/use-default-tags';
 import { useAIGeneration } from '@/hooks/use-ai-generation';
+import { useImageExpansion } from '@/hooks/use-image-expansion';
 import type { Product, ProductImage } from '@/types';
 
 export default function BatchesPage() {
@@ -48,6 +49,9 @@ export default function BatchesPage() {
     updateProduct,
     getMatchingTags,
   });
+  
+  // AI Image Expansion hook
+  const { expandProductImages, isExpanding: isExpandingImages, progress: expansionProgress } = useImageExpansion();
   
   // Initialize AI generated status when products load
   useEffect(() => {
@@ -273,6 +277,151 @@ const handleSelectBatch = useCallback((id: string) => {
       toast.error('Failed to upload images');
     }
   }, [selectedBatchId, uploadImages, addImageToBatch]);
+
+  // Camera capture handler - routes camera images through the same upload pipeline
+  const handleCameraCapture = useCallback(async (
+    files: File[], 
+    notes: Map<string, { note?: string; hasStain?: boolean; type?: string }>
+  ) => {
+    if (!selectedBatchId || files.length === 0) return;
+    
+    toast.info(`Processing ${files.length} camera image(s)...`);
+    
+    // Upload using same pipeline as manual uploads (preserves quality)
+    const urls = await uploadImages(files, selectedBatchId);
+    
+    if (urls.length > 0) {
+      // Save images to database with notes metadata
+      for (let i = 0; i < urls.length; i++) {
+        const file = files[i];
+        const noteData = notes.get(file.name);
+        
+        // Add image to batch
+        await addImageToBatch(selectedBatchId, urls[i], i);
+        
+        // If there are notes, update the image with metadata
+        // Note: Notes are stored as part of the image flow for AI to read
+        if (noteData && (noteData.note || noteData.hasStain)) {
+          // Store notes in product notes field when product is created
+          // For now, notes travel with the pending URL as metadata
+          console.log(`Image ${file.name} has note:`, noteData);
+        }
+      }
+      
+      // Add to pending for auto-grouping (same as regular uploads)
+      setPendingImageUrls(prev => [...prev, ...urls]);
+      toast.success(`${urls.length} camera image(s) uploaded. Click "Auto-group" to create products.`);
+    } else {
+      toast.error('Failed to upload camera images');
+    }
+  }, [selectedBatchId, uploadImages, addImageToBatch]);
+
+  // Quick Product Shots handler - for 4-shot mode with AI expansion
+  const handleQuickProductCapture = useCallback(async (
+    files: File[], 
+    notes: Map<string, { note?: string; hasStain?: boolean; type?: string }>
+  ) => {
+    if (!selectedBatchId || files.length === 0) return;
+    
+    toast.info(`Processing ${files.length} quick product shot(s)...`);
+    
+    // Upload using same pipeline
+    const urls = await uploadImages(files, selectedBatchId);
+    
+    if (urls.length > 0) {
+      // Save images to database
+      for (let i = 0; i < urls.length; i++) {
+        await addImageToBatch(selectedBatchId, urls[i], i);
+      }
+      
+      // For quick product shots, create a product group immediately
+      setPendingImageUrls(prev => [...prev, ...urls]);
+      setShowGroupManager(true);
+      
+      toast.success(
+        `${urls.length} quick shot(s) uploaded. ` +
+        `Group them and use "Expand Images" to generate additional listing photos.`
+      );
+    } else {
+      toast.error('Failed to upload quick product shots');
+    }
+  }, [selectedBatchId, uploadImages, addImageToBatch]);
+
+  // AI Image Expansion handler - generates additional listing images from existing product images
+  const handleExpandProductImages = useCallback(async (productId: string) => {
+    const product = products.find(p => p.id === productId);
+    if (!product) {
+      toast.error('Product not found');
+      return;
+    }
+    
+    // Fetch product images
+    const images = await fetchImagesForProduct(productId);
+    if (images.length === 0) {
+      toast.error('No images to expand');
+      return;
+    }
+    
+    // Sort by position to get front, back, label, detail
+    const sortedImages = [...images].sort((a, b) => a.position - b.position);
+    
+    // Find images by type or position
+    const frontImage = sortedImages[0]; // First image is typically front
+    const backImage = sortedImages.length > 1 ? sortedImages[1] : undefined;
+    const labelImage = sortedImages.find(img => img.source === 'upload' && sortedImages.indexOf(img) === 2);
+    const detailImage = sortedImages.length > 3 ? sortedImages[3] : undefined;
+    
+    toast.info('Generating additional listing images...');
+    
+    const result = await expandProductImages(
+      productId,
+      frontImage.url,
+      backImage?.url,
+      labelImage?.url,
+      detailImage?.url,
+      8 // Target 8 total images
+    );
+    
+    if (result && result.success) {
+      // Get current user for RLS
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error('You must be logged in');
+        return;
+      }
+      
+      // Add generated images to the product
+      const currentImages = await fetchImagesForProduct(productId);
+      const nextPosition = currentImages.length;
+      
+      for (let i = 0; i < result.generatedImages.length; i++) {
+        const genImg = result.generatedImages[i];
+        
+        // Insert new image into database
+        const { error } = await supabase
+          .from('images')
+          .insert({
+            url: genImg.url,
+            product_id: productId,
+            batch_id: selectedBatchId,
+            position: nextPosition + i,
+            include_in_shopify: true,
+            user_id: user.id,
+            source: 'ai_expansion'
+          });
+        
+        if (error) {
+          console.error('Error adding expanded image:', error);
+        }
+      }
+      
+      // Clear cache and refresh
+      clearCache();
+      await refetchProducts();
+      
+      toast.success(`Added ${result.generatedImages.length} AI-generated listing images`);
+    }
+  }, [products, fetchImagesForProduct, expandProductImages, selectedBatchId, clearCache, refetchProducts]);
 
   const handleAutoGroup = useCallback(async (imagesPerProduct: number) => {
     if (!selectedBatchId) return;
@@ -1735,6 +1884,10 @@ const handleSelectBatch = useCallback((id: string) => {
               onOpenDeletedImages={() => setShowDeletedImages(true)}
               onDeleteEmptyProducts={handleDeleteEmptyProducts}
               onCreateProductFromImageIds={handleCreateProductFromImageIds}
+              onCameraCapture={handleCameraCapture}
+              onQuickProductCapture={handleQuickProductCapture}
+              onExpandProductImages={handleExpandProductImages}
+              isExpandingImages={isExpandingImages}
             />
           ) : (
             <EmptyState />

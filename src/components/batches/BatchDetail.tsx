@@ -4,7 +4,10 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useShopifyStats } from '@/hooks/use-shopify-stats';
 import { useBackgroundRemoval, type ShadowType, type BackgroundRemovalOptions } from '@/hooks/use-background-removal';
 import { useModelTryOn, type PoseType, type FitStyle, type OutfitStyle } from '@/hooks/use-model-tryon';
+import { useImageExpansion } from '@/hooks/use-image-expansion';
 import { ModelTryOnDialog } from '@/components/model-tryon/ModelTryOnDialog';
+import { BatchCaptureButton } from '@/components/camera/BatchCaptureButton';
+import { QuickProductShotsButton } from '@/components/camera/QuickProductShotsButton';
 import {
   Upload, 
   Sparkles, 
@@ -32,7 +35,8 @@ import {
   ChevronDown,
   Eraser,
   Shirt,
-  User
+  User,
+  Wand2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -159,6 +163,12 @@ interface BatchDetailProps {
   onHideProduct?: (productId: string) => void;
   // Delete single image by ID (for ProductCard)
   onDeleteImageById?: (imageId: string, productId: string) => Promise<void>;
+  // Camera capture handlers
+  onCameraCapture?: (files: File[], notes: Map<string, { note?: string; hasStain?: boolean; type?: string }>) => void;
+  onQuickProductCapture?: (files: File[], notes: Map<string, { note?: string; hasStain?: boolean; type?: string }>) => void;
+  // AI Image Expansion
+  onExpandProductImages?: (productId: string) => void;
+  isExpandingImages?: boolean;
 }
 
 export function BatchDetail({
@@ -236,6 +246,10 @@ export function BatchDetail({
   onMarkAsPending,
   onHideProduct,
   onDeleteImageById,
+  onCameraCapture,
+  onQuickProductCapture,
+  onExpandProductImages,
+  isExpandingImages,
 }: BatchDetailProps) {
   // Early return if batch is missing (defensive guard)
   if (!batch || !batch.id) {
@@ -1012,6 +1026,20 @@ export function BatchDetail({
                   </TooltipContent>
                 </Tooltip>
               )}
+              
+              {/* Mobile Camera Buttons */}
+              {onCameraCapture && (
+                <BatchCaptureButton
+                  onComplete={onCameraCapture}
+                  disabled={isUploading}
+                />
+              )}
+              {onQuickProductCapture && (
+                <QuickProductShotsButton
+                  onComplete={onQuickProductCapture}
+                  disabled={isUploading}
+                />
+              )}
             </div>
 
             <div className="flex items-center gap-1 md:gap-2">
@@ -1614,6 +1642,41 @@ export function BatchDetail({
                       <Undo2 className="w-4 h-4 mr-1" />
                       Undo Model
                     </Button>
+                    
+                    {/* Generate Listing Images button (AI Image Expansion) */}
+                    {onExpandProductImages && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => {
+                              // Expand images for first selected product
+                              const firstProductId = Array.from(selectedProductIds)[0];
+                              if (firstProductId) {
+                                onExpandProductImages(firstProductId);
+                              }
+                            }}
+                            disabled={isExpandingImages || selectedProductIds.size === 0}
+                            type="button"
+                            className="text-cyan-600 hover:text-cyan-700 hover:bg-cyan-50"
+                          >
+                            {isExpandingImages ? (
+                              <>
+                                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                                Expanding...
+                              </>
+                            ) : (
+                              <>
+                                <Wand2 className="w-4 h-4 mr-1" />
+                                Expand Images
+                              </>
+                            )}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Generate additional listing images (crops, close-ups) from selected product</TooltipContent>
+                      </Tooltip>
+                    )}
                     
                     {/* Three-dots menu with actions for selected products */}
                     {onRegroupSelectedProducts && (

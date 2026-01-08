@@ -81,7 +81,11 @@ export interface ProductImage {
   url: string;
   position: number;
   include_in_shopify: boolean;
-  source?: 'upload' | 'model_tryon' | 'background_removal' | 'ghost_mannequin';
+  source?: 'upload' | 'model_tryon' | 'background_removal' | 'ghost_mannequin' | 'ai_expansion';
+  // Camera capture metadata
+  note?: string;
+  has_stain?: boolean;
+  shot_type?: 'front' | 'back' | 'label' | 'detail';
 }
 
 export interface Settings {
