@@ -12,121 +12,79 @@ interface RequestBody {
   backImageUrl?: string;
   labelImageUrl?: string;
   detailImageUrl?: string;
-  targetCount?: number; // Default 8 total images
+  targetCount?: number;
 }
 
 const MAX_RETRIES = 2;
 
-// AI Models with consistent identities for plain background shots
-const AI_MODELS = [
+// Close-up shot types for product detail expansion
+const CLOSE_UP_SHOTS = [
   {
-    id: 'alex',
-    name: 'Alex',
-    gender: 'male',
-    description: 'Male model, age 30-35, athletic build. Short dark brown hair, warm olive skin, brown eyes. Clean-shaven, natural expression.',
+    id: 'fabric_texture',
+    name: 'Fabric Texture Close-up',
+    prompt: `Generate a CLOSE-UP photograph showing the fabric texture and weave of this garment.
+
+REQUIREMENTS:
+- Extreme close-up of the fabric material (macro-style shot)
+- Show the actual weave pattern, thread texture, and material quality
+- Natural lighting that reveals fabric depth and texture
+- Fill the entire frame with fabric detail
+- Plain neutral background where fabric edges are visible
+- If there's any print or pattern, show how it looks up close
+
+CRITICAL - EXACT REPLICATION:
+- The fabric color MUST match the source image exactly
+- The texture/weave pattern MUST be identical to the source
+- If fabric is worn, pilled, or faded - show it exactly as-is
+- NO enhancement, NO smoothing, NO color correction
+- This must look like a real photo taken of the actual item`,
   },
   {
-    id: 'marcus',
-    name: 'Marcus', 
-    gender: 'male',
-    description: 'Male model, age 28-32, athletic build. Black skin, short fade haircut, dark brown eyes. Strong jawline, confident expression.',
+    id: 'collar_neckline',
+    name: 'Collar/Neckline Detail',
+    prompt: `Generate a CLOSE-UP photograph of the collar, neckline, or neck area of this garment.
+
+REQUIREMENTS:
+- Focused shot of the collar/neckline construction
+- Show stitching quality, collar shape, and construction details
+- Include any buttons, zippers, or closures in this area
+- Soft studio lighting to show depth and form
+- Lay flat or on form to show the detail clearly
+
+CRITICAL - EXACT REPLICATION:
+- Colors MUST match the source image exactly
+- Stitching and construction details must be accurate
+- If there's wear on the collar - show it exactly
+- NO enhancement, NO smoothing, NO idealization
+- This must look like a real product photo`,
   },
   {
-    id: 'elena',
-    name: 'Elena',
-    gender: 'female',
-    description: 'Female model, age 28-32, slim build. Long dark hair, Mediterranean olive skin, hazel eyes. Natural makeup, warm expression.',
-  },
-  {
-    id: 'lily',
-    name: 'Lily',
-    gender: 'female', 
-    description: 'Female model, age 25-30, slim athletic build. Blonde hair in loose waves, fair skin, blue eyes. Fresh-faced, approachable look.',
-  },
-  {
-    id: 'mei',
-    name: 'Mei',
-    gender: 'female',
-    description: 'Female model, age 26-30, slim build. East Asian features, straight black hair shoulder length, dark brown eyes. Elegant, serene expression.',
-  },
-  {
-    id: 'ryan',
-    name: 'Ryan',
-    gender: 'male',
-    description: 'Male model, age 30-35, medium athletic build. Light brown hair slightly wavy, fair skin, green eyes. Relaxed friendly expression.',
+    id: 'label_branding',
+    name: 'Label/Brand Detail',
+    prompt: `Generate a CLOSE-UP photograph showing the label, brand tag, or any branding elements on this garment.
+
+REQUIREMENTS:
+- Clear, readable shot of the main label/tag
+- Show brand name, size, care instructions if visible
+- Good lighting to ensure text is legible
+- Include any embroidered logos or printed branding
+- If no visible label, show the inside neckline/collar area
+
+CRITICAL - EXACT REPLICATION:
+- Text on labels must be accurate to what's shown in source
+- Colors and fonts must match exactly
+- Show any wear, fading, or imperfections on labels as-is
+- NO inventing brand names or labels not in source
+- This must look like a real photo of the actual label`,
   },
 ];
 
-// Different poses for variety
-const POSES = [
-  {
-    id: 'front_straight',
-    description: 'Standing straight, facing camera directly, arms relaxed at sides. Full body visible from head to below knees.',
-  },
-  {
-    id: 'front_casual',
-    description: 'Standing with slight weight shift to one leg, one hand in pocket or relaxed. Natural casual pose, full body visible.',
-  },
-  {
-    id: 'three_quarter',
-    description: 'Body turned 30-45 degrees from camera, face toward camera. Shows garment dimension and fit. Full body visible.',
-  },
-  {
-    id: 'movement',
-    description: 'Mid-stride walking pose, natural movement frozen. Shows how garment moves and drapes. Full body visible.',
-  },
-];
-
-async function generateModelImage(
+async function generateCloseUpImage(
   sourceImageUrl: string,
-  model: typeof AI_MODELS[0],
-  pose: typeof POSES[0],
+  shotType: typeof CLOSE_UP_SHOTS[0],
   apiKey: string,
   attempt: number = 1
 ): Promise<string | null> {
-  const prompt = `TASK: Generate an e-commerce model photo on a PLAIN STUDIO BACKGROUND.
-
-MODEL IDENTITY (MUST BE CONSISTENT):
-${model.description}
-Model name: ${model.name}
-Seed ID: ${model.id}-model-v1
-
-POSE:
-${pose.description}
-
-🔒 HARD RULE: CLOTHING LOCK (NON-NEGOTIABLE) 🔒
-The garment from the source image MUST appear EXACTLY as it is:
-✅ EXACT same color - no shifts, no enhancements
-✅ EXACT same fabric texture - if it's worn cotton, it stays worn cotton  
-✅ EXACT same prints, graphics, logos - pixel-perfect replication
-✅ EXACT same fit and drape characteristics
-✅ Natural matte finish - NO artificial gloss or CGI shine
-
-FORBIDDEN:
-❌ NO glossing or artificial shine
-❌ NO fabric smoothing or enhancement
-❌ NO color correction or saturation boost
-❌ NO CGI or hyper-rendered effects
-❌ NO adding accessories or styling
-❌ NO changing the garment in ANY way
-
-If the garment is faded, worn, or vintage - it MUST look faded, worn, or vintage.
-
-BACKGROUND:
-- Clean, solid white or very light grey (#F5F5F5) studio background
-- PLAIN - no gradients, no textures, no props
-- Professional photography studio lighting
-- Soft, even lighting with minimal shadows
-
-OUTPUT REQUIREMENTS:
-- Professional e-commerce product photography style
-- Model wearing ONLY the garment from the source image
-- Plain solid color bottoms (black or navy jeans/trousers) if source is a top
-- No distracting elements
-- The focus is 100% on the garment
-
-This is for e-commerce - customers must see exactly what they're buying.`;
-
   try {
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -140,7 +98,7 @@ This is for e-commerce - customers must see exactly what they're buying.`;
           {
             role: 'user',
             content: [
-              { type: 'text', text: prompt },
+              { type: 'text', text: shotType.prompt },
               { type: 'image_url', image_url: { url: sourceImageUrl } }
             ]
           }
@@ -151,7 +109,7 @@ This is for e-commerce - customers must see exactly what they're buying.`;
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`AI API error for ${model.id}/${pose.id} (attempt ${attempt}):`, response.status, errorText);
+      console.error(`AI API error for ${shotType.id} (attempt ${attempt}):`, response.status, errorText);
       
       if (response.status === 429) {
         throw new Error('Rate limit exceeded. Please try again later.');
@@ -161,9 +119,9 @@ This is for e-commerce - customers must see exactly what they're buying.`;
       }
       
       if (attempt < MAX_RETRIES) {
-        console.log(`Retrying ${model.id}/${pose.id}...`);
+        console.log(`Retrying ${shotType.id}...`);
         await new Promise(r => setTimeout(r, 2000));
-        return generateModelImage(sourceImageUrl, model, pose, apiKey, attempt + 1);
+        return generateCloseUpImage(sourceImageUrl, shotType, apiKey, attempt + 1);
       }
       return null;
     }
@@ -186,16 +144,15 @@ This is for e-commerce - customers must see exactly what they're buying.`;
 
     return generatedImage || null;
   } catch (error) {
-    console.error(`Error generating ${model.id}/${pose.id}:`, error);
+    console.error(`Error generating ${shotType.id}:`, error);
     
-    // Re-throw rate limit and payment errors
     if (error instanceof Error && (error.message.includes('Rate limit') || error.message.includes('Payment'))) {
       throw error;
     }
     
     if (attempt < MAX_RETRIES) {
       await new Promise(r => setTimeout(r, 2000));
-      return generateModelImage(sourceImageUrl, model, pose, apiKey, attempt + 1);
+      return generateCloseUpImage(sourceImageUrl, shotType, apiKey, attempt + 1);
     }
     return null;
   }
@@ -215,7 +172,7 @@ async function uploadBase64ToStorage(
     const base64Content = base64Data.replace(/^data:image\/\w+;base64,/, '');
     const imageBuffer = Uint8Array.from(atob(base64Content), c => c.charCodeAt(0));
     
-    const fileName = `${productId}/model_${imageType}_${Date.now()}.png`;
+    const fileName = `${productId}/closeup_${imageType}_${Date.now()}.png`;
     
     const { data, error } = await supabase.storage
       .from('product-images')
@@ -258,7 +215,7 @@ serve(async (req) => {
     }
 
     const body: RequestBody = await req.json();
-    const { productId, frontImageUrl, backImageUrl, targetCount = 8 } = body;
+    const { productId, frontImageUrl } = body;
 
     if (!productId || !frontImageUrl) {
       return new Response(
@@ -267,71 +224,40 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Starting AI model image expansion for product ${productId}`);
+    console.log(`Starting close-up image expansion for product ${productId}`);
 
-    // Calculate how many model images to generate - LIMIT TO 3 to avoid timeout
-    const existingCount = [frontImageUrl, backImageUrl].filter(Boolean).length;
-    const toGenerate = Math.max(0, Math.min(targetCount - existingCount, 3)); // Max 3 model images per call to avoid timeout
-    
-    console.log(`Existing: ${existingCount}, Target: ${targetCount}, To generate: ${toGenerate}`);
-
-    if (toGenerate === 0) {
-      return new Response(
-        JSON.stringify({ 
-          success: true, 
-          message: 'Already have enough images',
-          generatedImages: [] 
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Randomly select models and poses for variety
-    const shuffledModels = [...AI_MODELS].sort(() => Math.random() - 0.5);
-    const shuffledPoses = [...POSES].sort(() => Math.random() - 0.5);
-    
     const generatedImages: { type: string; url: string }[] = [];
 
-    // Generate model images - using Promise.all for parallel generation (faster)
-    const generatePromises = [];
+    // Generate all 3 close-up shots in parallel for speed
+    console.log(`Generating 3 close-up shots in parallel...`);
     
-    for (let i = 0; i < toGenerate; i++) {
-      const model = shuffledModels[i % shuffledModels.length];
-      const pose = shuffledPoses[i % shuffledPoses.length];
-
-      console.log(`Queuing model image ${i + 1}/${toGenerate}: ${model.name} in ${pose.id} pose...`);
+    const generatePromises = CLOSE_UP_SHOTS.map(async (shotType) => {
+      console.log(`Queuing ${shotType.name}...`);
       
-      generatePromises.push(
-        (async () => {
-          const base64Image = await generateModelImage(
-            frontImageUrl,
-            model,
-            pose,
-            apiKey
-          );
-
-          if (base64Image) {
-            // Upload to storage
-            const publicUrl = await uploadBase64ToStorage(
-              base64Image,
-              productId,
-              `${model.id}_${pose.id}`,
-              supabaseUrl,
-              supabaseKey
-            );
-
-            if (publicUrl) {
-              console.log(`Successfully generated and uploaded model image: ${model.name}/${pose.id}`);
-              return { type: `model_${model.id}_${pose.id}`, url: publicUrl };
-            }
-          }
-          console.warn(`Failed to generate model image: ${model.name}/${pose.id}`);
-          return null;
-        })()
+      const base64Image = await generateCloseUpImage(
+        frontImageUrl,
+        shotType,
+        apiKey
       );
-    }
 
-    // Wait for all generations to complete in parallel
+      if (base64Image) {
+        const publicUrl = await uploadBase64ToStorage(
+          base64Image,
+          productId,
+          shotType.id,
+          supabaseUrl,
+          supabaseKey
+        );
+
+        if (publicUrl) {
+          console.log(`Successfully generated: ${shotType.name}`);
+          return { type: shotType.id, url: publicUrl };
+        }
+      }
+      console.warn(`Failed to generate: ${shotType.name}`);
+      return null;
+    });
+
     const results = await Promise.all(generatePromises);
     for (const result of results) {
       if (result) {
@@ -339,13 +265,13 @@ serve(async (req) => {
       }
     }
 
-    console.log(`AI model image expansion complete. Generated ${generatedImages.length} images.`);
+    console.log(`Close-up expansion complete. Generated ${generatedImages.length} images.`);
 
     return new Response(
       JSON.stringify({ 
         success: true,
         generatedImages,
-        totalImages: existingCount + generatedImages.length,
+        totalImages: generatedImages.length,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
