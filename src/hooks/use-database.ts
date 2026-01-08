@@ -826,10 +826,12 @@ export function useImages() {
 
   const fetchImagesForProduct = useCallback(async (productId: string): Promise<ProductImage[]> => {
     // Always fetch fresh from database to ensure consistency
+    // CRITICAL: Filter out soft-deleted images
     const { data, error } = await supabase
       .from('images')
       .select('*')
       .eq('product_id', productId)
+      .is('deleted_at', null)
       .order('position', { ascending: true });
     
     if (error) {
@@ -843,10 +845,12 @@ export function useImages() {
   }, []);
 
   const fetchImagesForBatch = useCallback(async (batchId: string): Promise<ProductImage[]> => {
+    // CRITICAL: Filter out soft-deleted images
     const { data, error } = await supabase
       .from('images')
       .select('*')
       .eq('batch_id', batchId)
+      .is('deleted_at', null)
       .order('position', { ascending: true });
     
     if (error) {
