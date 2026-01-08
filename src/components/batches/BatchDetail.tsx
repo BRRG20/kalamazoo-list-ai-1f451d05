@@ -155,6 +155,11 @@ interface BatchDetailProps {
   // Hidden products
   hiddenProductsCount?: number;
   onOpenHiddenProducts?: () => void;
+  // Inline hidden products filter
+  showHiddenInline?: boolean;
+  onToggleShowHiddenInline?: () => void;
+  // Unhide product
+  onUnhideProduct?: (productId: string) => void;
   // Empty products cleanup
   onDeleteEmptyProducts?: (productIds: string[]) => Promise<void>;
   // Create product from image IDs (for Birds Eye View)
@@ -249,6 +254,9 @@ export function BatchDetail({
   onOpenDeletedImages,
   hiddenProductsCount = 0,
   onOpenHiddenProducts,
+  showHiddenInline,
+  onToggleShowHiddenInline,
+  onUnhideProduct,
   onDeleteEmptyProducts,
   onCreateProductFromImageIds,
   onMarkAsUploaded,
@@ -1611,6 +1619,30 @@ export function BatchDetail({
                   >
                     {shopifyFilter === 'not_uploaded' ? '✓ Showing pending only' : 'Hide uploaded'}
                   </button>
+                  {/* Show hidden products toggle */}
+                  {onToggleShowHiddenInline && hiddenProductsCount > 0 && (
+                    <button
+                      onClick={onToggleShowHiddenInline}
+                      className={cn(
+                        "ml-1 px-2 py-0.5 text-xs rounded-full border transition-colors",
+                        showHiddenInline
+                          ? "bg-amber-500 text-white border-amber-500"
+                          : "bg-transparent text-muted-foreground border-border hover:border-amber-500/50"
+                      )}
+                    >
+                      {showHiddenInline ? (
+                        <>
+                          <Eye className="w-3 h-3 inline mr-1" />
+                          {hiddenProductsCount} hidden shown
+                        </>
+                      ) : (
+                        <>
+                          <EyeOff className="w-3 h-3 inline mr-1" />
+                          Show {hiddenProductsCount} hidden
+                        </>
+                      )}
+                    </button>
+                  )}
                 </div>
               </div>
               
@@ -2073,6 +2105,7 @@ export function BatchDetail({
                   onMarkAsUploaded={(shopifyProductId) => onMarkAsUploaded?.(product.id, shopifyProductId)}
                   onMarkAsPending={() => onMarkAsPending?.(product.id)}
                   onHide={() => onHideProduct?.(product.id)}
+                  onUnhide={showHiddenInline && product.is_hidden ? () => onUnhideProduct?.(product.id) : undefined}
                 />
               ))}
               {!imagesLoading && products.length > 0 && Object.keys(productImages).length === 0 && (

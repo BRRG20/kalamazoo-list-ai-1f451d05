@@ -256,7 +256,7 @@ export function useBatches() {
 }
 
 // Products Hook with mutation locking
-export function useProducts(batchId: string | null) {
+export function useProducts(batchId: string | null, includeHidden: boolean = false) {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
   const [isMutating, setIsMutating] = useState(false);
@@ -293,12 +293,17 @@ export function useProducts(batchId: string | null) {
     abortControllerRef.current = new AbortController();
     
     setLoading(true);
-    const { data, error } = await supabase
+    let query = supabase
       .from('products')
       .select('*')
-      .eq('batch_id', batchId)
-      .eq('is_hidden', false) // CRITICAL: Only fetch non-hidden products
-      .order('created_at', { ascending: false });
+      .eq('batch_id', batchId);
+    
+    // Only filter out hidden products when not including them
+    if (!includeHidden) {
+      query = query.eq('is_hidden', false);
+    }
+    
+    const { data, error } = await query.order('created_at', { ascending: false });
     
     if (error) {
       console.error('Error fetching products:', error);
@@ -309,7 +314,7 @@ export function useProducts(batchId: string | null) {
     
     setProducts((data || []).map(mapProduct));
     setLoading(false);
-  }, [batchId]);
+  }, [batchId, includeHidden]);
 
   useEffect(() => {
     fetchProducts();

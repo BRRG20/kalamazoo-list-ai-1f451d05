@@ -39,7 +39,8 @@ const DEFAULT_FEMALE_MODEL_ID = '55555555-5555-5555-5555-555555555555'; // Sophi
 export default function BatchesPage() {
   const { batches, createBatch, updateBatch, deleteBatch, getProductCount } = useBatches();
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
-  const { products, createProduct, createProductWithImages, updateProduct, deleteProduct, deleteEmptyProducts, hideProduct, isMutating, acquireLock, releaseLock, refetch: refetchProducts } = useProducts(selectedBatchId);
+  const [showHiddenInline, setShowHiddenInline] = useState(false);
+  const { products, createProduct, createProductWithImages, updateProduct, deleteProduct, deleteEmptyProducts, hideProduct, isMutating, acquireLock, releaseLock, refetch: refetchProducts } = useProducts(selectedBatchId, showHiddenInline);
   const { deletedProducts, recoverProduct, permanentlyDelete: permanentlyDeleteProduct, emptyTrash, refetch: refetchDeletedProducts } = useDeletedProducts(selectedBatchId);
   const { deletedImages, recoverImage, permanentlyDelete: permanentlyDeleteImage, emptyImageTrash, recoverAllImages, refetch: refetchDeletedImages } = useDeletedImages(selectedBatchId);
   const { hiddenProducts, unhideProduct, refetch: refetchHiddenProducts } = useHiddenProducts(selectedBatchId);
@@ -2057,6 +2058,13 @@ const handleSelectBatch = useCallback((id: string) => {
               onOpenDeletedProducts={() => setShowDeletedProducts(true)}
               onOpenDeletedImages={() => setShowDeletedImages(true)}
               onOpenHiddenProducts={() => setShowHiddenProducts(true)}
+              showHiddenInline={showHiddenInline}
+              onToggleShowHiddenInline={() => setShowHiddenInline(prev => !prev)}
+              onUnhideProduct={async (productId) => {
+                await unhideProduct(productId);
+                refetchProducts();
+                refetchHiddenProducts();
+              }}
               onDeleteEmptyProducts={handleDeleteEmptyProducts}
               onCreateProductFromImageIds={handleCreateProductFromImageIds}
               onCameraCapture={handleCameraCapture}
