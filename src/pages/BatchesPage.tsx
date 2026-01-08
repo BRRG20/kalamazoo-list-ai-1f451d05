@@ -51,7 +51,7 @@ export default function BatchesPage() {
   });
   
   // AI Image Expansion hook
-  const { expandProductImages, isExpanding: isExpandingImages, progress: expansionProgress } = useImageExpansion();
+  const { expandProductImages, isExpanding: isExpandingImages, progress: expansionProgress, startBatchExpansion, updateBatchProgress, endBatchExpansion } = useImageExpansion();
   
   // Initialize AI generated status when products load
   useEffect(() => {
@@ -364,85 +364,95 @@ const handleSelectBatch = useCallback((id: string) => {
       return;
     }
     
-    toast.info(`Generating listing images for ${idsToProcess.length} product(s)...`);
+    // Start batch operation to prevent loading state flicker
+    startBatchExpansion(idsToProcess.length);
+    toast.info(`Generating close-up images for ${idsToProcess.length} product(s)...`);
     
     let totalGenerated = 0;
     let processedCount = 0;
     
-    for (const productId of idsToProcess) {
-      const product = products.find(p => p.id === productId);
-      if (!product) {
-        console.warn(`Product ${productId} not found, skipping`);
-        continue;
-      }
-      
-      // Fetch product images
-      const images = await fetchImagesForProduct(productId);
-      if (images.length === 0) {
-        console.warn(`No images for product ${productId}, skipping`);
-        continue;
-      }
-      
-      // Sort by position to get front, back, label, detail
-      const sortedImages = [...images].sort((a, b) => a.position - b.position);
-      
-      // Find images by type or position
-      const frontImage = sortedImages[0]; // First image is typically front
-      const backImage = sortedImages.length > 1 ? sortedImages[1] : undefined;
-      const labelImage = sortedImages.find(img => img.source === 'upload' && sortedImages.indexOf(img) === 2);
-      const detailImage = sortedImages.length > 3 ? sortedImages[3] : undefined;
-      
-      const result = await expandProductImages(
-        productId,
-        frontImage.url,
-        backImage?.url,
-        labelImage?.url,
-        detailImage?.url,
-        8 // Target 8 total images
-      );
-      
-      if (result && result.success) {
-        // Add generated images to the product
-        const currentImages = await fetchImagesForProduct(productId);
-        const nextPosition = currentImages.length;
+    try {
+      for (const productId of idsToProcess) {
+        const product = products.find(p => p.id === productId);
+        if (!product) {
+          console.warn(`Product ${productId} not found, skipping`);
+          continue;
+        }
         
-        for (let i = 0; i < result.generatedImages.length; i++) {
-          const genImg = result.generatedImages[i];
+        // Update progress
+        updateBatchProgress(processedCount + 1, idsToProcess.length);
+        
+        // Fetch product images
+        const images = await fetchImagesForProduct(productId);
+        if (images.length === 0) {
+          console.warn(`No images for product ${productId}, skipping`);
+          continue;
+        }
+        
+        // Sort by position to get front, back, label, detail
+        const sortedImages = [...images].sort((a, b) => a.position - b.position);
+        
+        // Find images by type or position
+        const frontImage = sortedImages[0]; // First image is typically front
+        const backImage = sortedImages.length > 1 ? sortedImages[1] : undefined;
+        const labelImage = sortedImages.find(img => img.source === 'upload' && sortedImages.indexOf(img) === 2);
+        const detailImage = sortedImages.length > 3 ? sortedImages[3] : undefined;
+        
+        const result = await expandProductImages(
+          productId,
+          frontImage.url,
+          backImage?.url,
+          labelImage?.url,
+          detailImage?.url,
+          8 // Target 8 total images
+        );
+        
+        if (result && result.success) {
+          // Add generated images to the product
+          const currentImages = await fetchImagesForProduct(productId);
+          const nextPosition = currentImages.length;
           
-          // Insert new image into database
-          const { error } = await supabase
-            .from('images')
-            .insert({
-              url: genImg.url,
-              product_id: productId,
-              batch_id: selectedBatchId,
-              position: nextPosition + i,
-              include_in_shopify: true,
-              user_id: user.id,
-              source: 'ai_expansion'
-            });
-          
-          if (error) {
-            console.error('Error adding expanded image:', error);
-          } else {
-            totalGenerated++;
+          for (let i = 0; i < result.generatedImages.length; i++) {
+            const genImg = result.generatedImages[i];
+            
+            // Insert new image into database
+            const { error } = await supabase
+              .from('images')
+              .insert({
+                url: genImg.url,
+                product_id: productId,
+                batch_id: selectedBatchId,
+                position: nextPosition + i,
+                include_in_shopify: true,
+                user_id: user.id,
+                source: 'ai_expansion'
+              });
+            
+            if (error) {
+              console.error('Error adding expanded image:', error);
+            } else {
+              totalGenerated++;
+            }
           }
         }
+        
+        processedCount++;
       }
       
-      processedCount++;
+      // Clear cache and refresh
+      clearCache();
+      await refetchProducts();
+      
+      if (totalGenerated > 0) {
+        toast.success(`Added ${totalGenerated} close-up images across ${processedCount} product(s)`);
+      } else {
+        toast.error('No images were generated');
+      }
+    } finally {
+      // Always end batch operation to reset loading state
+      endBatchExpansion();
     }
-    
-    // Clear cache and refresh
-    clearCache();
-    await refetchProducts();
-    
-    if (totalGenerated > 0) {
-      toast.success(`Added ${totalGenerated} AI-generated images across ${processedCount} product(s)`);
-    } else {
-      toast.error('No images were generated');
-    }
-  }, [products, fetchImagesForProduct, expandProductImages, selectedBatchId, clearCache, refetchProducts]);
+  }, [products, fetchImagesForProduct, expandProductImages, selectedBatchId, clearCache, refetchProducts, startBatchExpansion, updateBatchProgress, endBatchExpansion]);
 
   const handleAutoGroup = useCallback(async (imagesPerProduct: number) => {
     if (!selectedBatchId) return;

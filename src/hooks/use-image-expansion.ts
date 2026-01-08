@@ -1,5 +1,4 @@
-import { useState, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { useState, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 
 export interface ExpandedImage {
@@ -16,6 +15,9 @@ export interface ImageExpansionResult {
 export function useImageExpansion() {
   const [isExpanding, setIsExpanding] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
+  
+  // Track if we're in a batch operation to prevent premature state reset
+  const batchOperationRef = useRef(false);
 
   const expandProductImages = useCallback(async (
     productId: string,
@@ -25,8 +27,11 @@ export function useImageExpansion() {
     detailImageUrl?: string,
     targetCount: number = 8
   ): Promise<ImageExpansionResult | null> => {
-    setIsExpanding(true);
-    setProgress({ current: 0, total: targetCount });
+    // Only set expanding if not already in a batch operation
+    if (!batchOperationRef.current) {
+      setIsExpanding(true);
+      setProgress({ current: 0, total: targetCount });
+    }
 
     try {
       const response = await fetch(
@@ -64,7 +69,6 @@ export function useImageExpansion() {
       const data = await response.json();
       
       if (data.success) {
-        setProgress({ current: data.totalImages, total: targetCount });
         return data;
       }
       
@@ -74,9 +78,31 @@ export function useImageExpansion() {
       toast.error('Failed to expand product images');
       return null;
     } finally {
-      setIsExpanding(false);
-      setProgress({ current: 0, total: 0 });
+      // Only reset if not in a batch operation
+      if (!batchOperationRef.current) {
+        setIsExpanding(false);
+        setProgress({ current: 0, total: 0 });
+      }
     }
+  }, []);
+
+  // Start a batch operation - prevents individual calls from resetting state
+  const startBatchExpansion = useCallback((totalProducts: number) => {
+    batchOperationRef.current = true;
+    setIsExpanding(true);
+    setProgress({ current: 0, total: totalProducts });
+  }, []);
+
+  // Update progress during batch
+  const updateBatchProgress = useCallback((current: number, total: number) => {
+    setProgress({ current, total });
+  }, []);
+
+  // End batch operation and reset state
+  const endBatchExpansion = useCallback(() => {
+    batchOperationRef.current = false;
+    setIsExpanding(false);
+    setProgress({ current: 0, total: 0 });
   }, []);
 
   // Batch expand for multiple products
@@ -91,43 +117,47 @@ export function useImageExpansion() {
     targetCount: number = 8,
     onProgress?: (current: number, total: number) => void
   ): Promise<Map<string, ImageExpansionResult>> => {
-    setIsExpanding(true);
+    startBatchExpansion(products.length);
     const results = new Map<string, ImageExpansionResult>();
     
-    for (let i = 0; i < products.length; i++) {
-      const product = products[i];
-      onProgress?.(i + 1, products.length);
-      setProgress({ current: i + 1, total: products.length });
-      
-      const result = await expandProductImages(
-        product.productId,
-        product.frontImageUrl,
-        product.backImageUrl,
-        product.labelImageUrl,
-        product.detailImageUrl,
-        targetCount
-      );
-      
-      if (result) {
-        results.set(product.productId, result);
+    try {
+      for (let i = 0; i < products.length; i++) {
+        const product = products[i];
+        onProgress?.(i + 1, products.length);
+        updateBatchProgress(i + 1, products.length);
+        
+        const result = await expandProductImages(
+          product.productId,
+          product.frontImageUrl,
+          product.backImageUrl,
+          product.labelImageUrl,
+          product.detailImageUrl,
+          targetCount
+        );
+        
+        if (result) {
+          results.set(product.productId, result);
+        }
+        
+        // Delay between products to avoid rate limits
+        if (i < products.length - 1) {
+          await new Promise(r => setTimeout(r, 1000));
+        }
       }
-      
-      // Delay between products to avoid rate limits
-      if (i < products.length - 1) {
-        await new Promise(r => setTimeout(r, 1000));
-      }
+    } finally {
+      endBatchExpansion();
     }
     
-    setIsExpanding(false);
-    setProgress({ current: 0, total: 0 });
-    
     return results;
-  }, [expandProductImages]);
+  }, [expandProductImages, startBatchExpansion, updateBatchProgress, endBatchExpansion]);
 
   return {
     isExpanding,
     progress,
     expandProductImages,
     expandBatch,
+    startBatchExpansion,
+    updateBatchProgress,
+    endBatchExpansion,
   };
 }
