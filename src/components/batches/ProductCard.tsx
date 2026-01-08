@@ -159,6 +159,8 @@ export function ProductCard({
                 draggable
                 onDragStart={(e) => handleDragStart(e, thumbnail, 0)}
                 onDragEnd={handleDragEnd}
+                loading="lazy"
+                decoding="async"
               />
               {/* AI Model badge */}
               {images[0]?.source === 'model_tryon' && (
@@ -245,6 +247,8 @@ export function ProductCard({
                       src={img.url}
                       alt={`Image ${idx + 1}`}
                       className="w-full h-full object-cover rounded pointer-events-none"
+                      loading="lazy"
+                      decoding="async"
                     />
                     {/* Per-image delete button */}
                     {onDeleteImage && (
