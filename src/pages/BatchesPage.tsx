@@ -359,7 +359,7 @@ const handleSelectBatch = useCallback((id: string) => {
   // Uses existing model_tryon image, or generates one first if none exists
   // Accepts single productId or array of productIds for bulk expansion
   // Optional modelId parameter allows user to specify which AI model to use
-  const handleExpandProductImages = useCallback(async (productIds: string | string[], userSelectedModelId?: string) => {
+  const handleExpandProductImages = useCallback(async (productIds: string | string[], mode: 'product_photos' | 'ai_model') => {
     const idsToProcess = Array.isArray(productIds) ? productIds : [productIds];
     
     if (idsToProcess.length === 0) {
@@ -374,9 +374,9 @@ const handleSelectBatch = useCallback((id: string) => {
       return;
     }
     
-    // Start batch operation to prevent loading state flicker
+    const modeLabel = mode === 'product_photos' ? 'product photo' : 'AI model';
     startBatchExpansion(idsToProcess.length);
-    toast.info(`Generating close-up images for ${idsToProcess.length} product(s)...`);
+    toast.info(`Expanding ${modeLabel} images for ${idsToProcess.length} product(s)...`);
     
     let totalGenerated = 0;
     let processedCount = 0;
@@ -389,145 +389,75 @@ const handleSelectBatch = useCallback((id: string) => {
           continue;
         }
         
-        // Update progress
         updateBatchProgress(processedCount + 1, idsToProcess.length);
         
-        // Fetch product images
         const images = await fetchImagesForProduct(productId);
         if (images.length === 0) {
           console.warn(`No images for product ${productId}, skipping`);
           continue;
         }
         
-        // Sort by position
         const sortedImages = [...images].sort((a, b) => a.position - b.position);
-        
-        // Look for existing model_tryon image - that's the source for expansion
-        let modelImage = sortedImages.find(img => img.source === 'model_tryon');
         let sourceImageUrl: string;
         
-        if (modelImage) {
-          // Use existing model_tryon image for expansion
-          console.log(`Using existing model_tryon image for product ${productId}`);
-          sourceImageUrl = modelImage.url;
-        } else {
-          // No model_tryon image - generate one first using default model based on department
-          console.log(`No model_tryon image found for product ${productId}, generating one first...`);
-          
-          // Find the original product image (non-AI) to use as garment source
+        if (mode === 'product_photos') {
+          // Use original product photo (NOT model image)
           const originalImage = sortedImages.find(img => !img.source || img.source === 'upload');
           if (!originalImage) {
             console.warn(`No original product image for ${productId}, skipping`);
             continue;
           }
-          
-          // Determine model to use: user-selected > auto-detect based on department
-          const department = product.department;
-          let modelIdToUse: string;
-          
-          if (userSelectedModelId) {
-            // User explicitly selected a model
-            modelIdToUse = userSelectedModelId;
-            console.log(`Using user-selected model ${modelIdToUse}`);
-          } else if (department === 'Women') {
-            modelIdToUse = DEFAULT_FEMALE_MODEL_ID; // Sophie
-            console.log(`Auto-detecting: Women department -> ${modelIdToUse}`);
-          } else {
-            // Men, Unisex, Kids, or null - default to male model
-            modelIdToUse = DEFAULT_MALE_MODEL_ID; // James
-            console.log(`Auto-detecting: ${department || 'unknown'} department -> ${modelIdToUse}`);
-          }
-          
-          // Generate model try-on image
-          const response = await fetch(
-            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/model-tryon`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-              },
-              body: JSON.stringify({
-                garmentImageUrl: originalImage.url,
-                modelId: modelIdToUse,
-                poseId: 'front_neutral',
-                fitStyle: 'regular',
-                styleOutfit: false,
-              }),
-            }
-          );
-          
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-            console.error(`Failed to generate model for product ${productId}:`, errorData);
-            if (response.status === 429) {
-              toast.error('Rate limit exceeded. Please wait and try again.');
-              break; // Stop processing on rate limit
-            } else if (response.status === 402) {
-              toast.error('AI credits exhausted. Please add credits.');
-              break; // Stop processing on payment required
-            }
+          sourceImageUrl = originalImage.url;
+          console.log(`Using original product photo for expansion: ${productId}`);
+        } else {
+          // Use existing AI model image - NEVER generate new models
+          const modelImage = sortedImages.find(img => img.source === 'model_tryon');
+          if (!modelImage) {
+            console.warn(`No AI model image for ${productId}, skipping - user must generate model first`);
             continue;
           }
-          
-          const modelData = await response.json();
-          const generatedModelUrl = modelData.processedImageUrl;
-          
-          if (!generatedModelUrl) {
-            console.warn(`Model generation returned no URL for product ${productId}`);
-            continue;
-          }
-          
-          // Increment all existing image positions to make room for the model image at position 0
-          for (const img of sortedImages) {
-            await supabase
-              .from('images')
-              .update({ position: img.position + 1 })
-              .eq('id', img.id);
-          }
-          
-          // Insert new model_tryon image at position 0
-          const { error: insertError } = await supabase
-            .from('images')
-            .insert({
-              url: generatedModelUrl,
-              product_id: productId,
-              batch_id: selectedBatchId,
-              position: 0,
-              include_in_shopify: true,
-              user_id: user.id,
-              source: 'model_tryon'
-            });
-          
-          if (insertError) {
-            console.error('Error inserting model image:', insertError);
-            continue;
-          }
-          
-          sourceImageUrl = generatedModelUrl;
-          totalGenerated++; // Count the model image as generated
-          console.log(`Generated model_tryon image for product ${productId}`);
+          sourceImageUrl = modelImage.url;
+          console.log(`Using existing AI model image for expansion: ${productId}`);
         }
         
-        // Now expand using the model image as source
-        const result = await expandProductImages(
-          productId,
-          sourceImageUrl, // Use the model image for expansion
-          undefined, // No back image for model-based expansion
-          undefined, // No label image
-          undefined, // No detail image
-          8 // Target 8 total images
+        // Call the expand-product-photos edge function with mode
+        const response = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/expand-product-photos`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            },
+            body: JSON.stringify({
+              productId,
+              sourceImageUrl,
+              mode,
+            }),
+          }
         );
         
-        if (result && result.success) {
-          // Add generated images to the product
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+          console.error(`Expansion failed for ${productId}:`, errorData);
+          if (response.status === 429) {
+            toast.error('Rate limit exceeded. Please wait and try again.');
+            break;
+          } else if (response.status === 402) {
+            toast.error('AI credits exhausted. Please add credits.');
+            break;
+          }
+          continue;
+        }
+        
+        const result = await response.json();
+        
+        if (result.success && result.generatedImages?.length > 0) {
           const currentImages = await fetchImagesForProduct(productId);
           const nextPosition = currentImages.length;
           
           for (let i = 0; i < result.generatedImages.length; i++) {
             const genImg = result.generatedImages[i];
-            
-            // Insert new image into database
             const { error } = await supabase
               .from('images')
               .insert({
@@ -537,39 +467,31 @@ const handleSelectBatch = useCallback((id: string) => {
                 position: nextPosition + i,
                 include_in_shopify: true,
                 user_id: user.id,
-                source: 'ai_expansion'
+                source: mode === 'product_photos' ? 'product_expansion' : 'model_expansion'
               });
             
-            if (error) {
-              console.error('Error adding expanded image:', error);
-            } else {
-              totalGenerated++;
-            }
+            if (!error) totalGenerated++;
           }
         }
         
         processedCount++;
-        
-        // Small delay between products to avoid rate limits
         if (processedCount < idsToProcess.length) {
           await new Promise(r => setTimeout(r, 1000));
         }
       }
       
-      // Clear cache and refresh
       clearCache();
       await refetchProducts();
       
       if (totalGenerated > 0) {
-        toast.success(`Added ${totalGenerated} images across ${processedCount} product(s)`);
+        toast.success(`Added ${totalGenerated} ${modeLabel} images across ${processedCount} product(s)`);
       } else {
         toast.error('No images were generated');
       }
     } finally {
-      // Always end batch operation to reset loading state
       endBatchExpansion();
     }
-  }, [products, fetchImagesForProduct, expandProductImages, selectedBatchId, clearCache, refetchProducts, startBatchExpansion, updateBatchProgress, endBatchExpansion]);
+  }, [products, fetchImagesForProduct, selectedBatchId, clearCache, refetchProducts, startBatchExpansion, updateBatchProgress, endBatchExpansion]);
 
   const handleAutoGroup = useCallback(async (imagesPerProduct: number) => {
     if (!selectedBatchId) return;
@@ -2036,6 +1958,10 @@ const handleSelectBatch = useCallback((id: string) => {
               onQuickProductCapture={handleQuickProductCapture}
               onExpandProductImages={handleExpandProductImages}
               isExpandingImages={isExpandingImages}
+              getProductHasModelImage={(productId) => {
+                const images = fetchImagesForProduct(productId);
+                return false; // Will be checked async
+              }}
             />
           ) : (
             <EmptyState />
