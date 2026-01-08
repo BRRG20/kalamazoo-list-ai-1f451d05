@@ -292,6 +292,7 @@ export function BatchDetail({
   const [showInfoDialog, setShowInfoDialog] = useState(false);
   const [showModelTryOnDialog, setShowModelTryOnDialog] = useState(false);
   const [showExpandModeDialog, setShowExpandModeDialog] = useState(false);
+  const [regeneratingModelProductId, setRegeneratingModelProductId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const shopifyConfigured = isShopifyConfigured();
   
@@ -905,6 +906,110 @@ export function BatchDetail({
     toast.success(`Removed ${undoEntries.length} model images`);
   }, [batch.id, modelUndoData]);
 
+  // Regenerate AI model style for a single product
+  const handleRegenerateModelStyle = useCallback(async (productId: string) => {
+    const imgs = productImages[productId] || [];
+    
+    // Find the model try-on image to regenerate
+    const modelImage = imgs.find(img => img.source === 'model_tryon');
+    if (!modelImage) {
+      toast.error('No AI model image found to regenerate');
+      return;
+    }
+    
+    // Find an original product image to use as source
+    const sourceImage = imgs.find(img => img.source !== 'model_tryon' && img.source !== 'ai_expansion');
+    if (!sourceImage) {
+      toast.error('No original product image found for regeneration');
+      return;
+    }
+    
+    // Get current user for RLS
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      toast.error('You must be logged in to use this feature');
+      return;
+    }
+    
+    // Get product department for auto model selection
+    const product = products.find(p => p.id === productId);
+    const department = product?.department || 'Men';
+    
+    // Auto-select model based on department
+    const defaultModel = department === 'Women' 
+      ? availableModels.find(m => m.gender === 'female') 
+      : availableModels.find(m => m.gender === 'male');
+    const modelId = defaultModel?.id || availableModels[0]?.id;
+    
+    if (!modelId) {
+      toast.error('No AI model available for regeneration');
+      return;
+    }
+    
+    setRegeneratingModelProductId(productId);
+    
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/model-tryon`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({
+            garmentImageUrl: sourceImage.url,
+            modelId,
+            poseId: 'front_neutral',
+            fitStyle: 'regular',
+            styleOutfit: true,
+            outfitStyle: 'stylish_casual',
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        if (response.status === 429) {
+          toast.error('Rate limit exceeded. Please wait and try again.');
+        } else if (response.status === 402) {
+          toast.error('AI credits exhausted. Please add credits.');
+        } else {
+          toast.error(errorData.error || 'Model regeneration failed');
+        }
+        return;
+      }
+
+      const data = await response.json();
+      const newUrl = data.processedImageUrl;
+      
+      if (newUrl) {
+        // Update the existing model image URL in database
+        const { error } = await supabase
+          .from('images')
+          .update({ url: newUrl })
+          .eq('id', modelImage.id);
+        
+        if (!error) {
+          // Update local state
+          setProductImages(prev => ({
+            ...prev,
+            [productId]: prev[productId].map(img => 
+              img.id === modelImage.id ? { ...img, url: newUrl } : img
+            )
+          }));
+          toast.success('AI model style regenerated');
+        } else {
+          toast.error('Failed to save regenerated image');
+        }
+      }
+    } catch (error) {
+      console.error('Model regeneration error:', error);
+      toast.error('Failed to regenerate model style');
+    } finally {
+      setRegeneratingModelProductId(null);
+    }
+  }, [productImages, products, availableModels]);
 
   return (
     <div className="min-h-full flex flex-col">
@@ -1931,7 +2036,9 @@ export function BatchDetail({
                   onReorderImages={(imageIds) => onReorderProductImages?.(product.id, imageIds)}
                   onGenerateAI={() => onGenerateSingleProduct(product.id)}
                   onUndoAI={() => onUndoSingleProduct(product.id)}
+                  onRegenerateModelStyle={() => handleRegenerateModelStyle(product.id)}
                   isGenerating={isProductGenerating(product.id)}
+                  isRegeneratingModel={regeneratingModelProductId === product.id}
                   hasUndoState={hasProductUndoState(product.id)}
                   onMarkAsUploaded={(shopifyProductId) => onMarkAsUploaded?.(product.id, shopifyProductId)}
                   onMarkAsPending={() => onMarkAsPending?.(product.id)}
