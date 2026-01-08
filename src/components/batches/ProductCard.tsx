@@ -18,6 +18,7 @@ interface ProductCardProps {
   onDeleteImage?: (imageId: string) => void;
   onReceiveImage?: (imageUrl: string, fromProductId: string) => void;
   onReorderImages?: (imageIds: string[]) => void;
+  onUpdateImageUrl?: (imageId: string, newUrl: string) => void;
   isDraggingImage?: boolean;
   // AI generation props
   onGenerateAI?: () => void;
@@ -43,6 +44,7 @@ export function ProductCard({
   onDeleteImage,
   onReceiveImage,
   onReorderImages,
+  onUpdateImageUrl,
   isDraggingImage,
   onGenerateAI,
   onUndoAI,
@@ -417,6 +419,12 @@ export function ProductCard({
         initialIndex={previewIndex}
         open={previewOpen}
         onClose={() => setPreviewOpen(false)}
+        onImageUpdated={onUpdateImageUrl ? (index, newUrl) => {
+          const image = images[index];
+          if (image) {
+            onUpdateImageUrl(image.id, newUrl);
+          }
+        } : undefined}
       />
     </>
   );

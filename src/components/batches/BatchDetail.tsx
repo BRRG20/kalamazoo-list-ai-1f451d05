@@ -2028,6 +2028,15 @@ export function BatchDetail({
                     onMoveImageBetweenProducts?.(imageUrl, fromProductId, product.id)
                   }
                   onReorderImages={(imageIds) => onReorderProductImages?.(product.id, imageIds)}
+                  onUpdateImageUrl={async (imageId, newUrl) => {
+                    await supabase.from('images').update({ url: newUrl }).eq('id', imageId);
+                    setProductImages(prev => ({
+                      ...prev,
+                      [product.id]: (prev[product.id] || []).map(img => 
+                        img.id === imageId ? { ...img, url: newUrl } : img
+                      )
+                    }));
+                  }}
                   onGenerateAI={() => onGenerateSingleProduct(product.id)}
                   onUndoAI={() => onUndoSingleProduct(product.id)}
                   onRegenerateModelStyle={() => handleRegenerateModelStyle(product.id)}

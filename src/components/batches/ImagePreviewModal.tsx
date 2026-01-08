@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, ChevronLeft, ChevronRight, ZoomIn, Download } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, ZoomIn, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -7,12 +7,14 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
+import { ImageEditCanvas } from '@/components/image-edit/ImageEditCanvas';
 
 interface ImagePreviewModalProps {
   images: string[];
   initialIndex: number;
   open: boolean;
   onClose: () => void;
+  onImageUpdated?: (index: number, newUrl: string) => void;
 }
 
 export function ImagePreviewModal({
@@ -20,12 +22,21 @@ export function ImagePreviewModal({
   initialIndex,
   open,
   onClose,
+  onImageUpdated,
 }: ImagePreviewModalProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
+  const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
     setCurrentIndex(initialIndex);
   }, [initialIndex, open]);
+
+  // Reset editing mode when modal closes
+  useEffect(() => {
+    if (!open) {
+      setIsEditing(false);
+    }
+  }, [open]);
 
   const goToPrevious = useCallback(() => {
     setCurrentIndex((prev) => (prev > 0 ? prev - 1 : images.length - 1));
@@ -35,9 +46,9 @@ export function ImagePreviewModal({
     setCurrentIndex((prev) => (prev < images.length - 1 ? prev + 1 : 0));
   }, [images.length]);
 
-  // Keyboard navigation
+  // Keyboard navigation - disabled when editing
   useEffect(() => {
-    if (!open) return;
+    if (!open || isEditing) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'ArrowLeft') {
@@ -51,99 +62,127 @@ export function ImagePreviewModal({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [open, goToPrevious, goToNext, onClose]);
+  }, [open, isEditing, goToPrevious, goToNext, onClose]);
+
+  const handleEditSave = (newUrl: string) => {
+    if (onImageUpdated) {
+      onImageUpdated(currentIndex, newUrl);
+    }
+    setIsEditing(false);
+  };
 
   if (!images.length) return null;
 
   const currentImage = images[currentIndex];
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-[95vw] max-h-[95vh] w-auto h-auto p-0 bg-background/95 backdrop-blur-sm border-border">
+    <Dialog open={open} onOpenChange={isEditing ? undefined : onClose}>
+      <DialogContent className={`p-0 bg-background/95 backdrop-blur-sm border-border ${isEditing ? 'max-w-[95vw] w-[95vw] h-[90vh] max-h-[90vh]' : 'max-w-[95vw] max-h-[95vh] w-auto h-auto'}`}>
         <VisuallyHidden>
-          <DialogTitle>Image Preview</DialogTitle>
+          <DialogTitle>{isEditing ? 'Edit Image' : 'Image Preview'}</DialogTitle>
         </VisuallyHidden>
         
-        {/* Header */}
-        <div className="absolute top-0 left-0 right-0 flex items-center justify-between p-3 bg-gradient-to-b from-background/80 to-transparent z-10">
-          <span className="text-sm font-medium text-foreground bg-background/60 px-2 py-1 rounded">
-            {currentIndex + 1} of {images.length}
-          </span>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => window.open(currentImage, '_blank')}
-              className="h-8 w-8 bg-background/60 hover:bg-background/80"
-              title="Open full size"
-            >
-              <ZoomIn className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onClose}
-              className="h-8 w-8 bg-background/60 hover:bg-background/80"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-
-        {/* Main image */}
-        <div className="flex items-center justify-center min-h-[50vh] max-h-[80vh] p-12">
-          <img
-            src={currentImage}
-            alt={`Image ${currentIndex + 1}`}
-            className="max-w-full max-h-[75vh] object-contain rounded-lg shadow-lg"
+        {isEditing ? (
+          <ImageEditCanvas
+            imageUrl={currentImage}
+            onSave={handleEditSave}
+            onCancel={() => setIsEditing(false)}
           />
-        </div>
-
-        {/* Navigation buttons */}
-        {images.length > 1 && (
+        ) : (
           <>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={goToPrevious}
-              className="absolute left-3 top-1/2 -translate-y-1/2 h-12 w-12 bg-background/60 hover:bg-background/80 rounded-full"
-            >
-              <ChevronLeft className="h-6 w-6" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={goToNext}
-              className="absolute right-3 top-1/2 -translate-y-1/2 h-12 w-12 bg-background/60 hover:bg-background/80 rounded-full"
-            >
-              <ChevronRight className="h-6 w-6" />
-            </Button>
-          </>
-        )}
-
-        {/* Thumbnail strip */}
-        {images.length > 1 && (
-          <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-background/80 to-transparent">
-            <div className="flex justify-center gap-2 overflow-x-auto py-2 max-w-full">
-              {images.map((url, index) => (
-                <button
-                  key={index}
-                  onClick={() => setCurrentIndex(index)}
-                  className={`flex-shrink-0 w-12 h-12 rounded overflow-hidden border-2 transition-all ${
-                    index === currentIndex
-                      ? 'border-primary ring-2 ring-primary/30 scale-110'
-                      : 'border-border hover:border-primary/50 opacity-70 hover:opacity-100'
-                  }`}
+            {/* Header */}
+            <div className="absolute top-0 left-0 right-0 flex items-center justify-between p-3 bg-gradient-to-b from-background/80 to-transparent z-10">
+              <span className="text-sm font-medium text-foreground bg-background/60 px-2 py-1 rounded">
+                {currentIndex + 1} of {images.length}
+              </span>
+              <div className="flex items-center gap-2">
+                {onImageUpdated && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setIsEditing(true)}
+                    className="h-8 w-8 bg-background/60 hover:bg-background/80"
+                    title="Edit / Erase"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => window.open(currentImage, '_blank')}
+                  className="h-8 w-8 bg-background/60 hover:bg-background/80"
+                  title="Open full size"
                 >
-                  <img
-                    src={url}
-                    alt={`Thumbnail ${index + 1}`}
-                    className="w-full h-full object-cover"
-                  />
-                </button>
-              ))}
+                  <ZoomIn className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={onClose}
+                  className="h-8 w-8 bg-background/60 hover:bg-background/80"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
-          </div>
+
+            {/* Main image */}
+            <div className="flex items-center justify-center min-h-[50vh] max-h-[80vh] p-12">
+              <img
+                src={currentImage}
+                alt={`Image ${currentIndex + 1}`}
+                className="max-w-full max-h-[75vh] object-contain rounded-lg shadow-lg"
+              />
+            </div>
+
+            {/* Navigation buttons */}
+            {images.length > 1 && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={goToPrevious}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 h-12 w-12 bg-background/60 hover:bg-background/80 rounded-full"
+                >
+                  <ChevronLeft className="h-6 w-6" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={goToNext}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 h-12 w-12 bg-background/60 hover:bg-background/80 rounded-full"
+                >
+                  <ChevronRight className="h-6 w-6" />
+                </Button>
+              </>
+            )}
+
+            {/* Thumbnail strip */}
+            {images.length > 1 && (
+              <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-background/80 to-transparent">
+                <div className="flex justify-center gap-2 overflow-x-auto py-2 max-w-full">
+                  {images.map((url, index) => (
+                    <button
+                      key={index}
+                      onClick={() => setCurrentIndex(index)}
+                      className={`flex-shrink-0 w-12 h-12 rounded overflow-hidden border-2 transition-all ${
+                        index === currentIndex
+                          ? 'border-primary ring-2 ring-primary/30 scale-110'
+                          : 'border-border hover:border-primary/50 opacity-70 hover:opacity-100'
+                      }`}
+                    >
+                      <img
+                        src={url}
+                        alt={`Thumbnail ${index + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </DialogContent>
     </Dialog>
