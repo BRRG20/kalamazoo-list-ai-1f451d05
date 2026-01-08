@@ -12,7 +12,8 @@ interface RequestBody {
   backImageUrl?: string;
   labelImageUrl?: string;
   detailImageUrl?: string;
-  targetCount?: number;
+  currentImageCount?: number; // Current number of images to calculate how many more needed
+  targetCount?: number; // Target total (default 9)
 }
 
 const MAX_RETRIES = 2;
@@ -47,9 +48,9 @@ The GARMENT must remain IDENTICAL to source:
 - NO "improving" or "beautifying" the fabric
 `;
 
-// Three DISTINCT close-up shot types for strong e-commerce angles
-// These MUST be clearly different compositions, not minor variations
-const CLOSE_UP_SHOTS = [
+// Nine DISTINCT shot types for comprehensive e-commerce coverage
+// These create a full set of product angles to reach 9 total images
+const EXPANSION_SHOTS = [
   {
     id: 'detail_closeup',
     name: '1) Detail Close-up (Graphic/Print/Label)',
@@ -141,11 +142,173 @@ COMPOSITION REQUIREMENTS:
 
 OUTPUT: A crisp edge/hem/cuff detail that shows garment quality and construction.`
   },
+  {
+    id: 'left_angle',
+    name: '4) Left Side Angle',
+    prompt: `TASK: Create a LEFT SIDE view showing the garment from a 45-degree left angle.
+
+${REALISM_BLOCK}
+${PRODUCT_LOCK}
+
+🎯 TARGET: Show the model/garment from the left side at approximately 45-degrees
+- Full or three-quarter body visible
+- Emphasize left sleeve, left side seam, and profile silhouette
+- Show how garment drapes/fits from the side
+
+COMPOSITION REQUIREMENTS:
+- Model should appear to have turned to their right, showing their left side to camera
+- Maintain same pose energy as source but rotated view
+- Keep background consistent/neutral
+- Full garment visible from this angle
+
+⚠️ DO NOT:
+- Create a completely flat side profile (keep some depth)
+- Change the garment's appearance
+- Add or remove any garment elements
+
+OUTPUT: A professional left-angle shot showing side fit and silhouette.`
+  },
+  {
+    id: 'right_angle',
+    name: '5) Right Side Angle',
+    prompt: `TASK: Create a RIGHT SIDE view showing the garment from a 45-degree right angle.
+
+${REALISM_BLOCK}
+${PRODUCT_LOCK}
+
+🎯 TARGET: Show the model/garment from the right side at approximately 45-degrees
+- Full or three-quarter body visible
+- Emphasize right sleeve, right side seam, and profile silhouette
+- Show how garment drapes/fits from the side
+
+COMPOSITION REQUIREMENTS:
+- Model should appear to have turned to their left, showing their right side to camera
+- Maintain same pose energy as source but rotated view
+- Keep background consistent/neutral
+- Full garment visible from this angle
+
+⚠️ DO NOT:
+- Create a completely flat side profile (keep some depth)
+- Change the garment's appearance
+- Add or remove any garment elements
+
+OUTPUT: A professional right-angle shot showing side fit and silhouette.`
+  },
+  {
+    id: 'back_view',
+    name: '6) Back View',
+    prompt: `TASK: Create a BACK VIEW showing the garment from behind.
+
+${REALISM_BLOCK}
+${PRODUCT_LOCK}
+
+🎯 TARGET: Show the back of the garment
+- Full or three-quarter body from behind
+- Show back construction, seams, and any back details
+- If back has graphic/print → make it clearly visible
+- Show shoulder and back fit
+
+COMPOSITION REQUIREMENTS:
+- Model facing away from camera
+- Clean back view - professional e-commerce style
+- Full garment visible
+- Show back silhouette and drape
+
+⚠️ DO NOT:
+- Show back of head prominently (focus on garment)
+- Change any garment details
+- Add elements not visible in original
+
+OUTPUT: A clean back view showing back construction and fit.`
+  },
+  {
+    id: 'sleeve_detail',
+    name: '7) Sleeve Detail',
+    prompt: `TASK: Create a SLEEVE CLOSE-UP showing arm and sleeve detail.
+
+${REALISM_BLOCK}
+${PRODUCT_LOCK}
+
+🎯 TARGET: Focus on sleeve construction and fit
+- Show full sleeve from shoulder to cuff
+- Emphasize sleeve fit around arm
+- Show any sleeve details (cuffs, buttons, stitching, rolled sleeves)
+- If long sleeve → show how it fits the arm
+- If short sleeve → show sleeve hem and fit
+
+COMPOSITION REQUIREMENTS:
+- Can crop to upper body with arm extended or bent
+- Focus on how sleeve fits and looks
+- Show sleeve texture and construction
+
+⚠️ DO NOT:
+- Crop awkwardly through hand
+- Change sleeve length or style
+- Add elements not in source
+
+OUTPUT: A detailed sleeve shot showing arm fit and sleeve construction.`
+  },
+  {
+    id: 'texture_macro',
+    name: '8) Fabric Texture Macro',
+    prompt: `TASK: Create an EXTREME CLOSE-UP showing fabric texture.
+
+${REALISM_BLOCK}
+${PRODUCT_LOCK}
+
+🎯 TARGET: Ultra-close fabric detail
+- Fill frame with fabric texture
+- Show weave, knit pattern, or material quality
+- This helps buyers understand fabric hand-feel
+- If vintage → show authentic wear/patina honestly
+
+COMPOSITION REQUIREMENTS:
+- Macro-style close-up filling most of frame with fabric
+- Sharp focus on texture
+- Show fabric quality and material
+- This is about TOUCH - help buyer imagine how it feels
+
+⚠️ DO NOT:
+- Show too much of the garment (this is MACRO)
+- Smooth out texture
+- Change color or saturation
+- Add shine or gloss to matte fabrics
+
+OUTPUT: A macro fabric shot that shows material quality and texture.`
+  },
+  {
+    id: 'styled_pose',
+    name: '9) Dynamic Styled Pose',
+    prompt: `TASK: Create a DYNAMIC STYLED shot with movement or an interesting pose.
+
+${REALISM_BLOCK}
+${PRODUCT_LOCK}
+
+🎯 TARGET: Show the garment with energy and style
+- Model in a natural, stylish pose (walking, turning, hand in pocket, etc.)
+- Show how garment moves and fits during motion
+- Keep the editorial/lifestyle feel
+- This is the "hero" shot that sells the vibe
+
+COMPOSITION REQUIREMENTS:
+- Full or three-quarter body
+- Natural movement or interesting pose
+- Same model, same garment - just dynamic energy
+- Professional lighting and composition
+
+⚠️ DO NOT:
+- Create awkward or unnatural poses
+- Change the garment in any way
+- Add props or elements not in source
+- Make it look CGI or artificial
+
+OUTPUT: A dynamic, styled shot that brings the garment to life.`
+  },
 ];
 
-async function generateCloseUpImage(
+async function generateExpansionImage(
   sourceImageUrl: string,
-  shotType: typeof CLOSE_UP_SHOTS[0],
+  shotType: typeof EXPANSION_SHOTS[0],
   apiKey: string,
   attempt: number = 1
 ): Promise<string | null> {
@@ -187,7 +350,7 @@ async function generateCloseUpImage(
       if (attempt < MAX_RETRIES) {
         console.log(`Retrying ${shotType.id}...`);
         await new Promise(r => setTimeout(r, 2000));
-        return generateCloseUpImage(sourceImageUrl, shotType, apiKey, attempt + 1);
+        return generateExpansionImage(sourceImageUrl, shotType, apiKey, attempt + 1);
       }
       return null;
     }
@@ -224,7 +387,7 @@ async function generateCloseUpImage(
     
     if (attempt < MAX_RETRIES) {
       await new Promise(r => setTimeout(r, 2000));
-      return generateCloseUpImage(sourceImageUrl, shotType, apiKey, attempt + 1);
+      return generateExpansionImage(sourceImageUrl, shotType, apiKey, attempt + 1);
     }
     return null;
   }
@@ -288,7 +451,7 @@ serve(async (req) => {
     }
 
     const body: RequestBody = await req.json();
-    const { productId, frontImageUrl } = body;
+    const { productId, frontImageUrl, currentImageCount = 0, targetCount = 9 } = body;
 
     if (!productId || !frontImageUrl) {
       return new Response(
@@ -297,46 +460,74 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Starting close-up expansion for product ${productId}`);
-    console.log(`Source image (model): ${frontImageUrl.substring(0, 60)}...`);
-    console.log(`Generating 3 DISTINCT close-up compositions...`);
+    // Calculate how many images we need to generate to reach target (max 9)
+    const neededImages = Math.max(0, Math.min(targetCount - currentImageCount, EXPANSION_SHOTS.length));
+    
+    console.log(`Starting expansion for product ${productId}`);
+    console.log(`Source image: ${frontImageUrl.substring(0, 60)}...`);
+    console.log(`Current images: ${currentImageCount}, Target: ${targetCount}, Generating: ${neededImages} new images`);
+
+    if (neededImages === 0) {
+      console.log('Already at or above target count, no expansion needed');
+      return new Response(
+        JSON.stringify({ 
+          success: true,
+          generatedImages: [],
+          totalImages: 0,
+          message: 'Already at target image count'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     const generatedImages: { type: string; url: string }[] = [];
 
-    // Generate all 3 close-up shots in parallel
-    // These MUST be distinctly different compositions
-    const generatePromises = CLOSE_UP_SHOTS.map(async (shotType) => {
-      const base64Image = await generateCloseUpImage(
-        frontImageUrl,
-        shotType,
-        apiKey
-      );
+    // Select the shots to generate (take first N needed from the shot list)
+    const shotsToGenerate = EXPANSION_SHOTS.slice(0, neededImages);
 
-      if (base64Image) {
-        const publicUrl = await uploadBase64ToStorage(
-          base64Image,
-          productId,
-          shotType.id,
-          supabaseUrl,
-          supabaseKey
+    // Generate shots in parallel with rate limiting (max 3 concurrent)
+    const batchSize = 3;
+    for (let i = 0; i < shotsToGenerate.length; i += batchSize) {
+      const batch = shotsToGenerate.slice(i, i + batchSize);
+      
+      const generatePromises = batch.map(async (shotType) => {
+        const base64Image = await generateExpansionImage(
+          frontImageUrl,
+          shotType,
+          apiKey
         );
 
-        if (publicUrl) {
-          return { type: shotType.id, url: publicUrl };
+        if (base64Image) {
+          const publicUrl = await uploadBase64ToStorage(
+            base64Image,
+            productId,
+            shotType.id,
+            supabaseUrl,
+            supabaseKey
+          );
+
+          if (publicUrl) {
+            return { type: shotType.id, url: publicUrl };
+          }
+        }
+        console.warn(`Failed to create: ${shotType.name}`);
+        return null;
+      });
+
+      const results = await Promise.all(generatePromises);
+      for (const result of results) {
+        if (result) {
+          generatedImages.push(result);
         }
       }
-      console.warn(`Failed to create: ${shotType.name}`);
-      return null;
-    });
 
-    const results = await Promise.all(generatePromises);
-    for (const result of results) {
-      if (result) {
-        generatedImages.push(result);
+      // Add delay between batches to avoid rate limits
+      if (i + batchSize < shotsToGenerate.length) {
+        await new Promise(r => setTimeout(r, 1500));
       }
     }
 
-    console.log(`Close-up expansion complete. Generated ${generatedImages.length}/3 images.`);
+    console.log(`Expansion complete. Generated ${generatedImages.length}/${neededImages} images.`);
 
     return new Response(
       JSON.stringify({ 
