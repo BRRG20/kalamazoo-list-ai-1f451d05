@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, ImageIcon, Trash2, GripVertical, ZoomIn, Check, ChevronsUpDown, AlertTriangle, Eraser, Loader2, Undo2, Shirt, User, RefreshCw, Download } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, ImageIcon, Trash2, GripVertical, ZoomIn, Check, ChevronsUpDown, AlertTriangle, Eraser, Loader2, Undo2, Shirt, User, RefreshCw, Download, FolderDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
@@ -14,7 +14,7 @@ import { supabase } from '@/integrations/supabase/client';
 import type { ProductImage, Product } from '@/types';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { downloadImage } from '@/lib/image-download';
+import { downloadImage, downloadAllAsZip } from '@/lib/image-download';
 
 interface ImageGalleryProps {
   images: ProductImage[];
@@ -59,7 +59,7 @@ export function ImageGallery({
   const [modelDialogImageId, setModelDialogImageId] = useState<string | null>(null);
   const [regeneratingImageId, setRegeneratingImageId] = useState<string | null>(null);
   const [deletingImages, setDeletingImages] = useState(false);
-  
+  const [isDownloadingAll, setIsDownloadingAll] = useState(false);
   // Track original URLs for individual undo
   const originalUrlsRef = useRef<Map<string, string>>(new Map());
   
@@ -454,8 +454,38 @@ export function ImageGallery({
           <h3 className="font-semibold text-foreground">
             Images ({images.length})
           </h3>
-          {images.length > 1 && (onDeleteImage || onMoveImages) && (
-            <div className="flex gap-2">
+          <div className="flex gap-2">
+            {images.length > 1 && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={async () => {
+                      setIsDownloadingAll(true);
+                      try {
+                        await downloadAllAsZip(images.map(i => i.url), 'product-images');
+                        toast.success(`Downloaded ${images.length} images`);
+                      } catch {
+                        toast.error('Failed to download');
+                      } finally {
+                        setIsDownloadingAll(false);
+                      }
+                    }}
+                    disabled={isDownloadingAll}
+                    className="text-xs h-7"
+                  >
+                    {isDownloadingAll ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <FolderDown className="w-3 h-3" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Download all as zip</TooltipContent>
+              </Tooltip>
+            )}
+            {images.length > 1 && (onDeleteImage || onMoveImages) && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -464,8 +494,8 @@ export function ImageGallery({
               >
                 {selectedImageIds.size === images.length ? 'Clear' : 'Select All'}
               </Button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Move selected images UI */}

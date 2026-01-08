@@ -1,3 +1,5 @@
+import JSZip from 'jszip';
+
 /**
  * Downloads an image at full quality without any compression or resizing.
  * Fetches the original image data and triggers a browser download.
@@ -57,4 +59,94 @@ export async function downloadImage(imageUrl: string, filename?: string): Promis
     console.error('Download failed:', error);
     throw error;
   }
+}
+
+/**
+ * Downloads all images as a zip file at full quality.
+ * @param imageUrls Array of image URLs to download
+ * @param zipFilename Name for the zip file (without extension)
+ * @param onProgress Optional callback for progress updates (0-100)
+ */
+export async function downloadAllAsZip(
+  imageUrls: string[],
+  zipFilename: string = 'images',
+  onProgress?: (progress: number) => void
+): Promise<void> {
+  if (imageUrls.length === 0) {
+    throw new Error('No images to download');
+  }
+
+  const zip = new JSZip();
+  let completed = 0;
+
+  // Fetch all images in parallel
+  const fetchPromises = imageUrls.map(async (url, index) => {
+    try {
+      const response = await fetch(url, {
+        mode: 'cors',
+        cache: 'no-cache',
+      });
+
+      if (!response.ok) {
+        console.warn(`Failed to fetch image ${index + 1}: ${response.status}`);
+        return null;
+      }
+
+      const blob = await response.blob();
+      
+      // Determine extension from content type
+      let extension = '.jpg';
+      const contentType = blob.type;
+      if (contentType.includes('png')) {
+        extension = '.png';
+      } else if (contentType.includes('webp')) {
+        extension = '.webp';
+      }
+
+      // Add to zip with sequential naming
+      const filename = `image-${String(index + 1).padStart(2, '0')}${extension}`;
+      zip.file(filename, blob);
+
+      completed++;
+      if (onProgress) {
+        onProgress(Math.round((completed / imageUrls.length) * 80)); // 80% for fetching
+      }
+
+      return { filename, blob };
+    } catch (error) {
+      console.warn(`Error fetching image ${index + 1}:`, error);
+      completed++;
+      if (onProgress) {
+        onProgress(Math.round((completed / imageUrls.length) * 80));
+      }
+      return null;
+    }
+  });
+
+  await Promise.all(fetchPromises);
+
+  // Generate zip file
+  if (onProgress) onProgress(85);
+  
+  const zipBlob = await zip.generateAsync({ 
+    type: 'blob',
+    compression: 'STORE' // No compression to preserve full quality
+  });
+
+  if (onProgress) onProgress(95);
+
+  // Trigger download
+  const blobUrl = URL.createObjectURL(zipBlob);
+  const link = document.createElement('a');
+  link.href = blobUrl;
+  link.download = `${zipFilename}.zip`;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+
+  // Cleanup
+  document.body.removeChild(link);
+  URL.revokeObjectURL(blobUrl);
+
+  if (onProgress) onProgress(100);
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, ChevronLeft, ChevronRight, ZoomIn, Pencil, Download } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, ZoomIn, Pencil, Download, FolderDown, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -8,7 +8,7 @@ import {
 } from '@/components/ui/dialog';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { ImageEditCanvas } from '@/components/image-edit/ImageEditCanvas';
-import { downloadImage } from '@/lib/image-download';
+import { downloadImage, downloadAllAsZip } from '@/lib/image-download';
 import { toast } from 'sonner';
 
 interface ImagePreviewModalProps {
@@ -17,6 +17,7 @@ interface ImagePreviewModalProps {
   open: boolean;
   onClose: () => void;
   onImageUpdated?: (index: number, newUrl: string) => void;
+  productName?: string;
 }
 
 export function ImagePreviewModal({
@@ -25,9 +26,11 @@ export function ImagePreviewModal({
   open,
   onClose,
   onImageUpdated,
+  productName,
 }: ImagePreviewModalProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [isEditing, setIsEditing] = useState(false);
+  const [isDownloadingAll, setIsDownloadingAll] = useState(false);
 
   useEffect(() => {
     setCurrentIndex(initialIndex);
@@ -82,6 +85,23 @@ export function ImagePreviewModal({
     }
   };
 
+  const handleDownloadAll = async () => {
+    if (images.length === 0) return;
+    
+    setIsDownloadingAll(true);
+    try {
+      const zipName = productName 
+        ? productName.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()
+        : 'product-images';
+      await downloadAllAsZip(images, zipName);
+      toast.success(`Downloaded ${images.length} images as zip`);
+    } catch (error) {
+      toast.error('Failed to download images');
+    } finally {
+      setIsDownloadingAll(false);
+    }
+  };
+
   if (!images.length) return null;
 
   const currentImage = images[currentIndex];
@@ -123,10 +143,26 @@ export function ImagePreviewModal({
                   size="icon"
                   onClick={handleDownload}
                   className="h-8 w-8 bg-background/60 hover:bg-background/80"
-                  title="Download full quality"
+                  title="Download this image"
                 >
                   <Download className="h-4 w-4" />
                 </Button>
+                {images.length > 1 && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleDownloadAll}
+                    disabled={isDownloadingAll}
+                    className="h-8 w-8 bg-background/60 hover:bg-background/80"
+                    title="Download all as zip"
+                  >
+                    {isDownloadingAll ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <FolderDown className="h-4 w-4" />
+                    )}
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   size="icon"

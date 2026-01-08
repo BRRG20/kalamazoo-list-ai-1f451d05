@@ -446,6 +446,7 @@ export function ProductCard({
         initialIndex={previewIndex}
         open={previewOpen}
         onClose={() => setPreviewOpen(false)}
+        productName={product.title || product.sku || undefined}
         onImageUpdated={onUpdateImageUrl ? (index, newUrl) => {
           const image = images[index];
           if (image) {
