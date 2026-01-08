@@ -1656,7 +1656,7 @@ export function BatchDetail({
                       Undo Model
                     </Button>
                     
-                    {/* Generate Listing Images button with model selector dropdown */}
+                    {/* Generate Listing Images button with mode selector dropdown */}
                     {onExpandProductImages && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -1681,66 +1681,68 @@ export function BatchDetail({
                             )}
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" className="w-56">
-                          <DropdownMenuLabel className="text-xs text-muted-foreground">
-                            Select AI model for expansion
+                        <DropdownMenuContent align="start" className="w-64">
+                          {/* Mode: AI Model Images */}
+                          <DropdownMenuLabel className="text-xs font-semibold">
+                            AI Model Images
                           </DropdownMenuLabel>
-                          <DropdownMenuSeparator />
                           <DropdownMenuItem
                             onClick={() => {
                               const productIds = Array.from(selectedProductIds);
                               if (productIds.length > 0) {
-                                onExpandProductImages(productIds, undefined); // Auto-detect based on department
+                                onExpandProductImages(productIds, undefined);
                               }
                             }}
                             className="flex items-center gap-2"
                           >
                             <Sparkles className="w-4 h-4 text-amber-500" />
                             <div className="flex flex-col">
-                              <span className="font-medium">Auto-detect</span>
+                              <span className="font-medium">Auto-detect model</span>
                               <span className="text-xs text-muted-foreground">Based on product department</span>
                             </div>
                           </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuLabel className="text-xs text-muted-foreground">Male Models</DropdownMenuLabel>
-                          {availableModels.filter(m => m.gender === 'male').map(model => (
-                            <DropdownMenuItem
-                              key={model.id}
-                              onClick={() => {
-                                const productIds = Array.from(selectedProductIds);
-                                if (productIds.length > 0) {
-                                  onExpandProductImages(productIds, model.id);
-                                }
-                              }}
-                              className="flex items-center gap-2"
-                            >
-                              <User className="w-4 h-4 text-blue-500" />
-                              <div className="flex flex-col">
-                                <span>{model.name}</span>
-                                <span className="text-xs text-muted-foreground">{model.description}</span>
-                              </div>
-                            </DropdownMenuItem>
-                          ))}
-                          <DropdownMenuSeparator />
-                          <DropdownMenuLabel className="text-xs text-muted-foreground">Female Models</DropdownMenuLabel>
-                          {availableModels.filter(m => m.gender === 'female').map(model => (
-                            <DropdownMenuItem
-                              key={model.id}
-                              onClick={() => {
-                                const productIds = Array.from(selectedProductIds);
-                                if (productIds.length > 0) {
-                                  onExpandProductImages(productIds, model.id);
-                                }
-                              }}
-                              className="flex items-center gap-2"
-                            >
-                              <User className="w-4 h-4 text-pink-500" />
-                              <div className="flex flex-col">
-                                <span>{model.name}</span>
-                                <span className="text-xs text-muted-foreground">{model.description}</span>
-                              </div>
-                            </DropdownMenuItem>
-                          ))}
+                          <DropdownMenuSub>
+                            <DropdownMenuSubTrigger>
+                              <User className="w-4 h-4 mr-2 text-blue-500" />
+                              Choose male model
+                            </DropdownMenuSubTrigger>
+                            <DropdownMenuSubContent>
+                              {availableModels.filter(m => m.gender === 'male').map(model => (
+                                <DropdownMenuItem
+                                  key={model.id}
+                                  onClick={() => {
+                                    const productIds = Array.from(selectedProductIds);
+                                    if (productIds.length > 0) {
+                                      onExpandProductImages(productIds, model.id);
+                                    }
+                                  }}
+                                >
+                                  {model.name}
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuSubContent>
+                          </DropdownMenuSub>
+                          <DropdownMenuSub>
+                            <DropdownMenuSubTrigger>
+                              <User className="w-4 h-4 mr-2 text-pink-500" />
+                              Choose female model
+                            </DropdownMenuSubTrigger>
+                            <DropdownMenuSubContent>
+                              {availableModels.filter(m => m.gender === 'female').map(model => (
+                                <DropdownMenuItem
+                                  key={model.id}
+                                  onClick={() => {
+                                    const productIds = Array.from(selectedProductIds);
+                                    if (productIds.length > 0) {
+                                      onExpandProductImages(productIds, model.id);
+                                    }
+                                  }}
+                                >
+                                  {model.name}
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuSubContent>
+                          </DropdownMenuSub>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     )}

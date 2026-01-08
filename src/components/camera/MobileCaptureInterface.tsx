@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Camera, Upload, X, Check, ChevronLeft, AlertCircle, Image as ImageIcon, Sparkles } from 'lucide-react';
+import { Camera, Upload, X, Check, ChevronLeft, AlertCircle, Image as ImageIcon, Sparkles, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
@@ -11,14 +11,15 @@ interface CapturedImage {
   previewUrl: string;
   note?: string;
   hasStain?: boolean;
-  type?: 'front' | 'back' | 'label' | 'detail';
+  type?: 'front' | 'back' | 'side' | 'detail' | 'label';
+  productIndex: number; // Which product this image belongs to
 }
 
 interface MobileCaptureInterfaceProps {
   isOpen: boolean;
   onClose: () => void;
-  onComplete: (images: File[], notes: Map<string, { note?: string; hasStain?: boolean; type?: string }>) => void;
-  mode: 'batch' | 'quick-product';
+  onComplete: (images: File[], notes: Map<string, { note?: string; hasStain?: boolean; type?: string; productIndex?: number }>) => void;
+  mode: 'batch' | 'quick-product' | 'quick-product-batch';
 }
 
 export function MobileCaptureInterface({
@@ -34,9 +35,16 @@ export function MobileCaptureInterface({
   const [markAsStain, setMarkAsStain] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  // Quick product mode tracking
+  // Quick product batch mode tracking - 4 shots per product
+  const quickBatchTypes: ('front' | 'back' | 'side' | 'detail')[] = ['front', 'back', 'side', 'detail'];
+  // Legacy single product mode - includes label
   const quickProductTypes: ('front' | 'back' | 'label' | 'detail')[] = ['front', 'back', 'label', 'detail'];
-  const [currentQuickIndex, setCurrentQuickIndex] = useState(0);
+  
+  const [currentProductIndex, setCurrentProductIndex] = useState(0);
+  const [currentShotIndex, setCurrentShotIndex] = useState(0);
+
+  // Get the right type array based on mode
+  const shotTypes = mode === 'quick-product-batch' ? quickBatchTypes : quickProductTypes;
 
   // Reset state when opening
   useEffect(() => {
@@ -46,7 +54,8 @@ export function MobileCaptureInterface({
       setSelectedImageId(null);
       setNoteText('');
       setMarkAsStain(false);
-      setCurrentQuickIndex(0);
+      setCurrentProductIndex(0);
+      setCurrentShotIndex(0);
     }
   }, [isOpen]);
 
@@ -65,10 +74,24 @@ export function MobileCaptureInterface({
       const previewUrl = URL.createObjectURL(file);
       const id = `capture-${Date.now()}-${i}`;
       
-      // In quick product mode, assign type based on current index
-      let type: 'front' | 'back' | 'label' | 'detail' | undefined;
-      if (mode === 'quick-product' && currentQuickIndex < 4) {
-        type = quickProductTypes[currentQuickIndex + i];
+      // Assign type based on current shot index for quick modes
+      let type: 'front' | 'back' | 'side' | 'detail' | 'label' | undefined;
+      let productIdx = currentProductIndex;
+      
+      if (mode === 'quick-product-batch') {
+        const shotIdx = currentShotIndex + i;
+        if (shotIdx < 4) {
+          type = quickBatchTypes[shotIdx];
+        } else {
+          // Overflow to next product
+          const overflow = Math.floor(shotIdx / 4);
+          productIdx = currentProductIndex + overflow;
+          type = quickBatchTypes[shotIdx % 4];
+        }
+      } else if (mode === 'quick-product') {
+        if (currentShotIndex + i < 4) {
+          type = quickProductTypes[currentShotIndex + i];
+        }
       }
       
       newImages.push({
@@ -76,18 +99,25 @@ export function MobileCaptureInterface({
         file,
         previewUrl,
         type,
+        productIndex: productIdx,
       });
     }
 
     setCapturedImages(prev => [...prev, ...newImages]);
     
-    if (mode === 'quick-product') {
-      setCurrentQuickIndex(prev => Math.min(prev + files.length, 4));
+    if (mode === 'quick-product-batch') {
+      const totalShots = currentShotIndex + files.length;
+      const newProductIndex = Math.floor(totalShots / 4);
+      const newShotIndex = totalShots % 4;
+      setCurrentProductIndex(prev => prev + Math.floor((currentShotIndex + files.length) / 4));
+      setCurrentShotIndex(totalShots % 4);
+    } else if (mode === 'quick-product') {
+      setCurrentShotIndex(prev => Math.min(prev + files.length, 4));
     }
 
     // Reset input to allow re-selecting same file
     event.target.value = '';
-  }, [mode, currentQuickIndex]);
+  }, [mode, currentShotIndex, currentProductIndex]);
 
   const handleRemoveImage = useCallback((id: string) => {
     setCapturedImages(prev => {
@@ -99,8 +129,20 @@ export function MobileCaptureInterface({
       }
       return updated;
     });
-    if (mode === 'quick-product') {
-      setCurrentQuickIndex(prev => Math.max(0, prev - 1));
+    
+    // Adjust indices for quick modes
+    if (mode === 'quick-product-batch' || mode === 'quick-product') {
+      // Recalculate based on remaining images
+      setCapturedImages(prev => {
+        const totalImages = prev.filter(img => img.id !== id).length;
+        if (mode === 'quick-product-batch') {
+          setCurrentProductIndex(Math.floor(totalImages / 4));
+          setCurrentShotIndex(totalImages % 4);
+        } else {
+          setCurrentShotIndex(Math.min(totalImages, 4));
+        }
+        return prev.filter(img => img.id !== id);
+      });
     }
   }, [mode]);
 
@@ -128,19 +170,33 @@ export function MobileCaptureInterface({
     setMarkAsStain(false);
   }, [selectedImageId, noteText, markAsStain]);
 
+  // Advance to next product in batch mode
+  const handleNextProduct = useCallback(() => {
+    // Complete current product's 4 shots (fill remaining with undefined)
+    const remainingShots = 4 - currentShotIndex;
+    if (remainingShots > 0 && currentShotIndex > 0) {
+      // User has taken some shots but not all 4 - that's okay, advance anyway
+      setCurrentProductIndex(prev => prev + 1);
+      setCurrentShotIndex(0);
+    } else if (currentShotIndex === 4 || currentShotIndex === 0) {
+      // Either completed all 4 or hasn't started - just advance
+      setCurrentProductIndex(prev => prev + 1);
+      setCurrentShotIndex(0);
+    }
+  }, [currentShotIndex]);
+
   const handleComplete = useCallback(() => {
     const files = capturedImages.map(img => img.file);
-    const notes = new Map<string, { note?: string; hasStain?: boolean; type?: string }>();
+    const notes = new Map<string, { note?: string; hasStain?: boolean; type?: string; productIndex?: number }>();
     
-    capturedImages.forEach((img, index) => {
-      if (img.note || img.hasStain || img.type) {
-        // Use file name as key for matching after upload
-        notes.set(img.file.name, {
-          note: img.note,
-          hasStain: img.hasStain,
-          type: img.type,
-        });
-      }
+    capturedImages.forEach((img) => {
+      // Use file name as key for matching after upload
+      notes.set(img.file.name, {
+        note: img.note,
+        hasStain: img.hasStain,
+        type: img.type,
+        productIndex: img.productIndex,
+      });
     });
 
     // Cleanup object URLs
@@ -153,6 +209,16 @@ export function MobileCaptureInterface({
   if (!isOpen) return null;
 
   const selectedImage = capturedImages.find(img => img.id === selectedImageId);
+  
+  // Calculate product counts for batch mode
+  const productCount = mode === 'quick-product-batch' 
+    ? Math.max(1, Math.ceil(capturedImages.length / 4))
+    : 1;
+  
+  // Get images for current product preview in batch mode
+  const currentProductImages = mode === 'quick-product-batch'
+    ? capturedImages.filter(img => img.productIndex === currentProductIndex)
+    : capturedImages;
 
   return (
     <div className="fixed inset-0 z-50 bg-background flex flex-col">
@@ -175,10 +241,17 @@ export function MobileCaptureInterface({
         </Button>
         <div className="text-center">
           <h2 className="font-semibold">
-            {mode === 'batch' ? 'Batch Capture' : 'Quick Product Shots'}
+            {mode === 'batch' 
+              ? 'Batch Capture' 
+              : mode === 'quick-product-batch'
+              ? 'Quick Product Batch (4-shot)'
+              : 'Quick Product Shots'}
           </h2>
           <p className="text-xs text-muted-foreground">
-            {capturedImages.length} image{capturedImages.length !== 1 ? 's' : ''} captured
+            {mode === 'quick-product-batch' 
+              ? `${capturedImages.length} shots • ${productCount} product${productCount !== 1 ? 's' : ''}`
+              : `${capturedImages.length} image${capturedImages.length !== 1 ? 's' : ''} captured`
+            }
           </p>
         </div>
         <Button 
@@ -192,7 +265,46 @@ export function MobileCaptureInterface({
         </Button>
       </div>
 
-      {/* Quick Product Mode Guide */}
+      {/* Quick Product Batch Mode Guide */}
+      {mode === 'quick-product-batch' && (
+        <div className="p-3 bg-cyan-500/10 border-b border-cyan-500/20">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-cyan-600" />
+              <span className="text-sm font-medium text-cyan-800 dark:text-cyan-200">
+                Product #{currentProductIndex + 1} — {4 - currentShotIndex} shot{4 - currentShotIndex !== 1 ? 's' : ''} remaining
+              </span>
+            </div>
+            {currentShotIndex > 0 && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleNextProduct}
+                className="text-xs h-7 px-2"
+              >
+                <ArrowRight className="w-3 h-3 mr-1" />
+                Next Product
+              </Button>
+            )}
+          </div>
+          <div className="flex gap-2">
+            {quickBatchTypes.map((type, idx) => (
+              <Badge
+                key={type}
+                variant={idx < currentShotIndex ? 'default' : 'outline'}
+                className={cn(
+                  'capitalize text-xs',
+                  idx < currentShotIndex && 'bg-green-600'
+                )}
+              >
+                {idx + 1}. {type}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Legacy Quick Product Mode Guide */}
       {mode === 'quick-product' && (
         <div className="p-3 bg-amber-500/10 border-b border-amber-500/20">
           <div className="flex items-center gap-2 mb-2">
@@ -224,67 +336,140 @@ export function MobileCaptureInterface({
           <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
             <Camera className="w-16 h-16 mb-4 opacity-30" />
             <p className="text-lg font-medium">No images yet</p>
-            <p className="text-sm">
+            <p className="text-sm text-center">
               {mode === 'batch' 
                 ? 'Tap the camera button to start capturing'
+                : mode === 'quick-product-batch'
+                ? 'Capture Front, Back, Side, Detail for each product'
                 : 'Capture Front, Back, Label, and Detail shots'}
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {capturedImages.map((image) => (
-              <div 
-                key={image.id}
-                className="relative aspect-square rounded-lg overflow-hidden bg-muted border group"
-              >
-                <img 
-                  src={image.previewUrl} 
-                  alt="Captured" 
-                  className="w-full h-full object-cover"
-                />
+          <div className="space-y-4">
+            {/* Group images by product in batch mode */}
+            {mode === 'quick-product-batch' ? (
+              Array.from({ length: productCount }).map((_, productIdx) => {
+                const productImages = capturedImages.filter(img => img.productIndex === productIdx);
+                if (productImages.length === 0) return null;
                 
-                {/* Type badge for quick product mode */}
-                {image.type && (
-                  <Badge className="absolute top-2 left-2 capitalize text-xs bg-blue-600">
-                    {image.type}
-                  </Badge>
-                )}
-                
-                {/* Stain indicator */}
-                {image.hasStain && (
-                  <Badge className="absolute top-2 right-2 bg-red-600">
-                    <AlertCircle className="w-3 h-3 mr-1" />
-                    Stain
-                  </Badge>
-                )}
-                
-                {/* Note indicator */}
-                {image.note && !image.hasStain && (
-                  <Badge className="absolute top-2 right-2 bg-amber-600">
-                    Note
-                  </Badge>
-                )}
+                return (
+                  <div key={productIdx} className="border border-border rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-foreground">
+                        Product #{productIdx + 1}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {productImages.length}/4 shots
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-2">
+                      {productImages.map((image) => (
+                        <div 
+                          key={image.id}
+                          className="relative aspect-square rounded-lg overflow-hidden bg-muted border group"
+                        >
+                          <img 
+                            src={image.previewUrl} 
+                            alt="Captured" 
+                            className="w-full h-full object-cover"
+                          />
+                          
+                          {/* Type badge */}
+                          {image.type && (
+                            <Badge className="absolute top-1 left-1 capitalize text-[10px] px-1 py-0 bg-blue-600">
+                              {image.type}
+                            </Badge>
+                          )}
+                          
+                          {/* Stain indicator */}
+                          {image.hasStain && (
+                            <Badge className="absolute top-1 right-1 bg-red-600 text-[10px] px-1 py-0">
+                              <AlertCircle className="w-2 h-2" />
+                            </Badge>
+                          )}
 
-                {/* Overlay actions */}
-                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                  <Button 
-                    size="sm" 
-                    variant="secondary"
-                    onClick={() => handleOpenNote(image.id)}
+                          {/* Overlay actions on tap/hover */}
+                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
+                            <Button 
+                              size="sm" 
+                              variant="secondary"
+                              className="h-6 w-6 p-0"
+                              onClick={() => handleOpenNote(image.id)}
+                            >
+                              <AlertCircle className="w-3 h-3" />
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="destructive"
+                              className="h-6 w-6 p-0"
+                              onClick={() => handleRemoveImage(image.id)}
+                            >
+                              <X className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {capturedImages.map((image) => (
+                  <div 
+                    key={image.id}
+                    className="relative aspect-square rounded-lg overflow-hidden bg-muted border group"
                   >
-                    <AlertCircle className="w-4 h-4 mr-1" />
-                    Note
-                  </Button>
-                  <Button 
-                    size="sm" 
-                    variant="destructive"
-                    onClick={() => handleRemoveImage(image.id)}
-                  >
-                    <X className="w-4 h-4" />
-                  </Button>
-                </div>
+                    <img 
+                      src={image.previewUrl} 
+                      alt="Captured" 
+                      className="w-full h-full object-cover"
+                    />
+                    
+                    {/* Type badge for quick product mode */}
+                    {image.type && (
+                      <Badge className="absolute top-2 left-2 capitalize text-xs bg-blue-600">
+                        {image.type}
+                      </Badge>
+                    )}
+                    
+                    {/* Stain indicator */}
+                    {image.hasStain && (
+                      <Badge className="absolute top-2 right-2 bg-red-600">
+                        <AlertCircle className="w-3 h-3 mr-1" />
+                        Stain
+                      </Badge>
+                    )}
+                    
+                    {/* Note indicator */}
+                    {image.note && !image.hasStain && (
+                      <Badge className="absolute top-2 right-2 bg-amber-600">
+                        Note
+                      </Badge>
+                    )}
+
+                    {/* Overlay actions */}
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                      <Button 
+                        size="sm" 
+                        variant="secondary"
+                        onClick={() => handleOpenNote(image.id)}
+                      >
+                        <AlertCircle className="w-4 h-4 mr-1" />
+                        Note
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        variant="destructive"
+                        onClick={() => handleRemoveImage(image.id)}
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
         )}
       </div>
@@ -317,9 +502,23 @@ export function MobileCaptureInterface({
               <Upload className="w-6 h-6" />
             </Button>
           </>
+        ) : mode === 'quick-product-batch' ? (
+          <div className="flex flex-col items-center gap-2">
+            <Button
+              size="lg"
+              className="h-16 px-8"
+              onClick={handleCapture}
+            >
+              <Camera className="w-6 h-6 mr-2" />
+              Capture {quickBatchTypes[currentShotIndex]?.toUpperCase() || 'FRONT'}
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              Product #{currentProductIndex + 1} • {currentShotIndex}/4 shots
+            </p>
+          </div>
         ) : (
           <div className="flex flex-col items-center gap-2">
-            {currentQuickIndex < 4 ? (
+            {currentShotIndex < 4 ? (
               <>
                 <Button
                   size="lg"
@@ -327,10 +526,10 @@ export function MobileCaptureInterface({
                   onClick={handleCapture}
                 >
                   <Camera className="w-6 h-6 mr-2" />
-                  Capture {quickProductTypes[currentQuickIndex].toUpperCase()}
+                  Capture {quickProductTypes[currentShotIndex].toUpperCase()}
                 </Button>
                 <p className="text-xs text-muted-foreground">
-                  {4 - currentQuickIndex} shot{4 - currentQuickIndex !== 1 ? 's' : ''} remaining
+                  {4 - currentShotIndex} shot{4 - currentShotIndex !== 1 ? 's' : ''} remaining
                 </p>
               </>
             ) : (
