@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Edit2, ImageIcon, Trash2, Eye, Sparkles, Undo2, Loader2, EyeOff, User } from 'lucide-react';
+import { Edit2, ImageIcon, Trash2, Eye, Sparkles, Undo2, Loader2, EyeOff, User, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -22,7 +22,9 @@ interface ProductCardProps {
   // AI generation props
   onGenerateAI?: () => void;
   onUndoAI?: () => void;
+  onRegenerateModelStyle?: () => void;
   isGenerating?: boolean;
+  isRegeneratingModel?: boolean;
   hasUndoState?: boolean;
   // Shopify status override props
   onMarkAsUploaded?: (shopifyProductId?: string) => void;
@@ -44,7 +46,9 @@ export function ProductCard({
   isDraggingImage,
   onGenerateAI,
   onUndoAI,
+  onRegenerateModelStyle,
   isGenerating,
+  isRegeneratingModel,
   hasUndoState,
   onMarkAsUploaded,
   onMarkAsPending,
@@ -209,11 +213,13 @@ export function ProductCard({
           </button>
 
           {/* Generating indicator overlay */}
-          {isGenerating && (
+          {(isGenerating || isRegeneratingModel) && (
             <div className="absolute inset-0 bg-background/80 flex items-center justify-center">
               <div className="flex flex-col items-center gap-2">
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                <span className="text-sm font-medium text-foreground">Generating...</span>
+                <span className="text-sm font-medium text-foreground">
+                  {isRegeneratingModel ? 'Regenerating model...' : 'Generating...'}
+                </span>
               </div>
             </div>
           )}
@@ -357,11 +363,32 @@ export function ProductCard({
                   e.stopPropagation();
                   onUndoAI();
                 }}
-                disabled={isGenerating}
+                disabled={isGenerating || isRegeneratingModel}
                 title="Undo last AI change"
                 className="px-2 text-amber-600 hover:text-amber-700 border-amber-300 hover:border-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950"
               >
                 <Undo2 className="w-3 h-3" />
+              </Button>
+            )}
+
+            {/* Regenerate AI Model Style button - shows when product has AI model images */}
+            {onRegenerateModelStyle && images.some(img => img.source === 'model_tryon') && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRegenerateModelStyle();
+                }}
+                disabled={isGenerating || isRegeneratingModel}
+                title="Regenerate AI model style"
+                className="px-2 text-emerald-600 hover:text-emerald-700 border-emerald-300 hover:border-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950"
+              >
+                {isRegeneratingModel ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-3 h-3" />
+                )}
               </Button>
             )}
 
