@@ -10,6 +10,8 @@ interface RequestBody {
   productId: string;
   sourceImageUrl: string; // The source image for expansion
   mode: 'product_photos' | 'ai_model'; // Which expansion mode
+  currentImageCount?: number; // How many images the product currently has
+  maxImages?: number; // Maximum total images allowed (default 9)
 }
 
 const MAX_RETRIES = 2;
@@ -329,7 +331,7 @@ serve(async (req) => {
     }
 
     const body: RequestBody = await req.json();
-    const { productId, sourceImageUrl, mode } = body;
+    const { productId, sourceImageUrl, mode, currentImageCount = 0, maxImages = 9 } = body;
 
     if (!productId || !sourceImageUrl || !mode) {
       return new Response(
@@ -338,13 +340,31 @@ serve(async (req) => {
       );
     }
 
-    // Select shot types based on mode
-    const shotTypes = mode === 'product_photos' ? PRODUCT_PHOTO_SHOTS : AI_MODEL_SHOTS;
+    // Calculate how many images we can generate (cap at maxImages total)
+    const remainingSlots = Math.max(0, maxImages - currentImageCount);
+    
+    if (remainingSlots === 0) {
+      console.log(`Product ${productId} already has ${currentImageCount} images (max: ${maxImages}). No expansion needed.`);
+      return new Response(
+        JSON.stringify({ 
+          success: true,
+          mode,
+          generatedImages: [],
+          totalImages: 0,
+          message: `Product already has ${currentImageCount} images (max: ${maxImages})`
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Select shot types based on mode, limited by remaining slots
+    const allShotTypes = mode === 'product_photos' ? PRODUCT_PHOTO_SHOTS : AI_MODEL_SHOTS;
+    const shotTypes = allShotTypes.slice(0, remainingSlots);
     const modeLabel = mode === 'product_photos' ? 'PRODUCT PHOTO' : 'AI MODEL';
     
     console.log(`Starting ${modeLabel} expansion for product ${productId}`);
+    console.log(`Current images: ${currentImageCount}, Max: ${maxImages}, Generating: ${shotTypes.length} crops`);
     console.log(`Source image: ${sourceImageUrl.substring(0, 60)}...`);
-    console.log(`Mode: ${mode} - Generating 3 crops...`);
 
     const generatedImages: { type: string; url: string }[] = [];
 
@@ -381,7 +401,7 @@ serve(async (req) => {
       }
     }
 
-    console.log(`${modeLabel} expansion complete. Generated ${generatedImages.length}/3 images.`);
+    console.log(`${modeLabel} expansion complete. Generated ${generatedImages.length}/${shotTypes.length} images.`);
 
     return new Response(
       JSON.stringify({ 

@@ -422,7 +422,16 @@ const handleSelectBatch = useCallback((id: string) => {
         
         try {
           const images = await fetchImagesForProduct(productId);
-          if (images.length === 0) {
+          const currentImageCount = images.length;
+          
+          // Skip if product already has 9+ images
+          if (currentImageCount >= 9) {
+            console.log(`Product ${productId} already has ${currentImageCount} images (max 9), skipping`);
+            processedCount++;
+            continue;
+          }
+          
+          if (currentImageCount === 0) {
             console.warn(`No images for product ${productId}, skipping`);
             failedProducts.push(productId);
             failedCount++;
@@ -469,6 +478,8 @@ const handleSelectBatch = useCallback((id: string) => {
                 productId,
                 sourceImageUrl,
                 mode,
+                currentImageCount,
+                maxImages: 9,
               }),
             }
           );
