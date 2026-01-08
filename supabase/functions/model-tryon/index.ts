@@ -9,6 +9,7 @@ const corsHeaders = {
 interface RequestBody {
   garmentImageUrl: string;
   modelId: string;
+  modelReferenceUrl?: string; // Optional reference image for consistent model identity
   poseId?: string;
   fitStyle?: 'regular' | 'oversized' | 'tucked';
   styleOutfit?: boolean;
@@ -17,59 +18,82 @@ interface RequestBody {
 
 const MAX_RETRIES = 2;
 
-// FIXED MODEL IDENTITIES - Consistent identity but with expression/pose variation allowed
-// Models are 30-35 years old, cool, chic, handsome (men) / beautiful (women)
-const MODEL_DESCRIPTIONS: Record<string, string> = {
-  '11111111-1111-1111-1111-111111111111': `Alex: A strikingly handsome male fashion model, aged 32.
-IDENTITY (MUST BE CONSISTENT):
-- Hair: Short, neatly styled dark brown hair, side-parted to the left
-- Eyes: Deep brown eyes with confident gaze
-- Face: Clean-shaven, strong defined jawline, straight nose, high cheekbones
-- Skin: Warm olive/tan skin tone, flawless complexion
-- Build: Lean athletic, height 6ft (183cm), model proportions
-VIBE: Cool, effortlessly handsome, fashion-forward. Think male supermodel off-duty.
-EXPRESSION VARIATION ALLOWED: Can range from neutral cool confidence, slight knowing smile, relaxed smolder, to subtle intensity. Always chic and editorial.`,
+// FIXED MODEL IDENTITIES with deterministic seed hints
+// These descriptions are designed to be as specific as possible for consistency
+const MODEL_DESCRIPTIONS: Record<string, { description: string; gender: 'male' | 'female'; seed: string }> = {
+  '11111111-1111-1111-1111-111111111111': {
+    gender: 'male',
+    seed: 'ALEX_MODEL_V1_SEED_001',
+    description: `EXACT MODEL IDENTITY - ALEX (MUST REPLICATE EXACTLY):
+Face ID: ALEX-32-M-001
+- Age: Exactly 32 years old
+- Hair: Dark brown, short buzzcut fade, 0.5 inch on top, clean taper on sides
+- Eyes: Deep brown, almond shape, heavy brow ridge
+- Face: Square jaw, Roman nose (slightly aquiline), high cheekbones, clean-shaven
+- Skin: Warm olive Mediterranean skin tone, slight tan, clear complexion
+- Body: Athletic lean, 6'1" (185cm), broad shoulders, slim waist
+- Expression: Neutral cool confidence with relaxed eyes
 
-  '22222222-2222-2222-2222-222222222222': `Marcus: A handsome male fashion model with refined features, aged 33.
-IDENTITY (MUST BE CONSISTENT):
-- Hair: Medium-length textured light brown hair, swept back casually with natural movement
-- Eyes: Striking blue-grey eyes
-- Face: Light designer stubble, defined cheekbones, angular features, masculine but refined
-- Skin: Fair skin tone with subtle freckles, healthy glow
-- Build: Lean and tall, height 5ft11 (180cm), editorial model build
-VIBE: Cool Scandinavian minimalism meets London street style. Understated handsome.
-EXPRESSION VARIATION ALLOWED: Cool relaxed, understated confidence, minimal smile, thoughtful gaze, or casual intensity. Always effortlessly stylish.`,
+THIS IS THE SAME PERSON EVERY TIME. Generate as if photographing the same model in different shots.`
+  },
 
-  '33333333-3333-3333-3333-333333333333': `Sophie: A stunningly beautiful female fashion model, aged 31.
-IDENTITY (MUST BE CONSISTENT):
-- Hair: Sleek jet black hair - can be styled as bob, low bun, slicked back, or natural waves
-- Eyes: Dark brown almond-shaped eyes, captivating gaze
-- Face: High sculpted cheekbones, delicate features, full lips, symmetrical beauty
-- Skin: Light/fair porcelain complexion, flawless skin
-- Build: Slim model physique, height 5ft8 (173cm), graceful proportions
-VIBE: Parisian chic meets high fashion editorial. Cool, mysterious, beautiful.
-EXPRESSION VARIATION ALLOWED: Neutral cool, subtle smile, confident gaze, soft intensity, or serene poise. Always elegant and aspirational.`,
+  '22222222-2222-2222-2222-222222222222': {
+    gender: 'male',
+    seed: 'MARCUS_MODEL_V1_SEED_002',
+    description: `EXACT MODEL IDENTITY - MARCUS (MUST REPLICATE EXACTLY):
+Face ID: MARCUS-33-M-002
+- Age: Exactly 33 years old
+- Hair: Light brown, medium length swept back, textured waves, natural movement
+- Eyes: Blue-grey, deep set, European shape
+- Face: Angular Nordic features, designer stubble (3-day), defined cheekbones
+- Skin: Fair Scandinavian skin, light freckles across nose and cheeks
+- Body: Lean tall, 5'11" (180cm), slim build, model proportions
+- Expression: Cool understated confidence, slight knowing look
 
-  '44444444-4444-4444-4444-444444444444': `Emma: A naturally beautiful female fashion model with warm features, aged 34.
-IDENTITY (MUST BE CONSISTENT):
-- Hair: Long flowing chestnut brown hair - can be styled as loose waves, sleek straight, elegant updo, or natural texture
-- Eyes: Striking hazel/green eyes with warmth
-- Face: Soft beautiful features, natural brows, warm smile, approachable beauty
-- Skin: Medium/golden sun-kissed skin tone, healthy radiant complexion
-- Build: Slim-average model build, height 5ft7 (170cm), feminine proportions
-VIBE: California cool meets European elegance. Approachable yet aspirational beauty.
-EXPRESSION VARIATION ALLOWED: Relaxed confidence, warm natural smile, soft gaze, cool composure, or playful energy. Always beautiful and relatable.`,
+THIS IS THE SAME PERSON EVERY TIME. Generate as if photographing the same model in different shots.`
+  },
+
+  '33333333-3333-3333-3333-333333333333': {
+    gender: 'female',
+    seed: 'SOPHIE_MODEL_V1_SEED_003',
+    description: `EXACT MODEL IDENTITY - SOPHIE (MUST REPLICATE EXACTLY):
+Face ID: SOPHIE-31-F-003
+- Age: Exactly 31 years old
+- Hair: Jet black, sleek straight, shoulder length bob, center parted
+- Eyes: Dark brown, large almond shape, Asian-European features
+- Face: High sculpted cheekbones, small nose, full natural lips, oval face shape
+- Skin: Porcelain fair, flawless smooth, cool undertone
+- Body: Slim model build, 5'8" (173cm), elegant long limbs
+- Expression: Cool mysterious confidence, editorial gaze
+
+THIS IS THE SAME PERSON EVERY TIME. Generate as if photographing the same model in different shots.`
+  },
+
+  '44444444-4444-4444-4444-444444444444': {
+    gender: 'female',
+    seed: 'EMMA_MODEL_V1_SEED_004',
+    description: `EXACT MODEL IDENTITY - EMMA (MUST REPLICATE EXACTLY):
+Face ID: EMMA-34-F-004
+- Age: Exactly 34 years old
+- Hair: Chestnut brown, long flowing waves past shoulders, side parted left
+- Eyes: Hazel-green, large round, warm expression
+- Face: Soft oval features, natural full brows, warm smile lines, heart-shaped face
+- Skin: Golden sun-kissed, medium tone, healthy glow, light freckles
+- Body: Slim-average, 5'7" (170cm), feminine proportions
+- Expression: Warm confident, approachable yet editorial
+
+THIS IS THE SAME PERSON EVERY TIME. Generate as if photographing the same model in different shots.`
+  },
 };
 
-// Pose descriptions - varied, cool, editorial poses with creative freedom
-// Reference: ASOS, Zara, high-end e-commerce, fashion editorials
+// Pose descriptions - specific and consistent
 const POSE_DESCRIPTIONS: Record<string, string> = {
-  'front_neutral': `Standing facing camera with cool, relaxed stance. VARIATION ENCOURAGED: weight shifted, hand on hip, hand in pocket, arms crossed casually, or hands relaxed at sides. Natural model energy, not stiff. Full body visible with natural soft shadow. Expression can vary within the cool/chic range.`,
-  'three_quarter': `Standing at 3/4 angle with effortless editorial pose. VARIATION ENCOURAGED: body angled dynamically, one hand in pocket or on hip, subtle movement suggested, looking at camera or slight profile. Confident and chic. Shows outfit silhouette beautifully.`,
-  'relaxed': `Relaxed casual stance with natural S-curve in body. VARIATION ENCOURAGED: weight on one leg, hands in various natural positions (pockets, waistband, touching hair), leaning slightly, casual arm positions. Cool, approachable, model-like energy.`,
-  'arms_bent': `Cool stance with arms naturally positioned. VARIATION ENCOURAGED: hand on hip, arms bent with hands near pockets, adjusting clothing, touching accessories, or one hand raised casually. Shows garment fit around torso. Can include stylish accessories (watches, bracelets, rings).`,
-  'close_up_detail': `CLOSE-UP CROP from chest to mid-thigh. VARIATION ENCOURAGED in hand positions: relaxed at sides, touching pocket, adjusting waistband, thumbs in belt loops, or holding accessory. Focus on garment details, fabric texture, and fit. Face partially visible or cropped.`,
-  'movement': `Dynamic pose suggesting natural movement. VARIATION ENCOURAGED: walking motion, turning, mid-step, hair movement, fabric flowing. Cool editorial energy like caught mid-stride. Not frozen or stiff - alive and stylish.`,
+  'front_neutral': `Standing facing camera directly. Weight evenly distributed. Arms relaxed at sides or one hand lightly in pocket. Shoulders back, natural stance. Full body visible. Professional studio pose.`,
+  'three_quarter': `Body angled 30-45 degrees to camera. Looking at camera. One hand in pocket or on hip. Weight on back leg. Shows outfit dimension and fit. Editorial confident stance.`,
+  'relaxed': `Natural S-curve stance. Weight on one leg. Arms in relaxed position - can be crossed, in pockets, or at waist. Approachable energy while maintaining editorial quality.`,
+  'arms_bent': `Standing with one or both arms bent. Hand on hip, touching face, or adjusting clothing. Shows arm and torso fit. Confident pose with editorial energy.`,
+  'close_up_detail': `CROPPED VIEW: Chest to mid-thigh only. Focus on garment details. Hands visible near waist or pockets. Face partially visible or cropped at chin. Shows fabric texture and fit details.`,
+  'movement': `Dynamic walking or turning pose. Caught mid-motion. Hair and fabric showing natural movement. Energy and life while maintaining sharp focus on garment.`,
 };
 
 // Outfit styling descriptions - rich, diverse, inspiration-driven
@@ -276,6 +300,7 @@ STYLING RULES: Proportions are intentional - oversized meets cropped. Textures m
 async function processModelTryOn(
   garmentImageUrl: string, 
   modelId: string,
+  modelReferenceUrl: string | null,
   poseType: string,
   fitStyle: string,
   styleOutfit: boolean,
@@ -283,7 +308,7 @@ async function processModelTryOn(
   apiKey: string,
   attempt: number = 1
 ): Promise<string> {
-  const modelDescription = MODEL_DESCRIPTIONS[modelId] || MODEL_DESCRIPTIONS['11111111-1111-1111-1111-111111111111'];
+  const modelData = MODEL_DESCRIPTIONS[modelId] || MODEL_DESCRIPTIONS['11111111-1111-1111-1111-111111111111'];
   const poseDescription = POSE_DESCRIPTIONS[poseType] || POSE_DESCRIPTIONS['front_neutral'];
   
   const fitInstructions = fitStyle === 'oversized' 
@@ -292,13 +317,23 @@ async function processModelTryOn(
     ? 'If applicable, show the garment tucked in for a polished look.'
     : 'Style the garment with a natural regular fit.';
 
+  // Consistency instruction - use seed hint for deterministic generation
+  const consistencyInstruction = `
+⚠️ MODEL CONSISTENCY - CRITICAL ⚠️
+Model Seed ID: ${modelData.seed}
+This model must look IDENTICAL across all generations. Use this seed ID to ensure the same face, body, and features every time.
+
+${modelData.description}
+
+IMPORTANT: Generate the SAME PERSON every time this seed ID is used. This is like photographing the same real model multiple times - the person should be recognizable as the same individual.`;
+
   // Build the prompt based on whether we're styling the outfit
   let prompt: string;
   
   if (styleOutfit) {
     const stylingDirection = OUTFIT_STYLE_DESCRIPTIONS[outfitStyle] || OUTFIT_STYLE_DESCRIPTIONS['stylish_casual'];
     
-    prompt = `TASK: Place this EXACT garment onto a fashion model AND style a complete outfit around it for e-commerce product photography.
+    prompt = `TASK: Place this EXACT garment onto a specific fashion model AND style a complete outfit around it for e-commerce product photography.
 
 ⚠️ CRITICAL: GARMENT ACCURACY IS NON-NEGOTIABLE ⚠️
 The garment in the input image is the SINGLE SOURCE OF TRUTH. You MUST:
@@ -316,21 +351,10 @@ The garment in the input image is the HERO ITEM. It MUST be:
 - The dominant visual element of the image
 - Clearly visible and not obscured by other items
 
-MODEL IDENTITY (CONSISTENT BUT WITH VARIATION):
-${modelDescription}
-✅ Keep the model's IDENTITY consistent (face, body type, age 30-35)
-✅ VARY expressions within the cool/chic range (confident, relaxed, subtle smile, intense gaze)
-✅ The model should be strikingly handsome (men) or beautiful (women)
-✅ Think: fashion editorial, ASOS, Zara campaign quality
+${consistencyInstruction}
 
-POSE (CREATIVE VARIATION ENCOURAGED):
+POSE:
 ${poseDescription}
-✅ VARY the pose naturally - different arm positions, weight shifts, angles
-✅ Keep the energy: cool, chic, effortless, aspirational
-✅ Think: high-end e-commerce with editorial edge
-
-FIT STYLE FOR HERO GARMENT:
-${fitInstructions}
 
 ${stylingDirection}
 
@@ -381,18 +405,10 @@ The garment in the input image is the SINGLE SOURCE OF TRUTH. You MUST:
 - DO NOT alter, reimagine, or "improve" ANY text or graphics
 - If you cannot read text clearly, copy it as visible marks rather than inventing text
 
-MODEL IDENTITY (CONSISTENT BUT WITH VARIATION):
-${modelDescription}
-✅ Keep the model's IDENTITY consistent (face, body type, age 30-35)
-✅ VARY expressions within the cool/chic range (confident, relaxed, subtle smile, intense gaze)
-✅ The model should be strikingly handsome (men) or beautiful (women)
-✅ Think: fashion editorial, ASOS, Zara campaign quality
+${consistencyInstruction}
 
-POSE (CREATIVE VARIATION ENCOURAGED):
+POSE:
 ${poseDescription}
-✅ VARY the pose naturally - different arm positions, weight shifts, angles
-✅ Keep the energy: cool, chic, effortless, aspirational
-✅ Think: high-end e-commerce with editorial edge
 
 FIT STYLE:
 ${fitInstructions}
@@ -488,7 +504,7 @@ The input image is your ONLY reference for the garment. Copy it EXACTLY - especi
     if (attempt < MAX_RETRIES) {
       console.log(`Retrying model try-on (attempt ${attempt + 1})...`);
       await new Promise(resolve => setTimeout(resolve, 1000));
-      return processModelTryOn(garmentImageUrl, modelId, poseType, fitStyle, styleOutfit, outfitStyle, apiKey, attempt + 1);
+      return processModelTryOn(garmentImageUrl, modelId, modelReferenceUrl, poseType, fitStyle, styleOutfit, outfitStyle, apiKey, attempt + 1);
     }
     
     throw new Error('No processed image returned from AI after retries');
@@ -540,6 +556,7 @@ serve(async (req) => {
     const processedImage = await processModelTryOn(
       garmentImageUrl, 
       modelId, 
+      null, // modelReferenceUrl - not used yet
       poseType, 
       fitStyle,
       styleOutfit,
