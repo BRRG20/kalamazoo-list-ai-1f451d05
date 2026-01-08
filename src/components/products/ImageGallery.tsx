@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { ChevronUp, ChevronDown, ImageIcon, Trash2, GripVertical, ZoomIn, Check, ChevronsUpDown, AlertTriangle, Eraser, Loader2, Undo2, Shirt, User, RefreshCw } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, ImageIcon, Trash2, GripVertical, ZoomIn, Check, ChevronsUpDown, AlertTriangle, Eraser, Loader2, Undo2, Shirt, User, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
@@ -49,6 +49,7 @@ export function ImageGallery({
   const [draggedImageId, setDraggedImageId] = useState<string | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [previewImage, setPreviewImage] = useState<ProductImage | null>(null);
+  const [previewIndex, setPreviewIndex] = useState(0);
   const [selectedImageIds, setSelectedImageIds] = useState<Set<string>>(new Set());
   const [moveTargetProductId, setMoveTargetProductId] = useState<string>('');
   const [moveDropdownOpen, setMoveDropdownOpen] = useState(false);
@@ -597,7 +598,12 @@ export function ImageGallery({
               {/* Thumbnail with expand */}
               <div 
                 className="w-20 h-20 flex-shrink-0 rounded overflow-hidden bg-muted relative group cursor-pointer"
-                onClick={() => !failedImages.has(image.id) && setPreviewImage(image)}
+                onClick={() => {
+                  if (!failedImages.has(image.id)) {
+                    setPreviewIndex(index);
+                    setPreviewImage(image);
+                  }
+                }}
               >
                 {failedImages.has(image.id) ? (
                   <div className="w-full h-full flex flex-col items-center justify-center bg-destructive/10 text-destructive">
@@ -788,16 +794,55 @@ export function ImageGallery({
         </div>
       </div>
 
-      {/* Image Preview Dialog */}
+      {/* Image Preview Dialog with Navigation */}
       <Dialog open={!!previewImage} onOpenChange={(open) => !open && setPreviewImage(null)}>
         <DialogContent className="max-w-3xl p-2 bg-background">
           {previewImage && (
             <div className="relative">
+              {/* Previous button */}
+              {images.length > 1 && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute left-2 top-1/2 -translate-y-1/2 z-10 h-10 w-10 rounded-full bg-background/80 hover:bg-background shadow-lg"
+                  onClick={() => {
+                    const newIndex = previewIndex > 0 ? previewIndex - 1 : images.length - 1;
+                    setPreviewIndex(newIndex);
+                    setPreviewImage(images[newIndex]);
+                  }}
+                >
+                  <ChevronLeft className="w-6 h-6" />
+                </Button>
+              )}
+              
               <img
                 src={previewImage.url}
                 alt="Preview"
                 className="w-full h-auto max-h-[80vh] object-contain rounded"
               />
+              
+              {/* Next button */}
+              {images.length > 1 && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 z-10 h-10 w-10 rounded-full bg-background/80 hover:bg-background shadow-lg"
+                  onClick={() => {
+                    const newIndex = previewIndex < images.length - 1 ? previewIndex + 1 : 0;
+                    setPreviewIndex(newIndex);
+                    setPreviewImage(images[newIndex]);
+                  }}
+                >
+                  <ChevronRight className="w-6 h-6" />
+                </Button>
+              )}
+              
+              {/* Image counter */}
+              {images.length > 1 && (
+                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-background/80 px-3 py-1 rounded-full text-sm font-medium">
+                  {previewIndex + 1} / {images.length}
+                </div>
+              )}
             </div>
           )}
         </DialogContent>
