@@ -171,6 +171,8 @@ interface BatchDetailProps {
   isExpandingImages?: boolean;
   // Check if products have model images for AI Model expansion mode
   getProductHasModelImage?: (productId: string) => boolean;
+  // Force refresh images - increment to force refetch
+  imageRefreshKey?: number;
 }
 
 export function BatchDetail({
@@ -253,6 +255,7 @@ export function BatchDetail({
   onExpandProductImages,
   isExpandingImages,
   getProductHasModelImage,
+  imageRefreshKey,
 }: BatchDetailProps) {
   // Early return if batch is missing (defensive guard)
   if (!batch || !batch.id) {
@@ -468,6 +471,55 @@ export function BatchDetail({
   useEffect(() => {
     lastFetchedRef.current = '';
   }, [batch.id]);
+
+  // Listen for external force refresh trigger via imageRefreshKey
+  useEffect(() => {
+    if (imageRefreshKey && imageRefreshKey > 0) {
+      // Force refresh when key changes
+      lastFetchedRef.current = '';
+      // Trigger a refetch by updating state
+      setImagesLoading(true);
+      const fetchAllImages = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('images')
+            .select('*')
+            .eq('batch_id', batch.id)
+            .is('deleted_at', null)
+            .order('position', { ascending: true });
+          
+          if (error) {
+            console.error('Error refreshing batch images:', error);
+            return;
+          }
+          
+          const imagesMap: Record<string, ProductImage[]> = {};
+          for (const product of products) {
+            imagesMap[product.id] = [];
+          }
+          
+          for (const row of data || []) {
+            if (row.product_id && imagesMap[row.product_id]) {
+              imagesMap[row.product_id].push({
+                id: row.id,
+                product_id: row.product_id,
+                url: row.url,
+                position: row.position,
+                include_in_shopify: row.include_in_shopify,
+                source: row.source as ProductImage['source'],
+              });
+            }
+          }
+          
+          setProductImages(imagesMap);
+          lastFetchedRef.current = `${batch.id}:${products.length}`;
+        } finally {
+          setImagesLoading(false);
+        }
+      };
+      fetchAllImages();
+    }
+  }, [imageRefreshKey, batch.id, products]);
 
   // Manual refresh function to force reload images - uses same efficient single query
   const handleRefreshImages = async () => {

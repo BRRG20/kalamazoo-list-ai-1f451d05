@@ -97,6 +97,12 @@ export default function BatchesPage() {
   // Track initial state for change detection in Confirm Grouping
   const [initialImageAssignments, setInitialImageAssignments] = useState<Map<string, string | null>>(new Map());
   
+  // Force refresh key for images - increment to force BatchDetail to re-fetch
+  const [imageRefreshKey, setImageRefreshKey] = useState(0);
+  const forceRefreshImages = useCallback(() => {
+    setImageRefreshKey(prev => prev + 1);
+  }, []);
+  
   // Global undo state for all actions
   interface UndoState {
     type: 'delete_products' | 'group_change';
@@ -541,6 +547,9 @@ const handleSelectBatch = useCallback((id: string) => {
       clearCache();
       await refetchProducts();
       
+      // Force BatchDetail to re-fetch images immediately
+      forceRefreshImages();
+      
       // Dismiss loading toast
       toast.dismiss(toastId);
       
@@ -570,7 +579,7 @@ const handleSelectBatch = useCallback((id: string) => {
       // Always end batch operation to reset loading state
       endBatchExpansion();
     }
-  }, [products, fetchImagesForProduct, selectedBatchId, clearCache, refetchProducts, startBatchExpansion, updateBatchProgress, endBatchExpansion]);
+  }, [products, fetchImagesForProduct, selectedBatchId, clearCache, refetchProducts, startBatchExpansion, updateBatchProgress, endBatchExpansion, forceRefreshImages]);
 
   const handleAutoGroup = useCallback(async (imagesPerProduct: number) => {
     if (!selectedBatchId) return;
@@ -2037,6 +2046,7 @@ const handleSelectBatch = useCallback((id: string) => {
               onQuickProductCapture={handleQuickProductCapture}
               onExpandProductImages={handleExpandProductImages}
               isExpandingImages={isExpandingImages}
+              imageRefreshKey={imageRefreshKey}
               getProductHasModelImage={(productId) => {
                 const images = fetchImagesForProduct(productId);
                 return false; // Will be checked async
