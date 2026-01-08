@@ -2058,10 +2058,6 @@ const handleSelectBatch = useCallback((id: string) => {
               onExpandProductImages={handleExpandProductImages}
               isExpandingImages={isExpandingImages}
               imageRefreshKey={imageRefreshKey}
-              getProductHasModelImage={(productId) => {
-                const images = fetchImagesForProduct(productId);
-                return false; // Will be checked async
-              }}
             />
           ) : (
             <EmptyState />

@@ -1843,9 +1843,10 @@ export function BatchDetail({
                             }
                           }}
                           hasExistingModelImages={
-                            Array.from(selectedProductIds).some(pid => 
-                              getProductHasModelImage?.(pid) ?? false
-                            )
+                            Array.from(selectedProductIds).some(pid => {
+                              const imgs = productImages[pid] || [];
+                              return imgs.some(img => img.source === 'model_tryon');
+                            })
                           }
                           productCount={selectedProductIds.size}
                         />
