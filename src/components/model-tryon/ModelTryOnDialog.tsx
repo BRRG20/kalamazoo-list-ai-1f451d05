@@ -30,11 +30,17 @@ interface ModelTryOnDialogProps {
   imageCount?: number;
 }
 
+// 7 AI Models based on reference images
 const MODELS: AIFashionModel[] = [
-  { id: '11111111-1111-1111-1111-111111111111', name: 'Alex', gender: 'male', description: 'Handsome, 32, cool editorial vibe' },
-  { id: '22222222-2222-2222-2222-222222222222', name: 'Marcus', gender: 'male', description: 'Stylish, 33, Scandinavian cool' },
-  { id: '33333333-3333-3333-3333-333333333333', name: 'Sophie', gender: 'female', description: 'Beautiful, 31, Parisian chic' },
-  { id: '44444444-4444-4444-4444-444444444444', name: 'Emma', gender: 'female', description: 'Natural beauty, 34, California elegance' },
+  // Male Models
+  { id: '11111111-1111-1111-1111-111111111111', name: 'Alex', gender: 'male', description: 'Mediterranean, dark hair, clean-shaven' },
+  { id: '22222222-2222-2222-2222-222222222222', name: 'Marcus', gender: 'male', description: 'Black, athletic, full beard' },
+  { id: '33333333-3333-3333-3333-333333333333', name: 'James', gender: 'male', description: 'European, light eyes, angular' },
+  { id: '44444444-4444-4444-4444-444444444444', name: 'Theo', gender: 'male', description: 'Youthful, curly hair, artistic' },
+  // Female Models
+  { id: '55555555-5555-5555-5555-555555555555', name: 'Sophie', gender: 'female', description: 'European, long brown hair' },
+  { id: '66666666-6666-6666-6666-666666666666', name: 'Zoe', gender: 'female', description: 'Edgy, undercut bob, alternative' },
+  { id: '77777777-7777-7777-7777-777777777777', name: 'Lily', gender: 'female', description: 'East Asian, long black hair' },
 ];
 
 const POSES: { id: PoseType; name: string }[] = [

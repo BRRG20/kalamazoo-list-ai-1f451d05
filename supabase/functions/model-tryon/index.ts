@@ -18,71 +18,147 @@ interface RequestBody {
 
 const MAX_RETRIES = 2;
 
-// FIXED MODEL IDENTITIES with deterministic seed hints
-// These descriptions are designed to be as specific as possible for consistency
-const MODEL_DESCRIPTIONS: Record<string, { description: string; gender: 'male' | 'female'; seed: string }> = {
+// FIXED MODEL IDENTITIES based on actual reference images
+// 7 models: 4 male, 3 female - each with unique, specific features
+const MODEL_DESCRIPTIONS: Record<string, { description: string; gender: 'male' | 'female'; seed: string; referenceUrl: string }> = {
+  // ALEX - Dark hair, olive skin, clean-shaven, handsome Mediterranean look
+  // Reference: 30kalamazoo, 46kalamazoo, 51kalamazoo, 58kalamazoo
   '11111111-1111-1111-1111-111111111111': {
     gender: 'male',
-    seed: 'ALEX_MODEL_V1_SEED_001',
-    description: `EXACT MODEL IDENTITY - ALEX (MUST REPLICATE EXACTLY):
-Face ID: ALEX-32-M-001
-- Age: Exactly 32 years old
-- Hair: Dark brown, short buzzcut fade, 0.5 inch on top, clean taper on sides
-- Eyes: Deep brown, almond shape, heavy brow ridge
-- Face: Square jaw, Roman nose (slightly aquiline), high cheekbones, clean-shaven
-- Skin: Warm olive Mediterranean skin tone, slight tan, clear complexion
-- Body: Athletic lean, 6'1" (185cm), broad shoulders, slim waist
-- Expression: Neutral cool confidence with relaxed eyes
+    seed: 'ALEX_MODEL_V1',
+    referenceUrl: '/models/alex-reference.jpeg',
+    description: `MODEL: ALEX - Handsome Mediterranean Male
+EXACT IDENTITY (DO NOT CHANGE):
+- Age: 30-32 years old
+- Hair: Dark brown, side-swept to the left, short neat sides, longer on top with slight wave
+- Eyes: Dark brown, deep-set with strong brow ridge
+- Face: CLEAN-SHAVEN (no beard, no stubble), strong square jaw, straight nose, defined cheekbones, slight cleft chin
+- Skin: Warm olive Mediterranean skin tone, clear smooth complexion
+- Body: Athletic lean build, 6'1" (185cm), broad shoulders, well-proportioned
+- Expression: Cool neutral confidence, relaxed but intense gaze, slight pout
+- Vibe: London street style, European model off-duty, effortlessly handsome
 
-THIS IS THE SAME PERSON EVERY TIME. Generate as if photographing the same model in different shots.`
+CRITICAL: Clean-shaven face. Dark swept hair. Olive skin. Same person every shot.`
   },
 
+  // MARCUS - Black male, short hair, full beard, athletic build
+  // Reference: virtual-try-on-9a3d9626, virtual-try-on-61f3fdca, 41kalamazoo
   '22222222-2222-2222-2222-222222222222': {
     gender: 'male',
-    seed: 'MARCUS_MODEL_V1_SEED_002',
-    description: `EXACT MODEL IDENTITY - MARCUS (MUST REPLICATE EXACTLY):
-Face ID: MARCUS-33-M-002
-- Age: Exactly 33 years old
-- Hair: Light brown, medium length swept back, textured waves, natural movement
-- Eyes: Blue-grey, deep set, European shape
-- Face: Angular Nordic features, designer stubble (3-day), defined cheekbones
-- Skin: Fair Scandinavian skin, light freckles across nose and cheeks
-- Body: Lean tall, 5'11" (180cm), slim build, model proportions
-- Expression: Cool understated confidence, slight knowing look
+    seed: 'MARCUS_MODEL_V1',
+    referenceUrl: '/models/marcus-reference.jpeg',
+    description: `MODEL: MARCUS - Athletic Black Male
+EXACT IDENTITY (DO NOT CHANGE):
+- Age: 30-33 years old
+- Hair: Black, very short buzz cut/fade, natural texture, clean lined up
+- Eyes: Dark brown, warm confident gaze
+- Face: FULL BEARD (neat, well-groomed, medium length), strong jawline, broad nose, full lips
+- Skin: Rich dark brown/deep ebony skin tone, smooth clear complexion
+- Body: Athletic muscular build, 6'0" (183cm), broad shoulders, strong arms
+- Expression: Confident, calm, approachable yet editorial, subtle knowing look
+- Vibe: Urban streetwear, sports-luxe, modern masculine energy
 
-THIS IS THE SAME PERSON EVERY TIME. Generate as if photographing the same model in different shots.`
+CRITICAL: Black skin. Full beard. Short buzz hair. Athletic build. Same person every shot.`
   },
 
+  // JAMES - Brown hair, clean-shaven, angular features, European model look
+  // Reference: virtual-try-on-ceabe343 (left person)
   '33333333-3333-3333-3333-333333333333': {
-    gender: 'female',
-    seed: 'SOPHIE_MODEL_V1_SEED_003',
-    description: `EXACT MODEL IDENTITY - SOPHIE (MUST REPLICATE EXACTLY):
-Face ID: SOPHIE-31-F-003
-- Age: Exactly 31 years old
-- Hair: Jet black, sleek straight, shoulder length bob, center parted
-- Eyes: Dark brown, large almond shape, Asian-European features
-- Face: High sculpted cheekbones, small nose, full natural lips, oval face shape
-- Skin: Porcelain fair, flawless smooth, cool undertone
-- Body: Slim model build, 5'8" (173cm), elegant long limbs
-- Expression: Cool mysterious confidence, editorial gaze
+    gender: 'male',
+    seed: 'JAMES_MODEL_V1',
+    referenceUrl: '/models/james-sophie-reference.jpeg',
+    description: `MODEL: JAMES - Classic European Male
+EXACT IDENTITY (DO NOT CHANGE):
+- Age: 28-32 years old
+- Hair: Medium brown, short sides with longer textured top, swept back naturally
+- Eyes: Light hazel/green, intense editorial gaze
+- Face: CLEAN-SHAVEN, angular defined features, high cheekbones, straight nose, square jaw
+- Skin: Fair/light European skin tone, clear complexion with slight warmth
+- Body: Tall lean model build, 6'2" (188cm), slim with good posture
+- Expression: Cool editorial intensity, fashion model confident, slightly brooding
+- Vibe: High fashion editorial, London Fashion Week, Burberry campaign aesthetic
 
-THIS IS THE SAME PERSON EVERY TIME. Generate as if photographing the same model in different shots.`
+CRITICAL: Clean-shaven. Light eyes. Angular features. Tall and lean. Same person every shot.`
   },
 
+  // THEO - Curly light brown hair, youthful, slim, artistic look
+  // Reference: hero_decemebr-2 (right person)
   '44444444-4444-4444-4444-444444444444': {
-    gender: 'female',
-    seed: 'EMMA_MODEL_V1_SEED_004',
-    description: `EXACT MODEL IDENTITY - EMMA (MUST REPLICATE EXACTLY):
-Face ID: EMMA-34-F-004
-- Age: Exactly 34 years old
-- Hair: Chestnut brown, long flowing waves past shoulders, side parted left
-- Eyes: Hazel-green, large round, warm expression
-- Face: Soft oval features, natural full brows, warm smile lines, heart-shaped face
-- Skin: Golden sun-kissed, medium tone, healthy glow, light freckles
-- Body: Slim-average, 5'7" (170cm), feminine proportions
-- Expression: Warm confident, approachable yet editorial
+    gender: 'male',
+    seed: 'THEO_MODEL_V1',
+    referenceUrl: '/models/zoe-theo-reference.jpg',
+    description: `MODEL: THEO - Youthful Artistic Male
+EXACT IDENTITY (DO NOT CHANGE):
+- Age: 24-28 years old
+- Hair: Light brown/dirty blonde, natural curly/wavy texture, medium length, tousled
+- Eyes: Light green/hazel, soft expressive gaze
+- Face: CLEAN-SHAVEN or very light stubble, soft youthful features, defined but not angular, natural brows
+- Skin: Fair skin with warm peachy undertone, clear youthful complexion
+- Body: Slim lean build, 5'11" (180cm), narrow shoulders, artistic/musician physique
+- Expression: Gentle cool confidence, approachable, slight hint of a smile
+- Vibe: Brooklyn hipster, indie musician, Scandinavian minimalist
 
-THIS IS THE SAME PERSON EVERY TIME. Generate as if photographing the same model in different shots.`
+CRITICAL: Curly/wavy hair. Youthful face. Slim build. Artistic vibe. Same person every shot.`
+  },
+
+  // SOPHIE - Long straight brown hair, classic beauty, denim jacket girl
+  // Reference: virtual-try-on-ceabe343 (right person)
+  '55555555-5555-5555-5555-555555555555': {
+    gender: 'female',
+    seed: 'SOPHIE_MODEL_V1',
+    referenceUrl: '/models/james-sophie-reference.jpeg',
+    description: `MODEL: SOPHIE - Classic European Female
+EXACT IDENTITY (DO NOT CHANGE):
+- Age: 26-30 years old
+- Hair: Medium brown, long straight hair past shoulders, center-parted, sleek and shiny
+- Eyes: Light brown/hazel, soft but confident gaze
+- Face: Oval face shape, natural brows, soft features, subtle cheekbones, natural pink lips
+- Skin: Fair/light European skin with slight warm undertone, natural healthy glow
+- Body: Slim model build, 5'8" (173cm), elegant proportions
+- Expression: Cool relaxed confidence, approachable beauty, slight knowing look
+- Vibe: Parisian chic, Scandinavian minimalist, effortless European style
+
+CRITICAL: Long straight brown hair. Fair skin. Classic beauty. Same person every shot.`
+  },
+
+  // ZOE - Edgy dark bob with undercut, alternative style, striking features
+  // Reference: hero_decemebr-2 (left person)
+  '66666666-6666-6666-6666-666666666666': {
+    gender: 'female',
+    seed: 'ZOE_MODEL_V1',
+    referenceUrl: '/models/zoe-theo-reference.jpg',
+    description: `MODEL: ZOE - Edgy Alternative Female
+EXACT IDENTITY (DO NOT CHANGE):
+- Age: 25-29 years old
+- Hair: DISTINCTIVE - Dark brown/black chin-length bob with blunt bangs AND shaved undercut on one side
+- Eyes: Grey-green, intense editorial gaze, slightly hooded
+- Face: Striking angular features, high cheekbones, defined jawline, bold brows, minimal makeup look
+- Skin: Fair porcelain skin, cool undertone, clear complexion
+- Body: Slim androgynous build, 5'7" (170cm), fashion-forward silhouette
+- Expression: Cool edgy confidence, slight intensity, fashion editorial attitude
+- Vibe: London avant-garde, Harajuku meets Shoreditch, high fashion edge
+
+CRITICAL: Undercut bob with bangs. Edgy look. Angular features. Same person every shot.`
+  },
+
+  // LILY - Asian female, long black hair, elegant minimal look
+  // Reference: 59kalamazoo
+  '77777777-7777-7777-7777-777777777777': {
+    gender: 'female',
+    seed: 'LILY_MODEL_V1',
+    referenceUrl: '/models/lily-reference.jpeg',
+    description: `MODEL: LILY - Elegant East Asian Female
+EXACT IDENTITY (DO NOT CHANGE):
+- Age: 27-32 years old
+- Hair: Jet black, very long straight hair (past mid-back), center-parted, sleek and shiny
+- Eyes: Dark brown, almond-shaped, soft but confident East Asian features
+- Face: Oval face, delicate refined features, subtle cheekbones, natural brows, soft lips
+- Skin: Light/fair East Asian skin tone, smooth porcelain-like, cool undertone
+- Body: Slim elegant build, 5'7" (170cm), graceful proportions
+- Expression: Serene cool confidence, mysterious, elegant poise
+- Vibe: Japanese minimalism, Korean fashion editorial, quiet luxury aesthetic
+
+CRITICAL: Long black straight hair. East Asian features. Elegant minimal vibe. Same person every shot.`
   },
 };
 
