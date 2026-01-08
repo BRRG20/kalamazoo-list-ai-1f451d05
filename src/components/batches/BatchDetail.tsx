@@ -924,13 +924,6 @@ export function BatchDetail({
       return;
     }
     
-    // Get current user for RLS
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      toast.error('You must be logged in to use this feature');
-      return;
-    }
-    
     // Get product department for auto model selection
     const product = products.find(p => p.id === productId);
     const department = product?.department || 'Men';
