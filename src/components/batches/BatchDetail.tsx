@@ -357,14 +357,12 @@ export function BatchDetail({
     }
   }, [settings?.default_images_per_product]);
 
-  // Fetch images for all products when batch or product list changes
-  // Use a stable key based on batch.id and product IDs to prevent over-fetching
+  // Fetch ALL images for the batch in a SINGLE query, then group by product_id
+  // This eliminates N+1 queries and dramatically improves performance
   useEffect(() => {
-    // Create a stable key from batch ID and sorted product IDs
-    const productIds = products.map(p => p.id).sort().join(',');
-    const fetchKey = `${batch.id}:${productIds}:${products.length}`;
+    const fetchKey = `${batch.id}:${products.length}`;
     
-    // Skip if we already fetched for this exact combination
+    // Skip if we already fetched for this batch with same product count
     if (lastFetchedRef.current === fetchKey) {
       return;
     }
@@ -377,28 +375,51 @@ export function BatchDetail({
       return;
     }
     
-    // Mark the key immediately to prevent duplicate fetches from racing
+    // Mark the key immediately to prevent duplicate fetches
     lastFetchedRef.current = fetchKey;
     
     const fetchAllImages = async () => {
       setImagesLoading(true);
       
       try {
-        const results = await Promise.all(
-          products.map(async (product) => {
-            const images = await getProductImages(product.id);
-            return { productId: product.id, images };
-          })
-        );
+        // SINGLE query to fetch ALL images for the batch
+        const { data, error } = await supabase
+          .from('images')
+          .select('*')
+          .eq('batch_id', batch.id)
+          .order('position', { ascending: true });
         
-        const imagesMap: Record<string, ProductImage[]> = {};
-        for (const { productId, images } of results) {
-          imagesMap[productId] = images;
+        if (error) {
+          console.error('Error fetching batch images:', error);
+          lastFetchedRef.current = '';
+          return;
         }
+        
+        // Group images by product_id client-side
+        const imagesMap: Record<string, ProductImage[]> = {};
+        
+        // Initialize empty arrays for all products
+        for (const product of products) {
+          imagesMap[product.id] = [];
+        }
+        
+        // Distribute images to their respective products
+        for (const row of data || []) {
+          if (row.product_id && imagesMap[row.product_id]) {
+            imagesMap[row.product_id].push({
+              id: row.id,
+              product_id: row.product_id,
+              url: row.url,
+              position: row.position,
+              include_in_shopify: row.include_in_shopify,
+              source: row.source as ProductImage['source'],
+            });
+          }
+        }
+        
         setProductImages(imagesMap);
       } catch (error) {
         console.error('Error fetching images:', error);
-        // Reset the key on error to allow retry
         lastFetchedRef.current = '';
       } finally {
         setImagesLoading(false);
@@ -406,14 +427,14 @@ export function BatchDetail({
     };
     
     fetchAllImages();
-  }, [batch.id, products, getProductImages]);
+  }, [batch.id, products]);
 
   // Reset lastFetchedRef when batch changes to ensure fresh data
   useEffect(() => {
     lastFetchedRef.current = '';
   }, [batch.id]);
 
-  // Manual refresh function to force reload images
+  // Manual refresh function to force reload images - uses same efficient single query
   const handleRefreshImages = async () => {
     if (products.length === 0) return;
     
@@ -421,25 +442,47 @@ export function BatchDetail({
     lastFetchedRef.current = ''; // Clear cache to force refetch
     
     try {
-      console.log('Refreshing images for', products.length, 'products');
-      const results = await Promise.all(
-        products.map(async (product) => {
-          const images = await getProductImages(product.id);
-          return { productId: product.id, images };
-        })
-      );
+      console.log('Refreshing images for batch', batch.id);
       
-      const imagesMap: Record<string, ProductImage[]> = {};
-      let totalImages = 0;
-      for (const { productId, images } of results) {
-        imagesMap[productId] = images;
-        totalImages += images.length;
+      // SINGLE query to fetch ALL images for the batch
+      const { data, error } = await supabase
+        .from('images')
+        .select('*')
+        .eq('batch_id', batch.id)
+        .order('position', { ascending: true });
+      
+      if (error) {
+        console.error('Error refreshing batch images:', error);
+        return;
       }
+      
+      // Group images by product_id client-side
+      const imagesMap: Record<string, ProductImage[]> = {};
+      
+      // Initialize empty arrays for all products
+      for (const product of products) {
+        imagesMap[product.id] = [];
+      }
+      
+      // Distribute images to their respective products
+      let totalImages = 0;
+      for (const row of data || []) {
+        if (row.product_id && imagesMap[row.product_id]) {
+          imagesMap[row.product_id].push({
+            id: row.id,
+            product_id: row.product_id,
+            url: row.url,
+            position: row.position,
+            include_in_shopify: row.include_in_shopify,
+            source: row.source as ProductImage['source'],
+          });
+          totalImages++;
+        }
+      }
+      
       console.log('Loaded', totalImages, 'images across', Object.keys(imagesMap).length, 'products');
       setProductImages(imagesMap);
-      
-      const productIds = products.map(p => p.id).sort().join(',');
-      lastFetchedRef.current = `${batch.id}:${productIds}:${products.length}`;
+      lastFetchedRef.current = `${batch.id}:${products.length}`;
     } catch (error) {
       console.error('Error refreshing images:', error);
     } finally {
