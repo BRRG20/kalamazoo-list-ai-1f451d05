@@ -602,7 +602,7 @@ export function useProducts(batchId: string | null) {
    * Hide a product - permanently removes from visible list
    * Can ONLY be unhidden via explicit user action
    */
-  const hideProduct = async (id: string): Promise<boolean> => {
+  const hideProduct = async (id: string, showToast: boolean = true): Promise<boolean> => {
     const { error } = await supabase
       .from('products')
       .update({ is_hidden: true })
@@ -616,7 +616,9 @@ export function useProducts(batchId: string | null) {
     
     // Remove from local state immediately
     setProducts(prev => prev.filter(p => p.id !== id));
-    toast.success('Product hidden');
+    if (showToast) {
+      toast.success('Product hidden');
+    }
     return true;
   };
 

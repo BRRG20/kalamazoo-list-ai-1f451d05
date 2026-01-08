@@ -1297,8 +1297,8 @@ const handleSelectBatch = useCallback((id: string) => {
   }, [updateProduct]);
 
   // Hide product - permanently removes from visible list until explicitly unhidden
-  const handleHideProduct = useCallback(async (productId: string) => {
-    await hideProduct(productId);
+  const handleHideProduct = useCallback(async (productId: string, showToast: boolean = true) => {
+    await hideProduct(productId, showToast);
   }, [hideProduct]);
 
   // Delete empty products (products with 0 images) - used in Birds Eye View cleanup
