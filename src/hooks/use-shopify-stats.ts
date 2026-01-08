@@ -26,12 +26,14 @@ export function useShopifyStats(batchId: string | null) {
 
     setIsLoading(true);
     try {
-      // Single query to get all products and compute stats client-side
+      // Single query to get all visible products and compute stats client-side
       // This is more efficient than 4 separate count queries
+      // Only count visible products (is_hidden = false) to match displayed products
       const { data: products, error } = await supabase
         .from('products')
-        .select('id, shopify_product_id, status')
+        .select('id, shopify_product_id, status, is_hidden')
         .eq('batch_id', batchId)
+        .eq('is_hidden', false)
         .is('deleted_at', null);
 
       if (error) throw error;
