@@ -6,8 +6,7 @@ import { useBackgroundRemoval, type ShadowType, type BackgroundRemovalOptions } 
 import { useModelTryOn, type PoseType, type FitStyle, type OutfitStyle } from '@/hooks/use-model-tryon';
 import { useImageExpansion } from '@/hooks/use-image-expansion';
 import { ModelTryOnDialog } from '@/components/model-tryon/ModelTryOnDialog';
-import { BatchCaptureButton } from '@/components/camera/BatchCaptureButton';
-import { QuickProductShotsButton } from '@/components/camera/QuickProductShotsButton';
+import { BatchCaptureButton, QuickProductShotsButton } from '@/components/camera/QuickProductShotsButton';
 import {
   Upload, 
   Sparkles, 
@@ -1027,7 +1026,7 @@ export function BatchDetail({
                 </Tooltip>
               )}
               
-              {/* Mobile Camera Buttons */}
+              {/* Camera Capture Buttons */}
               {onCameraCapture && (
                 <BatchCaptureButton
                   onComplete={onCameraCapture}
