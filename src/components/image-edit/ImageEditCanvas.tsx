@@ -55,20 +55,35 @@ export function ImageEditCanvas({ imageUrl, onSave, onCancel }: ImageEditCanvasP
   useEffect(() => {
     if (!imageObj || !containerRef.current) return;
 
-    const container = containerRef.current;
-    const containerWidth = container.clientWidth;
-    const containerHeight = container.clientHeight;
+    const calculateScale = () => {
+      const container = containerRef.current;
+      if (!container) return;
+      
+      const containerWidth = container.clientWidth;
+      const containerHeight = container.clientHeight;
+      
+      if (containerWidth === 0 || containerHeight === 0) return;
+      
+      const scaleX = containerWidth / imageObj.width;
+      const scaleY = containerHeight / imageObj.height;
+      const newScale = Math.min(scaleX, scaleY, 1);
+      
+      setScale(newScale);
+      setOffset({
+        x: (containerWidth - imageObj.width * newScale) / 2,
+        y: (containerHeight - imageObj.height * newScale) / 2,
+      });
+    };
+
+    // Initial calculation
+    calculateScale();
     
-    const scaleX = containerWidth / imageObj.width;
-    const scaleY = containerHeight / imageObj.height;
-    const newScale = Math.min(scaleX, scaleY, 1);
+    // Recalculate on resize
+    const resizeObserver = new ResizeObserver(calculateScale);
+    resizeObserver.observe(containerRef.current);
     
-    setScale(newScale);
-    setOffset({
-      x: (containerWidth - imageObj.width * newScale) / 2,
-      y: (containerHeight - imageObj.height * newScale) / 2,
-    });
-  }, [imageObj, containerRef.current?.clientWidth, containerRef.current?.clientHeight]);
+    return () => resizeObserver.disconnect();
+  }, [imageObj]);
 
   // Render canvas
   useEffect(() => {
@@ -170,6 +185,8 @@ export function ImageEditCanvas({ imageUrl, onSave, onCancel }: ImageEditCanvasP
   }, []);
 
   const handlePointerDown = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     const point = getCanvasPoint(e);
     if (!point) return;
     
@@ -181,6 +198,8 @@ export function ImageEditCanvas({ imageUrl, onSave, onCancel }: ImageEditCanvasP
   }, [getCanvasPoint, brushSize]);
 
   const handlePointerMove = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     if (!isDrawing || !currentStroke) return;
     
     const point = getCanvasPoint(e);
@@ -192,7 +211,11 @@ export function ImageEditCanvas({ imageUrl, onSave, onCancel }: ImageEditCanvasP
     } : null);
   }, [isDrawing, currentStroke, getCanvasPoint]);
 
-  const handlePointerUp = useCallback(() => {
+  const handlePointerUp = useCallback((e?: React.MouseEvent | React.TouchEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     if (currentStroke && currentStroke.points.length > 0) {
       setStrokes(prev => [...prev, currentStroke]);
     }
@@ -349,8 +372,8 @@ export function ImageEditCanvas({ imageUrl, onSave, onCancel }: ImageEditCanvasP
       {/* Canvas area */}
       <div 
         ref={containerRef}
-        className="flex-1 overflow-hidden relative bg-muted/30 flex items-center justify-center"
-        onMouseLeave={handlePointerUp}
+        className="flex-1 min-h-0 overflow-hidden relative bg-muted/30 flex items-center justify-center"
+        onMouseLeave={() => handlePointerUp()}
       >
         {showPreview && previewUrl ? (
           <img
