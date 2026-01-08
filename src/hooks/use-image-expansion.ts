@@ -25,12 +25,13 @@ export function useImageExpansion() {
     backImageUrl?: string,
     labelImageUrl?: string,
     detailImageUrl?: string,
-    targetCount: number = 8
+    currentImageCount: number = 0,
+    targetCount: number = 9
   ): Promise<ImageExpansionResult | null> => {
     // Only set expanding if not already in a batch operation
     if (!batchOperationRef.current) {
       setIsExpanding(true);
-      setProgress({ current: 0, total: targetCount });
+      setProgress({ current: 0, total: targetCount - currentImageCount });
     }
 
     try {
@@ -48,6 +49,7 @@ export function useImageExpansion() {
             backImageUrl,
             labelImageUrl,
             detailImageUrl,
+            currentImageCount,
             targetCount,
           }),
         }
@@ -113,8 +115,9 @@ export function useImageExpansion() {
       backImageUrl?: string;
       labelImageUrl?: string;
       detailImageUrl?: string;
+      currentImageCount?: number;
     }>,
-    targetCount: number = 8,
+    targetCount: number = 9,
     onProgress?: (current: number, total: number) => void
   ): Promise<Map<string, ImageExpansionResult>> => {
     startBatchExpansion(products.length);
@@ -132,6 +135,7 @@ export function useImageExpansion() {
           product.backImageUrl,
           product.labelImageUrl,
           product.detailImageUrl,
+          product.currentImageCount || 0,
           targetCount
         );
         
