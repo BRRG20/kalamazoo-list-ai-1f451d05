@@ -17,58 +17,59 @@ interface RequestBody {
 
 const MAX_RETRIES = 2;
 
-// FIXED MODEL APPEARANCES - These exact descriptions MUST be used for consistency
-// Each model has a FIXED, UNCHANGING appearance that MUST be identical every generation
+// FIXED MODEL IDENTITIES - Consistent identity but with expression/pose variation allowed
+// Models are 30-35 years old, cool, chic, handsome (men) / beautiful (women)
 const MODEL_DESCRIPTIONS: Record<string, string> = {
-  '11111111-1111-1111-1111-111111111111': `Alex: A male fashion model, EXACTLY aged 32 years old.
-FIXED APPEARANCE (DO NOT DEVIATE):
-- Hair: Short, neatly styled dark brown hair, side-parted to the left, approximately 2 inches on top
-- Eyes: Brown eyes
-- Face: Clean-shaven, strong jawline, straight nose
-- Skin: Warm olive/tan skin tone
-- Build: Lean athletic, height 6ft (183cm)
-- Expression: Neutral confidence, slight knowing smile, relaxed brow
-This EXACT person must appear in every image. Do not change ANY facial features.`,
+  '11111111-1111-1111-1111-111111111111': `Alex: A strikingly handsome male fashion model, aged 32.
+IDENTITY (MUST BE CONSISTENT):
+- Hair: Short, neatly styled dark brown hair, side-parted to the left
+- Eyes: Deep brown eyes with confident gaze
+- Face: Clean-shaven, strong defined jawline, straight nose, high cheekbones
+- Skin: Warm olive/tan skin tone, flawless complexion
+- Build: Lean athletic, height 6ft (183cm), model proportions
+VIBE: Cool, effortlessly handsome, fashion-forward. Think male supermodel off-duty.
+EXPRESSION VARIATION ALLOWED: Can range from neutral cool confidence, slight knowing smile, relaxed smolder, to subtle intensity. Always chic and editorial.`,
 
-  '22222222-2222-2222-2222-222222222222': `Marcus: A male fashion model, EXACTLY aged 33 years old.
-FIXED APPEARANCE (DO NOT DEVIATE):
-- Hair: Medium-length textured light brown hair, swept back casually, approximately 3 inches
-- Eyes: Blue-grey eyes
-- Face: Light stubble (3-day beard), defined cheekbones, slightly rounded chin
-- Skin: Fair/light skin tone with subtle freckles
-- Build: Lean, height 5ft11 (180cm)
-- Expression: Cool and relaxed, understated confidence, minimal smile
-This EXACT person must appear in every image. Do not change ANY facial features.`,
+  '22222222-2222-2222-2222-222222222222': `Marcus: A handsome male fashion model with refined features, aged 33.
+IDENTITY (MUST BE CONSISTENT):
+- Hair: Medium-length textured light brown hair, swept back casually with natural movement
+- Eyes: Striking blue-grey eyes
+- Face: Light designer stubble, defined cheekbones, angular features, masculine but refined
+- Skin: Fair skin tone with subtle freckles, healthy glow
+- Build: Lean and tall, height 5ft11 (180cm), editorial model build
+VIBE: Cool Scandinavian minimalism meets London street style. Understated handsome.
+EXPRESSION VARIATION ALLOWED: Cool relaxed, understated confidence, minimal smile, thoughtful gaze, or casual intensity. Always effortlessly stylish.`,
 
-  '33333333-3333-3333-3333-333333333333': `Sophie: A female fashion model, EXACTLY aged 31 years old.
-FIXED APPEARANCE (DO NOT DEVIATE):
-- Hair: Sleek black straight bob, chin-length, center-parted
-- Eyes: Dark brown eyes
-- Face: High cheekbones, delicate features, full lips
-- Skin: Light/fair skin tone with porcelain complexion
-- Build: Slim, height 5ft8 (173cm)
-- Expression: Neutral but approachable, cool confidence, closed-mouth subtle smile
-This EXACT person must appear in every image. Do not change ANY facial features.`,
+  '33333333-3333-3333-3333-333333333333': `Sophie: A stunningly beautiful female fashion model, aged 31.
+IDENTITY (MUST BE CONSISTENT):
+- Hair: Sleek jet black hair - can be styled as bob, low bun, slicked back, or natural waves
+- Eyes: Dark brown almond-shaped eyes, captivating gaze
+- Face: High sculpted cheekbones, delicate features, full lips, symmetrical beauty
+- Skin: Light/fair porcelain complexion, flawless skin
+- Build: Slim model physique, height 5ft8 (173cm), graceful proportions
+VIBE: Parisian chic meets high fashion editorial. Cool, mysterious, beautiful.
+EXPRESSION VARIATION ALLOWED: Neutral cool, subtle smile, confident gaze, soft intensity, or serene poise. Always elegant and aspirational.`,
 
-  '44444444-4444-4444-4444-444444444444': `Emma: A female fashion model, EXACTLY aged 34 years old.
-FIXED APPEARANCE (DO NOT DEVIATE):
-- Hair: Long flowing chestnut brown hair, loose waves, past shoulders
-- Eyes: Hazel/green eyes
-- Face: Soft features, natural brows, warm smile lines
-- Skin: Medium/golden skin tone
-- Build: Slim-average, height 5ft7 (170cm)
-- Expression: Relaxed confidence, warm natural smile, approachable
-This EXACT person must appear in every image. Do not change ANY facial features.`,
+  '44444444-4444-4444-4444-444444444444': `Emma: A naturally beautiful female fashion model with warm features, aged 34.
+IDENTITY (MUST BE CONSISTENT):
+- Hair: Long flowing chestnut brown hair - can be styled as loose waves, sleek straight, elegant updo, or natural texture
+- Eyes: Striking hazel/green eyes with warmth
+- Face: Soft beautiful features, natural brows, warm smile, approachable beauty
+- Skin: Medium/golden sun-kissed skin tone, healthy radiant complexion
+- Build: Slim-average model build, height 5ft7 (170cm), feminine proportions
+VIBE: California cool meets European elegance. Approachable yet aspirational beauty.
+EXPRESSION VARIATION ALLOWED: Relaxed confidence, warm natural smile, soft gaze, cool composure, or playful energy. Always beautiful and relatable.`,
 };
 
-// Pose descriptions - cool, neutral, model-like poses (inspired by fashion editorials)
-// Reference: ASOS, Zara, high-end e-commerce with varied crops and angles
+// Pose descriptions - varied, cool, editorial poses with creative freedom
+// Reference: ASOS, Zara, high-end e-commerce, fashion editorials
 const POSE_DESCRIPTIONS: Record<string, string> = {
-  'front_neutral': `Standing facing camera with cool, relaxed stance - weight slightly shifted, one hand relaxed at side or gently resting on hip/thigh area. Natural model pose, not stiff. Face toward camera with neutral cool expression. Hair styled sleek (low bun, slicked back, or natural waves). Full body visible with natural soft shadow beneath feet.`,
-  'three_quarter': `Standing at 3/4 angle with effortless cool pose, body angled but face toward camera. One hand can be in pocket or relaxed at side, the other arm natural. Confident, editorial feel. Hair styled elegantly. Side profile shows clean silhouette of the outfit.`,
-  'relaxed': `Relaxed casual stance, weight on one leg creating natural S-curve in body. Arms natural - hands in pockets, thumbs hooked in waistband, or one arm relaxed while other touches hip. Cool, approachable but model-like. Confident posture.`,
-  'arms_bent': `Cool stance with arms naturally bent - hand on hip showing waistline, or arms bent with hands resting near pockets. Editorial pose, confident but not stiff. Shows garment fit around torso clearly. Can include subtle accessories on wrists (chunky silver or black bracelets, elegant watch).`,
-  'close_up_detail': `CLOSE-UP CROP: Frame from approximately chest/shoulder level down to mid-thigh. Focus on the garment's waist, hip, and torso area. Model's hands can be relaxed at sides, one hand touching pocket or waistband, or thumbs hooked in belt loops. Shows fabric texture, fit, and construction details clearly. Face may be partially visible or cropped at chin level.`,
+  'front_neutral': `Standing facing camera with cool, relaxed stance. VARIATION ENCOURAGED: weight shifted, hand on hip, hand in pocket, arms crossed casually, or hands relaxed at sides. Natural model energy, not stiff. Full body visible with natural soft shadow. Expression can vary within the cool/chic range.`,
+  'three_quarter': `Standing at 3/4 angle with effortless editorial pose. VARIATION ENCOURAGED: body angled dynamically, one hand in pocket or on hip, subtle movement suggested, looking at camera or slight profile. Confident and chic. Shows outfit silhouette beautifully.`,
+  'relaxed': `Relaxed casual stance with natural S-curve in body. VARIATION ENCOURAGED: weight on one leg, hands in various natural positions (pockets, waistband, touching hair), leaning slightly, casual arm positions. Cool, approachable, model-like energy.`,
+  'arms_bent': `Cool stance with arms naturally positioned. VARIATION ENCOURAGED: hand on hip, arms bent with hands near pockets, adjusting clothing, touching accessories, or one hand raised casually. Shows garment fit around torso. Can include stylish accessories (watches, bracelets, rings).`,
+  'close_up_detail': `CLOSE-UP CROP from chest to mid-thigh. VARIATION ENCOURAGED in hand positions: relaxed at sides, touching pocket, adjusting waistband, thumbs in belt loops, or holding accessory. Focus on garment details, fabric texture, and fit. Face partially visible or cropped.`,
+  'movement': `Dynamic pose suggesting natural movement. VARIATION ENCOURAGED: walking motion, turning, mid-step, hair movement, fabric flowing. Cool editorial energy like caught mid-stride. Not frozen or stiff - alive and stylish.`,
 };
 
 // Outfit styling descriptions - rich, diverse, inspiration-driven
@@ -306,8 +307,7 @@ The garment in the input image is the SINGLE SOURCE OF TRUTH. You MUST:
 - If the front says "WANT", output MUST say "WANT" - no alternatives, no reinterpretation
 - ALL graphics, logos, prints MUST be copied EXACTLY - same position, same size, same colors
 - DO NOT alter, reimagine, or "improve" ANY text or graphics
-- DO NOT substitute similar text or create alternative typography
-- If you cannot read the text clearly, leave it as visible marks rather than inventing text
+- If you cannot read text clearly, copy it as visible marks rather than inventing text
 
 THE HERO PRODUCT (THIS IS THE MAIN FOCUS):
 The garment in the input image is the HERO ITEM. It MUST be:
@@ -316,68 +316,58 @@ The garment in the input image is the HERO ITEM. It MUST be:
 - The dominant visual element of the image
 - Clearly visible and not obscured by other items
 
-MODEL TO USE (DO NOT CHANGE - LOCKED IDENTITY):
+MODEL IDENTITY (CONSISTENT BUT WITH VARIATION):
 ${modelDescription}
-⚠️ USE THIS EXACT MODEL - DO NOT INTRODUCE A NEW MODEL
-⚠️ DO NOT stylise, editorialise, or reinterpret the model
-⚠️ Same face, body type, proportions, age, expression EVERY TIME
+✅ Keep the model's IDENTITY consistent (face, body type, age 30-35)
+✅ VARY expressions within the cool/chic range (confident, relaxed, subtle smile, intense gaze)
+✅ The model should be strikingly handsome (men) or beautiful (women)
+✅ Think: fashion editorial, ASOS, Zara campaign quality
 
-POSE (LOCKED - DO NOT CHANGE):
+POSE (CREATIVE VARIATION ENCOURAGED):
 ${poseDescription}
-⚠️ Keep the same cool, neutral, effortless energy
-⚠️ No new poses, no dramatic movement, no fashion-editorial exaggeration
-⚠️ This is a product-first image, not a concept shoot
-
-MODEL APPEARANCE (CRITICAL - DO NOT DEVIATE):
-- Face MUST match the model description EXACTLY
-- Expression: cool, neutral, effortlessly confident
-- Subtle knowing smile or relaxed neutral - NO exaggerated expressions
-- Think: cool street-style fashion photography, candid but composed
-- Natural soft lighting on face
+✅ VARY the pose naturally - different arm positions, weight shifts, angles
+✅ Keep the energy: cool, chic, effortless, aspirational
+✅ Think: high-end e-commerce with editorial edge
 
 FIT STYLE FOR HERO GARMENT:
 ${fitInstructions}
 
 ${stylingDirection}
 
-STYLING RULES (CRITICAL):
+STYLING RULES:
 1. The HERO GARMENT (input image) is the STAR - other items support it, don't compete
-2. Add complementary items: trousers/jeans, footwear, maybe a jacket/overshirt if it doesn't cover the hero
-3. DO NOT add accessories that distract (no bags, hats, jewelry unless very subtle)
-4. DO NOT add logos on complementary items that compete with the hero
-5. Colours of complementary items MUST work with the hero garment - no clashing
-6. Fit must be realistic - no extreme proportions unless style demands it
-7. The styled outfit must look like something a real person would wear
+2. Add complementary items: trousers/jeans, footwear, jacket/layers if appropriate
+3. VARY the outfit styling each generation for buyer choice
+4. Accessories encouraged: watches, bracelets, rings, subtle jewelry, quality bags
+5. Colors of complementary items MUST work with the hero garment
+6. Everything should look like something a stylish person would actually wear
 
-⚠️ ABSOLUTE REQUIREMENTS FOR THE HERO GARMENT (ZERO TOLERANCE FOR ERRORS):
+⚠️ ABSOLUTE REQUIREMENTS FOR THE HERO GARMENT (ZERO TOLERANCE):
 1. COPY ALL TEXT EXACTLY: If it says "WANT", output says "WANT" - CHARACTER FOR CHARACTER
 2. COPY ALL GRAPHICS EXACTLY: Same position, same size, same colors, same details
 3. COPY EXACTLY: every color, shade, pattern, texture from the input image
 4. COPY EXACTLY: all logos, prints - line for line, shape for shape
-5. COPY EXACTLY: all buttons, zippers, stitching, seams, labels, tags
-6. COPY EXACTLY: any wear, fading, distressing, vintage characteristics
-7. FABRIC MUST LOOK NATURAL: No high gloss, no artificial shine, no CGI look
-8. Preserve the EXACT fabric texture - matte cotton stays matte, wool stays wooly
-9. The garment must look like a real photo, not a digital render
+5. FABRIC MUST LOOK NATURAL: No high gloss, no artificial shine, no CGI look
+6. The garment must look like a real photo, not a digital render
 
-BACKGROUND (ONLY THIS CAN VARY):
-- Soft gradient backdrop variations allowed
-- Options: cream/warm beige to cool grey, pure warm cream, soft grey gradient, subtle pastel undertones
-- Professional studio lighting - softbox/beauty lighting setup with natural soft shadows
-- Light texture is acceptable if minimal and modern
-- Soft natural shadow beneath model's feet
+BACKGROUND (CREATIVE VARIATION ENCOURAGED):
+✅ VARY backgrounds between: soft cream/beige gradients, cool grey gradients, warm to cool transitions, subtle pastel undertones, clean studio white, soft textured backdrops
+✅ Professional studio lighting with natural soft shadows
+✅ High-end e-commerce quality - think ASOS, Zara, Net-a-Porter
 
-WHAT IS ALLOWED TO CHANGE:
-✅ Background gradient/color variations only
-✅ Subtle lighting adjustments to support the background
+WHAT CAN VARY (ENCOURAGED FOR BUYER CHOICE):
+✅ Background colors and gradients
+✅ Outfit styling and complementary pieces  
+✅ Pose variations within the cool/editorial range
+✅ Expression variations (all within cool/chic/confident range)
+✅ Hair styling variations (always elegant)
+✅ Accessories and finishing touches
 
-WHAT IS NOT ALLOWED:
-❌ Changing the model's face, body, or appearance
-❌ Changing pose, styling, attitude, or coolness
-❌ Changing garment fit, scale, or any graphic/text
-❌ Adding props, narrative, or mood shifts
-❌ "Creative interpretation" of any kind
-❌ Altering ANY text on the garment - if it says "WANT" it MUST say "WANT"`;
+WHAT CANNOT CHANGE (NON-NEGOTIABLE):
+❌ The hero garment - must be EXACT copy
+❌ Any text/graphics on the garment - copy CHARACTER FOR CHARACTER
+❌ The model's core identity (face structure, age range, beauty level)
+❌ Overall quality level - must remain high-end editorial`;
   } else {
     // Product-only mode - just the garment on model
     prompt = `TASK: Place this EXACT garment onto a fashion model for e-commerce product photography.
@@ -389,63 +379,49 @@ The garment in the input image is the SINGLE SOURCE OF TRUTH. You MUST:
 - If the front says "WANT", output MUST say "WANT" - no alternatives, no reinterpretation
 - ALL graphics, logos, prints MUST be copied EXACTLY - same position, same size, same colors
 - DO NOT alter, reimagine, or "improve" ANY text or graphics
-- DO NOT substitute similar text or create alternative typography
-- If you cannot read the text clearly, leave it as visible marks rather than inventing text
+- If you cannot read text clearly, copy it as visible marks rather than inventing text
 
-MODEL TO USE (DO NOT CHANGE - LOCKED IDENTITY):
+MODEL IDENTITY (CONSISTENT BUT WITH VARIATION):
 ${modelDescription}
-⚠️ USE THIS EXACT MODEL - DO NOT INTRODUCE A NEW MODEL
-⚠️ DO NOT stylise, editorialise, or reinterpret the model
-⚠️ Same face, body type, proportions, age, expression EVERY TIME
+✅ Keep the model's IDENTITY consistent (face, body type, age 30-35)
+✅ VARY expressions within the cool/chic range (confident, relaxed, subtle smile, intense gaze)
+✅ The model should be strikingly handsome (men) or beautiful (women)
+✅ Think: fashion editorial, ASOS, Zara campaign quality
 
-POSE (LOCKED - DO NOT CHANGE):
+POSE (CREATIVE VARIATION ENCOURAGED):
 ${poseDescription}
-⚠️ Keep the same cool, neutral, effortless energy
-⚠️ No new poses, no dramatic movement, no fashion-editorial exaggeration
-⚠️ This is a product-first image, not a concept shoot
-
-MODEL APPEARANCE (CRITICAL - DO NOT DEVIATE):
-- Face MUST match the model description EXACTLY
-- Expression: cool, neutral, effortlessly confident
-- Subtle knowing smile or relaxed neutral - NO exaggerated expressions
-- Think: cool street-style fashion photography, candid but composed
-- Natural soft lighting on face
+✅ VARY the pose naturally - different arm positions, weight shifts, angles
+✅ Keep the energy: cool, chic, effortless, aspirational
+✅ Think: high-end e-commerce with editorial edge
 
 FIT STYLE:
 ${fitInstructions}
 
-⚠️ ABSOLUTE REQUIREMENTS - ZERO TOLERANCE FOR ERRORS:
+⚠️ ABSOLUTE REQUIREMENTS FOR THE GARMENT (ZERO TOLERANCE):
 1. COPY ALL TEXT EXACTLY: If garment says "WANT", output says "WANT" - CHARACTER FOR CHARACTER
 2. COPY ALL GRAPHICS EXACTLY: Same position, same size, same colors, same details
-3. COPY EXACTLY: every color, every shade, every pattern, every texture
-4. COPY EXACTLY: all logos, all prints - line for line, shape for shape
-5. COPY EXACTLY: all buttons, zippers, stitching, seams, labels, tags
-6. COPY EXACTLY: any wear, fading, distressing, or vintage characteristics
-7. FABRIC MUST LOOK NATURAL: No high gloss, no artificial shine, no CGI look
-8. Preserve the EXACT fabric texture - matte cotton stays matte, wool stays wooly, knit stays knit
-9. The garment must look like a real photograph, not a digital render or 3D model
+3. COPY EXACTLY: every color, shade, pattern, texture from the input image
+4. FABRIC MUST LOOK NATURAL: No high gloss, no artificial shine, no CGI look
+5. The garment must look like a real photograph, not a digital render
 
-BACKGROUND (ONLY THIS CAN VARY):
-- Soft gradient backdrop variations allowed
-- Options: cream/warm beige to cool grey, pure warm cream, soft grey gradient, subtle pastel undertones
-- Professional studio lighting - softbox/beauty lighting setup
-- Light texture is acceptable if minimal and modern
-- Soft natural shadow beneath model (not harsh drop shadow)
+BACKGROUND (CREATIVE VARIATION ENCOURAGED):
+✅ VARY backgrounds between: soft cream/beige gradients, cool grey gradients, warm to cool transitions, subtle pastel undertones, clean studio white, soft textured backdrops
+✅ Professional studio lighting with natural soft shadows
+✅ High-end e-commerce quality
 
-WHAT IS ALLOWED TO CHANGE:
-✅ Background gradient/color variations only
-✅ Subtle lighting adjustments to support the background
+WHAT CAN VARY (ENCOURAGED FOR BUYER CHOICE):
+✅ Background colors and gradients
+✅ Pose variations within the cool/editorial range
+✅ Expression variations (all within cool/chic/confident range)
+✅ Hair styling variations (always elegant)
 
-WHAT IS NOT ALLOWED:
-❌ Changing the model's face, body, or appearance
-❌ Changing pose, styling, attitude, or coolness
-❌ Changing garment fit, scale, or any graphic/text
-❌ Adding props, narrative, or mood shifts
-❌ "Creative interpretation" of any kind
-❌ Altering ANY text on the garment - copy it EXACTLY
-❌ Generating a "similar" garment - use the EXACT one from the image
+WHAT CANNOT CHANGE (NON-NEGOTIABLE):
+❌ The garment - must be EXACT copy of input
+❌ Any text/graphics on the garment - copy CHARACTER FOR CHARACTER
+❌ The model's core identity (face structure, age range 30-35, beauty level)
+❌ Overall quality level - must remain high-end editorial
 
-The input image is your ONLY reference for the garment. Copy it EXACTLY onto the model - especially all text and graphics.`;
+The input image is your ONLY reference for the garment. Copy it EXACTLY - especially all text and graphics. Generate VARIATIONS in pose, expression, and background.`;
   }
 
   const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
