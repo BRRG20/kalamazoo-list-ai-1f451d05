@@ -162,20 +162,14 @@ export function ImageEditCanvas({ imageUrl, onSave, onCancel }: ImageEditCanvasP
     }
   }, [imageObj, strokes, currentStroke, showPreview, mode]);
 
-  const getCanvasPoint = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+  const getCanvasPoint = useCallback((e: React.PointerEvent) => {
     if (!canvasRef.current) return null;
     
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
     
-    let clientX: number, clientY: number;
-    if ('touches' in e) {
-      clientX = e.touches[0].clientX;
-      clientY = e.touches[0].clientY;
-    } else {
-      clientX = e.clientX;
-      clientY = e.clientY;
-    }
+    const clientX = e.clientX;
+    const clientY = e.clientY;
     
     // Convert screen coordinates to canvas coordinates
     const x = ((clientX - rect.left) / rect.width) * canvas.width;
@@ -184,11 +178,16 @@ export function ImageEditCanvas({ imageUrl, onSave, onCancel }: ImageEditCanvasP
     return { x, y };
   }, []);
 
-  const handlePointerDown = useCallback((e: React.MouseEvent | React.TouchEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    // Only prevent default for touch to stop scrolling
+    if (e.pointerType === 'touch') {
+      e.preventDefault();
+    }
     const point = getCanvasPoint(e);
     if (!point) return;
+    
+    // Capture pointer for reliable tracking
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
     
     setIsDrawing(true);
     setCurrentStroke({
@@ -197,10 +196,13 @@ export function ImageEditCanvas({ imageUrl, onSave, onCancel }: ImageEditCanvasP
     });
   }, [getCanvasPoint, brushSize]);
 
-  const handlePointerMove = useCallback((e: React.MouseEvent | React.TouchEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handlePointerMove = useCallback((e: React.PointerEvent) => {
     if (!isDrawing || !currentStroke) return;
+    
+    // Only prevent default when actively drawing
+    if (e.pointerType === 'touch') {
+      e.preventDefault();
+    }
     
     const point = getCanvasPoint(e);
     if (!point) return;
@@ -211,10 +213,9 @@ export function ImageEditCanvas({ imageUrl, onSave, onCancel }: ImageEditCanvasP
     } : null);
   }, [isDrawing, currentStroke, getCanvasPoint]);
 
-  const handlePointerUp = useCallback((e?: React.MouseEvent | React.TouchEvent) => {
+  const handlePointerUp = useCallback((e?: React.PointerEvent) => {
     if (e) {
-      e.preventDefault();
-      e.stopPropagation();
+      (e.target as HTMLElement).releasePointerCapture(e.pointerId);
     }
     if (currentStroke && currentStroke.points.length > 0) {
       setStrokes(prev => [...prev, currentStroke]);
@@ -373,7 +374,6 @@ export function ImageEditCanvas({ imageUrl, onSave, onCancel }: ImageEditCanvasP
       <div 
         ref={containerRef}
         className="flex-1 min-h-0 overflow-hidden relative bg-muted/30 flex items-center justify-center"
-        onMouseLeave={() => handlePointerUp()}
       >
         {showPreview && previewUrl ? (
           <img
@@ -392,12 +392,11 @@ export function ImageEditCanvas({ imageUrl, onSave, onCancel }: ImageEditCanvasP
               width: imageObj ? imageObj.width * scale : 'auto',
               height: imageObj ? imageObj.height * scale : 'auto',
             }}
-            onMouseDown={handlePointerDown}
-            onMouseMove={handlePointerMove}
-            onMouseUp={handlePointerUp}
-            onTouchStart={handlePointerDown}
-            onTouchMove={handlePointerMove}
-            onTouchEnd={handlePointerUp}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerLeave={handlePointerUp}
+            onPointerCancel={handlePointerUp}
           />
         )}
         
