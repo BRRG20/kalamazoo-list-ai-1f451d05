@@ -56,9 +56,13 @@ export function ImageGallery({
   const [showModelDialog, setShowModelDialog] = useState(false);
   const [modelDialogImageId, setModelDialogImageId] = useState<string | null>(null);
   const [regeneratingImageId, setRegeneratingImageId] = useState<string | null>(null);
+  const [deletingImages, setDeletingImages] = useState(false);
   
   // Track original URLs for individual undo
   const originalUrlsRef = useRef<Map<string, string>>(new Map());
+  
+  // Track recently deleted images for undo
+  const recentlyDeletedRef = useRef<{ ids: string[], timestamp: number } | null>(null);
 
   const moveImage = (imageId: string, direction: 'up' | 'down') => {
     const image = images.find(i => i.id === imageId);
@@ -137,6 +141,81 @@ export function ImageGallery({
 
   const clearSelection = () => {
     setSelectedImageIds(new Set());
+  };
+
+  // Delete selected images (bulk)
+  const handleDeleteSelected = async () => {
+    if (selectedImageIds.size === 0 || !onDeleteImage) return;
+    
+    setDeletingImages(true);
+    const idsToDelete = Array.from(selectedImageIds);
+    
+    // Store for undo
+    recentlyDeletedRef.current = { ids: idsToDelete, timestamp: Date.now() };
+    
+    // Delete all selected images
+    for (const imageId of idsToDelete) {
+      await onDeleteImage(imageId);
+    }
+    
+    setSelectedImageIds(new Set());
+    setDeletingImages(false);
+    
+    // Show toast with undo option
+    toast.success(`${idsToDelete.length} image${idsToDelete.length > 1 ? 's' : ''} deleted`, {
+      action: {
+        label: 'Undo',
+        onClick: () => handleUndoDelete(idsToDelete),
+      },
+      duration: 8000,
+    });
+  };
+
+  // Delete single image with undo
+  const handleDeleteSingle = async (imageId: string) => {
+    if (!onDeleteImage) return;
+    
+    // Store for undo
+    recentlyDeletedRef.current = { ids: [imageId], timestamp: Date.now() };
+    
+    await onDeleteImage(imageId);
+    
+    // Show toast with undo option
+    toast.success('Image deleted', {
+      action: {
+        label: 'Undo',
+        onClick: () => handleUndoDelete([imageId]),
+      },
+      duration: 8000,
+    });
+  };
+
+  // Undo delete - recover images
+  const handleUndoDelete = async (imageIds: string[]) => {
+    try {
+      // Clear deleted_at to recover images
+      const { error } = await supabase
+        .from('images')
+        .update({ deleted_at: null })
+        .in('id', imageIds);
+      
+      if (error) {
+        console.error('Failed to recover images:', error);
+        toast.error('Failed to recover images');
+        return;
+      }
+      
+      recentlyDeletedRef.current = null;
+      toast.success(`${imageIds.length} image${imageIds.length > 1 ? 's' : ''} recovered`);
+      
+      // Trigger refresh
+      if (onImageAdded) {
+        onImageAdded();
+      }
+    } catch (err) {
+      console.error('Undo delete failed:', err);
+      toast.error('Failed to recover images');
+    }
   };
 
   const handleRemoveBackground = async (image: ProductImage) => {
@@ -373,7 +452,7 @@ export function ImageGallery({
           <h3 className="font-semibold text-foreground">
             Images ({images.length})
           </h3>
-          {images.length > 1 && (
+          {images.length > 1 && (onDeleteImage || onMoveImages) && (
             <div className="flex gap-2">
               <Button
                 variant="ghost"
@@ -388,7 +467,7 @@ export function ImageGallery({
         </div>
 
         {/* Move selected images UI */}
-        {selectedImageIds.size > 0 && availableProducts.length > 0 && onMoveImages && (
+        {selectedImageIds.size > 0 && onMoveImages && availableProducts.length > 0 && (
           <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 border border-border">
             <span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
               {selectedImageIds.size} selected
@@ -452,6 +531,35 @@ export function ImageGallery({
             </Button>
           </div>
         )}
+
+        {/* Bulk delete selected images UI */}
+        {selectedImageIds.size > 0 && onDeleteImage && (
+          <div className="flex items-center gap-2 p-2 rounded-lg bg-destructive/10 border border-destructive/30">
+            <span className="text-xs text-destructive whitespace-nowrap flex-shrink-0">
+              {selectedImageIds.size} selected
+            </span>
+            <div className="flex-1" />
+            <Button
+              size="sm"
+              variant="destructive"
+              className="h-8 text-xs flex-shrink-0"
+              onClick={handleDeleteSelected}
+              disabled={deletingImages}
+            >
+              {deletingImages ? (
+                <>
+                  <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-3 h-3 mr-1" />
+                  Delete {selectedImageIds.size} image{selectedImageIds.size > 1 ? 's' : ''}
+                </>
+              )}
+            </Button>
+          </div>
+        )}
         
         <div className="space-y-2">
           {images.map((image, index) => (
@@ -470,8 +578,8 @@ export function ImageGallery({
                 selectedImageIds.has(image.id) && "ring-2 ring-primary bg-primary/5"
               )}
             >
-              {/* Selection checkbox */}
-              {availableProducts.length > 0 && onMoveImages && (
+              {/* Selection checkbox - show when move or delete is available */}
+              {(onMoveImages || onDeleteImage) && (
                 <div className="flex items-center">
                   <Checkbox
                     checked={selectedImageIds.has(image.id)}
@@ -642,14 +750,19 @@ export function ImageGallery({
                       <ChevronDown className="w-4 h-4" />
                     </Button>
                     {onDeleteImage && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
-                        onClick={() => onDeleteImage(image.id)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => handleDeleteSingle(image.id)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Delete image</TooltipContent>
+                      </Tooltip>
                     )}
                   </div>
                 </div>
