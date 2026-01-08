@@ -152,6 +152,9 @@ interface BatchDetailProps {
   deletedImagesCount?: number;
   onOpenDeletedProducts?: () => void;
   onOpenDeletedImages?: () => void;
+  // Hidden products
+  hiddenProductsCount?: number;
+  onOpenHiddenProducts?: () => void;
   // Empty products cleanup
   onDeleteEmptyProducts?: (productIds: string[]) => Promise<void>;
   // Create product from image IDs (for Birds Eye View)
@@ -244,6 +247,8 @@ export function BatchDetail({
   onOpenDeletedProducts,
   deletedImagesCount,
   onOpenDeletedImages,
+  hiddenProductsCount = 0,
+  onOpenHiddenProducts,
   onDeleteEmptyProducts,
   onCreateProductFromImageIds,
   onMarkAsUploaded,
@@ -1489,6 +1494,28 @@ export function BatchDetail({
                 <p>Refresh all images from database</p>
               </TooltipContent>
             </Tooltip>
+
+            {/* Hidden products button */}
+            {onOpenHiddenProducts && hiddenProductsCount > 0 && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onOpenHiddenProducts}
+                    className="text-xs md:text-sm relative text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                  >
+                    <EyeOff className="w-4 h-4" />
+                    <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-amber-500 text-white text-xs rounded-full flex items-center justify-center">
+                      {hiddenProductsCount}
+                    </span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>View hidden products ({hiddenProductsCount})</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
 
             {/* Trash button - show deleted products */}
             {onOpenDeletedProducts && (
