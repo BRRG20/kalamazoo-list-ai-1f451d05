@@ -54,6 +54,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { ExpandModeDialog, type ExpandMode } from './ExpandModeDialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -165,9 +166,11 @@ interface BatchDetailProps {
   // Camera capture handlers
   onCameraCapture?: (files: File[], notes: Map<string, { note?: string; hasStain?: boolean; type?: string }>) => void;
   onQuickProductCapture?: (files: File[], notes: Map<string, { note?: string; hasStain?: boolean; type?: string }>) => void;
-  // AI Image Expansion
-  onExpandProductImages?: (productIds: string | string[], modelId?: string) => void;
+  // AI Image Expansion - now requires mode selection
+  onExpandProductImages?: (productIds: string | string[], mode: 'product_photos' | 'ai_model') => void;
   isExpandingImages?: boolean;
+  // Check if products have model images for AI Model expansion mode
+  getProductHasModelImage?: (productId: string) => boolean;
 }
 
 export function BatchDetail({
@@ -249,6 +252,7 @@ export function BatchDetail({
   onQuickProductCapture,
   onExpandProductImages,
   isExpandingImages,
+  getProductHasModelImage,
 }: BatchDetailProps) {
   // Early return if batch is missing (defensive guard)
   if (!batch || !batch.id) {
@@ -284,7 +288,7 @@ export function BatchDetail({
   const [bulkSelectKey, setBulkSelectKey] = useState(0);
   const [showInfoDialog, setShowInfoDialog] = useState(false);
   const [showModelTryOnDialog, setShowModelTryOnDialog] = useState(false);
-  const [selectedExpansionModelId, setSelectedExpansionModelId] = useState<string | undefined>(undefined);
+  const [showExpandModeDialog, setShowExpandModeDialog] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const shopifyConfigured = isShopifyConfigured();
   
@@ -1656,95 +1660,46 @@ export function BatchDetail({
                       Undo Model
                     </Button>
                     
-                    {/* Generate Listing Images button with mode selector dropdown */}
+                    {/* Expand Images button - opens mode selection dialog */}
                     {onExpandProductImages && (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            disabled={isExpandingImages || selectedProductIds.size === 0}
-                            type="button"
-                            className="text-cyan-600 hover:text-cyan-700 hover:bg-cyan-50"
-                          >
-                            {isExpandingImages ? (
-                              <>
-                                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                                Expanding...
-                              </>
-                            ) : (
-                              <>
-                                <Wand2 className="w-4 h-4 mr-1" />
-                                Expand Images
-                                <ChevronDown className="w-3 h-3 ml-1" />
-                              </>
-                            )}
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" className="w-64">
-                          {/* Mode: AI Model Images */}
-                          <DropdownMenuLabel className="text-xs font-semibold">
-                            AI Model Images
-                          </DropdownMenuLabel>
-                          <DropdownMenuItem
-                            onClick={() => {
-                              const productIds = Array.from(selectedProductIds);
-                              if (productIds.length > 0) {
-                                onExpandProductImages(productIds, undefined);
-                              }
-                            }}
-                            className="flex items-center gap-2"
-                          >
-                            <Sparkles className="w-4 h-4 text-amber-500" />
-                            <div className="flex flex-col">
-                              <span className="font-medium">Auto-detect model</span>
-                              <span className="text-xs text-muted-foreground">Based on product department</span>
-                            </div>
-                          </DropdownMenuItem>
-                          <DropdownMenuSub>
-                            <DropdownMenuSubTrigger>
-                              <User className="w-4 h-4 mr-2 text-blue-500" />
-                              Choose male model
-                            </DropdownMenuSubTrigger>
-                            <DropdownMenuSubContent>
-                              {availableModels.filter(m => m.gender === 'male').map(model => (
-                                <DropdownMenuItem
-                                  key={model.id}
-                                  onClick={() => {
-                                    const productIds = Array.from(selectedProductIds);
-                                    if (productIds.length > 0) {
-                                      onExpandProductImages(productIds, model.id);
-                                    }
-                                  }}
-                                >
-                                  {model.name}
-                                </DropdownMenuItem>
-                              ))}
-                            </DropdownMenuSubContent>
-                          </DropdownMenuSub>
-                          <DropdownMenuSub>
-                            <DropdownMenuSubTrigger>
-                              <User className="w-4 h-4 mr-2 text-pink-500" />
-                              Choose female model
-                            </DropdownMenuSubTrigger>
-                            <DropdownMenuSubContent>
-                              {availableModels.filter(m => m.gender === 'female').map(model => (
-                                <DropdownMenuItem
-                                  key={model.id}
-                                  onClick={() => {
-                                    const productIds = Array.from(selectedProductIds);
-                                    if (productIds.length > 0) {
-                                      onExpandProductImages(productIds, model.id);
-                                    }
-                                  }}
-                                >
-                                  {model.name}
-                                </DropdownMenuItem>
-                              ))}
-                            </DropdownMenuSubContent>
-                          </DropdownMenuSub>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      <>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          disabled={isExpandingImages || selectedProductIds.size === 0}
+                          onClick={() => setShowExpandModeDialog(true)}
+                          type="button"
+                          className="text-cyan-600 hover:text-cyan-700 hover:bg-cyan-50"
+                        >
+                          {isExpandingImages ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                              Expanding...
+                            </>
+                          ) : (
+                            <>
+                              <Wand2 className="w-4 h-4 mr-1" />
+                              Expand Images
+                            </>
+                          )}
+                        </Button>
+                        <ExpandModeDialog
+                          open={showExpandModeDialog}
+                          onOpenChange={setShowExpandModeDialog}
+                          onSelectMode={(mode: ExpandMode) => {
+                            const productIds = Array.from(selectedProductIds);
+                            if (productIds.length > 0) {
+                              onExpandProductImages(productIds, mode);
+                            }
+                          }}
+                          hasExistingModelImages={
+                            Array.from(selectedProductIds).some(pid => 
+                              getProductHasModelImage?.(pid) ?? false
+                            )
+                          }
+                          productCount={selectedProductIds.size}
+                        />
+                      </>
                     )}
                     
                     {/* Three-dots menu with actions for selected products */}

@@ -8,115 +8,190 @@ const corsHeaders = {
 
 interface RequestBody {
   productId: string;
-  frontImageUrl: string;
-  backImageUrl?: string;
-  sideImageUrl?: string;
-  detailImageUrl?: string;
+  sourceImageUrl: string; // The source image for expansion
+  mode: 'product_photos' | 'ai_model'; // Which expansion mode
 }
 
 const MAX_RETRIES = 2;
 
-// Real photo crop definitions - these are cropping operations on the ORIGINAL photos
-// NO hallucination, NO adding elements, just smart crops from existing pixels
-const CROP_SHOTS = [
+// PRODUCT PHOTO EXPANSION - Strictly crops/reframes from original photos
+// NO AI generation, NO beautification, NO hallucination
+const PRODUCT_PHOTO_SHOTS = [
   {
-    id: 'chest_crop',
-    name: 'Chest/Shoulder Close-up',
-    sourcePreference: ['front', 'back'], // Prefer front, fallback to back
-    prompt: `TASK: Create a CROPPED close-up from this exact garment photograph.
+    id: 'detail_crop',
+    name: 'Detail Close-up (Graphic/Print/Label)',
+    prompt: `🎯 TASK: Create a CROPPED CLOSE-UP from this exact product photo.
 
-CRITICAL RULES - REAL PHOTO ONLY:
-- You MUST crop from THIS EXACT photograph - no generation of new content
-- DO NOT change colors, lighting, texture, or any visual properties
-- DO NOT add shadows, effects, or enhancements
-- DO NOT smooth, sharpen, or apply any filters
-- Keep the exact matte finish - no glossy/CGI look
-- Preserve any natural imperfections, wear, or fabric texture
+⚠️ CRITICAL RULES - YOU MUST FOLLOW EXACTLY:
+1. You are ONLY cropping/reframing the provided image
+2. DO NOT generate new content
+3. DO NOT add any elements not in the source
+4. DO NOT change colors, textures, or graphics
+5. DO NOT "beautify" or "enhance" the image
+6. This is a CROP operation, not a generation operation
 
-CROP AREA: Upper chest and shoulder region
-- Zoom into the upper torso area (chest to shoulders)
-- Show the neckline/collar construction
-- Include any buttons, zippers, or closures visible
-- Maintain original pixel quality - no interpolation artifacts
+🔍 TARGET: Find and crop to the most distinctive feature:
+- If graphic/print exists → center it in frame (fill 60-80%)
+- If logo/text → make it prominent and readable
+- If pattern → show representative texture area
+- If plain → focus on best construction detail (stitching, collar, buttons)
 
-OUTPUT: A cropped section showing chest/shoulder detail with zero alterations.`,
+📐 COMPOSITION:
+- E-commerce quality close-up crop
+- Sharp focus on the detail
+- No excessive negative space
+- Square or landscape orientation preferred
+
+OUTPUT: A crisp, EXACT crop from the source showing the sellable detail.`
   },
   {
-    id: 'fabric_macro',
-    name: 'Fabric Texture Macro',
-    sourcePreference: ['detail', 'front', 'back'], // Prefer detail shot
-    prompt: `TASK: Create a MACRO CROP from this exact garment photograph.
+    id: 'upper_crop',
+    name: 'Upper Garment Crop (Neckline/Shoulder)',
+    prompt: `🎯 TASK: Create an UPPER BODY CROP from this exact product photo.
 
-CRITICAL RULES - REAL PHOTO ONLY:
-- You MUST crop from THIS EXACT photograph - no generation of new content
-- DO NOT change colors, lighting, texture, or any visual properties
-- DO NOT add smoothing, sharpening, or clarity adjustments
-- DO NOT enhance or alter the fabric appearance in any way
-- Keep the exact matte finish - no glossy/CGI look
-- Preserve pilling, wear, fading exactly as photographed
+⚠️ CRITICAL RULES - YOU MUST FOLLOW EXACTLY:
+1. You are ONLY cropping/reframing the provided image
+2. DO NOT generate new content
+3. DO NOT add any elements not in the source
+4. DO NOT change colors, textures, or graphics
+5. DO NOT "beautify" or "enhance" the image
+6. This is a CROP operation, not a generation operation
 
-CROP AREA: Fabric texture region
-- Zoom into a representative area showing fabric weave/texture
-- Focus on the main body material (avoid seams/edges if possible)
-- Show the actual hand-feel through visual texture
-- Maintain original photograph grain and quality
+🔍 TARGET: Upper portion of the garment:
+- Neckline and collar construction
+- Shoulder seams and fit
+- Upper chest area
+- Any closures (buttons, zippers, hoods)
 
-OUTPUT: A tight macro crop showing fabric texture with zero alterations.`,
+📐 COMPOSITION:
+- Frame the top 30-40% of the garment
+- Show collar/neckline detail clearly
+- Landscape or square crop preferred
+- E-commerce product photography style
+
+OUTPUT: A crisp EXACT crop showing neckline and shoulder area.`
   },
   {
-    id: 'feature_crop',
-    name: 'Feature Detail (Logo/Print/Stitch)',
-    sourcePreference: ['front', 'detail', 'back'], // Prefer front for logos
-    prompt: `TASK: Create a DETAIL CROP focusing on any print, logo, or distinctive feature.
+    id: 'lower_crop',
+    name: 'Lower Garment Crop (Hem/Cuff/Pocket)',
+    prompt: `🎯 TASK: Create a LOWER/EDGE CROP from this exact product photo.
 
-CRITICAL RULES - REAL PHOTO ONLY:
-- You MUST crop from THIS EXACT photograph - no generation of new content
-- DO NOT change colors, contrast, or saturation
-- DO NOT sharpen text or enhance readability artificially
-- DO NOT add shadows, highlights, or depth
-- Keep the exact matte finish - no glossy/CGI look
-- Preserve any cracking, fading, or aging on prints exactly
+⚠️ CRITICAL RULES - YOU MUST FOLLOW EXACTLY:
+1. You are ONLY cropping/reframing the provided image
+2. DO NOT generate new content
+3. DO NOT add any elements not in the source
+4. DO NOT change colors, textures, or graphics
+5. DO NOT "beautify" or "enhance" the image
+6. This is a CROP operation, not a generation operation
 
-CROP AREA: Most prominent feature
-- If there's a logo/graphic: zoom into it clearly
-- If there's text: center it in frame
-- If there's pattern: show a representative section
-- If there's stitching detail: focus on that
-- If plain: focus on any pocket, button, or unique construction
+🔍 TARGET: Choose the most interesting visible detail:
+- Hem/bottom edge with stitching
+- Cuff/sleeve end
+- Pocket construction
+- Side seam details
+- Waistband (if visible)
+- Any hardware (zippers, buttons, rivets)
 
-OUTPUT: A cropped section of the most distinctive feature with zero alterations.`,
-  },
-  {
-    id: 'hem_cuff_crop',
-    name: 'Hem/Cuff/Edge Detail',
-    sourcePreference: ['side', 'front', 'back'], // Prefer side for edges
-    prompt: `TASK: Create a CROP focusing on garment edges like hem, cuff, or waistband.
+📐 COMPOSITION:
+- Focus on construction quality
+- Show fabric texture clearly
+- Square or landscape crop preferred
+- E-commerce product photography style
 
-CRITICAL RULES - REAL PHOTO ONLY:
-- You MUST crop from THIS EXACT photograph - no generation of new content
-- DO NOT change colors, lighting, or fabric appearance
-- DO NOT add shadows or depth enhancement
-- DO NOT smooth edges or hide imperfections
-- Keep the exact matte finish - no glossy/CGI look
-- Show wear on edges exactly as photographed
-
-CROP AREA: Lower edge or sleeve detail
-- Zoom into hem, cuff, waistband, or sleeve edge
-- Show construction quality (stitching, ribbing, etc.)
-- Include any elastic, drawstring, or closure visible
-- If sleeves not visible, focus on bottom hem
-
-OUTPUT: A cropped section of edge/hem detail with zero alterations.`,
+OUTPUT: A crisp EXACT crop showing hem, cuff, or edge detail.`
   },
 ];
 
-async function generateCropFromSource(
+// AI MODEL EXPANSION - Additional angles of SAME model
+// NEVER generate a new model, NEVER change the person
+const AI_MODEL_SHOTS = [
+  {
+    id: 'model_detail',
+    name: 'Model Detail Close-up',
+    prompt: `🎯 TASK: Create a DETAIL CLOSE-UP from this AI model photo.
+
+🔒 IDENTITY LOCK - NON-NEGOTIABLE:
+- The person MUST be the EXACT SAME person from the source
+- SAME face, SAME skin tone, SAME body type
+- NEVER swap to a different person or gender
+- This is the same photoshoot, just a different crop
+
+🔒 CLOTHING LOCK - NON-NEGOTIABLE:
+- The garment MUST remain IDENTICAL to source
+- EXACT colour (no shifting)
+- EXACT texture (no gloss/shine added)
+- EXACT graphics/prints (character-for-character)
+- NO hallucinated elements
+
+⚠️ DO NOT ZOOM INTO FACE - This is PRODUCT-focused.
+
+🎯 TARGET: Find the most sellable garment detail:
+- If graphic/print → center it prominently
+- If logo → make it readable
+- If pattern → show texture clearly
+- Show from mid-chest area
+
+📐 OUTPUT: A close-up crop from the same photoshoot showing garment detail on model.`
+  },
+  {
+    id: 'model_upper',
+    name: 'Model Upper Body',
+    prompt: `🎯 TASK: Create an UPPER BODY crop from this AI model photo.
+
+🔒 IDENTITY LOCK - NON-NEGOTIABLE:
+- The person MUST be the EXACT SAME person from the source
+- SAME face, SAME skin tone, SAME body type
+- NEVER swap to a different person or gender
+- This is the same photoshoot, just a different frame
+
+🔒 CLOTHING LOCK - NON-NEGOTIABLE:
+- The garment MUST remain IDENTICAL to source
+- EXACT colour, texture, graphics, wear
+- NO "improving" or "beautifying" the fabric
+
+🎯 TARGET: Shoulders to mid-chest:
+- Show collar/neckline fit on the model
+- Include shoulder seams
+- Can show partial chin but DO NOT focus on face
+- This shows HOW THE GARMENT FITS
+
+📐 OUTPUT: Upper body crop from the same photoshoot showing fit at neckline.`
+  },
+  {
+    id: 'model_lower',
+    name: 'Model Lower/Edge Detail',
+    prompt: `🎯 TASK: Create a LOWER DETAIL crop from this AI model photo.
+
+🔒 IDENTITY LOCK - NON-NEGOTIABLE:
+- The person MUST be the EXACT SAME person from the source
+- SAME body, SAME skin tone
+- NEVER swap to a different person
+- Hands must have realistic anatomy (5 fingers, natural joints)
+
+🔒 CLOTHING LOCK - NON-NEGOTIABLE:
+- The garment MUST remain IDENTICAL to source
+- EXACT colour, texture, graphics, wear
+- NO hallucinated elements
+
+🎯 TARGET: Choose the best visible lower detail:
+- Hem/bottom edge of garment
+- Cuff/sleeve ending
+- Pocket if visible
+- Side seam construction
+
+📐 OUTPUT: Lower body/edge crop from the same photoshoot showing garment construction.`
+  },
+];
+
+async function generateCropImage(
   sourceImageUrl: string,
-  cropType: typeof CROP_SHOTS[0],
+  shotType: { id: string; name: string; prompt: string },
   apiKey: string,
   attempt: number = 1
 ): Promise<string | null> {
   try {
+    console.log(`Generating ${shotType.name}...`);
+    
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -129,7 +204,7 @@ async function generateCropFromSource(
           {
             role: 'user',
             content: [
-              { type: 'text', text: cropType.prompt },
+              { type: 'text', text: shotType.prompt },
               { type: 'image_url', image_url: { url: sourceImageUrl } }
             ]
           }
@@ -140,7 +215,7 @@ async function generateCropFromSource(
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`AI API error for ${cropType.id} (attempt ${attempt}):`, response.status, errorText);
+      console.error(`AI API error for ${shotType.id} (attempt ${attempt}):`, response.status, errorText);
       
       if (response.status === 429) {
         throw new Error('Rate limit exceeded. Please try again later.');
@@ -150,9 +225,9 @@ async function generateCropFromSource(
       }
       
       if (attempt < MAX_RETRIES) {
-        console.log(`Retrying ${cropType.id}...`);
+        console.log(`Retrying ${shotType.id}...`);
         await new Promise(r => setTimeout(r, 2000));
-        return generateCropFromSource(sourceImageUrl, cropType, apiKey, attempt + 1);
+        return generateCropImage(sourceImageUrl, shotType, apiKey, attempt + 1);
       }
       return null;
     }
@@ -173,9 +248,15 @@ async function generateCropFromSource(
       }
     }
 
+    if (generatedImage) {
+      console.log(`Successfully generated ${shotType.name}`);
+    } else {
+      console.warn(`No image returned for ${shotType.name}`);
+    }
+
     return generatedImage || null;
   } catch (error) {
-    console.error(`Error generating ${cropType.id}:`, error);
+    console.error(`Error generating ${shotType.id}:`, error);
     
     if (error instanceof Error && (error.message.includes('Rate limit') || error.message.includes('Payment'))) {
       throw error;
@@ -183,7 +264,7 @@ async function generateCropFromSource(
     
     if (attempt < MAX_RETRIES) {
       await new Promise(r => setTimeout(r, 2000));
-      return generateCropFromSource(sourceImageUrl, cropType, apiKey, attempt + 1);
+      return generateCropImage(sourceImageUrl, shotType, apiKey, attempt + 1);
     }
     return null;
   }
@@ -193,6 +274,7 @@ async function uploadBase64ToStorage(
   base64Data: string,
   productId: string,
   imageType: string,
+  mode: string,
   supabaseUrl: string,
   supabaseKey: string
 ): Promise<string | null> {
@@ -203,7 +285,7 @@ async function uploadBase64ToStorage(
     const base64Content = base64Data.replace(/^data:image\/\w+;base64,/, '');
     const imageBuffer = Uint8Array.from(atob(base64Content), c => c.charCodeAt(0));
     
-    const fileName = `${productId}/photo_crop_${imageType}_${Date.now()}.png`;
+    const fileName = `${productId}/${mode}_${imageType}_${Date.now()}.png`;
     
     const { data, error } = await supabase.storage
       .from('product-images')
@@ -221,6 +303,7 @@ async function uploadBase64ToStorage(
       .from('product-images')
       .getPublicUrl(fileName);
 
+    console.log(`Uploaded ${imageType} to storage: ${publicUrl.publicUrl.substring(0, 60)}...`);
     return publicUrl.publicUrl;
   } catch (error) {
     console.error('Upload error:', error);
@@ -246,55 +329,30 @@ serve(async (req) => {
     }
 
     const body: RequestBody = await req.json();
-    const { productId, frontImageUrl, backImageUrl, sideImageUrl, detailImageUrl } = body;
+    const { productId, sourceImageUrl, mode } = body;
 
-    if (!productId) {
+    if (!productId || !sourceImageUrl || !mode) {
       return new Response(
-        JSON.stringify({ error: 'productId is required' }),
+        JSON.stringify({ error: 'productId, sourceImageUrl, and mode are required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Build source map for intelligent source selection
-    const sourceMap: Record<string, string | undefined> = {
-      front: frontImageUrl,
-      back: backImageUrl,
-      side: sideImageUrl,
-      detail: detailImageUrl,
-    };
-
-    // Find the best available source for each crop
-    const findBestSource = (preferences: string[]): string | null => {
-      for (const pref of preferences) {
-        if (sourceMap[pref]) {
-          return sourceMap[pref]!;
-        }
-      }
-      // Fallback to any available source
-      return frontImageUrl || backImageUrl || sideImageUrl || detailImageUrl || null;
-    };
-
-    console.log(`Starting REAL PHOTO expansion for product ${productId}`);
-    console.log(`Available sources: front=${!!frontImageUrl}, back=${!!backImageUrl}, side=${!!sideImageUrl}, detail=${!!detailImageUrl}`);
+    // Select shot types based on mode
+    const shotTypes = mode === 'product_photos' ? PRODUCT_PHOTO_SHOTS : AI_MODEL_SHOTS;
+    const modeLabel = mode === 'product_photos' ? 'PRODUCT PHOTO' : 'AI MODEL';
+    
+    console.log(`Starting ${modeLabel} expansion for product ${productId}`);
+    console.log(`Source image: ${sourceImageUrl.substring(0, 60)}...`);
+    console.log(`Mode: ${mode} - Generating 3 crops...`);
 
     const generatedImages: { type: string; url: string }[] = [];
 
-    // Generate all 4 crops in parallel
-    console.log(`Generating 4 real-photo crops...`);
-    
-    const generatePromises = CROP_SHOTS.map(async (cropType) => {
-      const sourceUrl = findBestSource(cropType.sourcePreference);
-      
-      if (!sourceUrl) {
-        console.warn(`No source image available for ${cropType.name}`);
-        return null;
-      }
-      
-      console.log(`Queuing ${cropType.name} from source...`);
-      
-      const base64Image = await generateCropFromSource(
-        sourceUrl,
-        cropType,
+    // Generate all 3 crop shots in parallel
+    const generatePromises = shotTypes.map(async (shotType) => {
+      const base64Image = await generateCropImage(
+        sourceImageUrl,
+        shotType,
         apiKey
       );
 
@@ -302,17 +360,17 @@ serve(async (req) => {
         const publicUrl = await uploadBase64ToStorage(
           base64Image,
           productId,
-          cropType.id,
+          shotType.id,
+          mode,
           supabaseUrl,
           supabaseKey
         );
 
         if (publicUrl) {
-          console.log(`Successfully created: ${cropType.name}`);
-          return { type: cropType.id, url: publicUrl };
+          return { type: shotType.id, url: publicUrl };
         }
       }
-      console.warn(`Failed to create: ${cropType.name}`);
+      console.warn(`Failed to create: ${shotType.name}`);
       return null;
     });
 
@@ -323,11 +381,12 @@ serve(async (req) => {
       }
     }
 
-    console.log(`Real photo expansion complete. Generated ${generatedImages.length} cropped images.`);
+    console.log(`${modeLabel} expansion complete. Generated ${generatedImages.length}/3 images.`);
 
     return new Response(
       JSON.stringify({ 
         success: true,
+        mode,
         generatedImages,
         totalImages: generatedImages.length,
       }),
@@ -335,9 +394,9 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Photo expansion error:', error);
+    console.error('Image expansion error:', error);
     
-    const errorMessage = error instanceof Error ? error.message : 'Photo expansion failed';
+    const errorMessage = error instanceof Error ? error.message : 'Image expansion failed';
     const status = errorMessage.includes('Rate limit') ? 429 
       : errorMessage.includes('Payment') ? 402 
       : 500;
