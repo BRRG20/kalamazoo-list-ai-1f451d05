@@ -159,7 +159,7 @@ interface BatchDetailProps {
   onMarkAsUploaded?: (productId: string, shopifyProductId?: string) => void;
   onMarkAsPending?: (productId: string) => void;
   // Hide product
-  onHideProduct?: (productId: string) => void;
+  onHideProduct?: (productId: string, showToast?: boolean) => void;
   // Delete single image by ID (for ProductCard)
   onDeleteImageById?: (imageId: string, productId: string) => Promise<void>;
   // Camera capture handlers
@@ -360,11 +360,21 @@ export function BatchDetail({
   const handleHideSelected = useCallback(async () => {
     if (selectedProductIds.size === 0 || !onHideProduct) return;
     
-    // Hide each selected product (persisted to database)
-    for (const id of selectedProductIds) {
-      await onHideProduct(id);
-    }
+    // CRITICAL: Capture IDs upfront to avoid race conditions during iteration
+    // The products array changes as each product is hidden, which can cause
+    // the selection sync effect to modify selectedProductIds mid-loop
+    const idsToHide = Array.from(selectedProductIds);
+    const count = idsToHide.length;
+    
+    // Clear selection FIRST to prevent UI flicker and race conditions
     onDeselectAllProducts();
+    
+    // Hide each selected product (persisted to database) - suppress individual toasts
+    const hidePromises = idsToHide.map(id => onHideProduct(id, false));
+    await Promise.all(hidePromises);
+    
+    // Show one aggregate toast
+    toast.success(`${count} product${count > 1 ? 's' : ''} hidden`);
   }, [selectedProductIds, onDeselectAllProducts, onHideProduct]);
 
   // Update imagesPerProduct when settings load
