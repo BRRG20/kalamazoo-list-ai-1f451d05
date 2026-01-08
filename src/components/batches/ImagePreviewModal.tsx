@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, ChevronLeft, ChevronRight, ZoomIn, Pencil } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, ZoomIn, Pencil, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -8,6 +8,8 @@ import {
 } from '@/components/ui/dialog';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { ImageEditCanvas } from '@/components/image-edit/ImageEditCanvas';
+import { downloadImage } from '@/lib/image-download';
+import { toast } from 'sonner';
 
 interface ImagePreviewModalProps {
   images: string[];
@@ -71,6 +73,15 @@ export function ImagePreviewModal({
     setIsEditing(false);
   };
 
+  const handleDownload = async () => {
+    try {
+      await downloadImage(currentImage, `image-${currentIndex + 1}`);
+      toast.success('Image downloaded');
+    } catch {
+      toast.error('Failed to download image');
+    }
+  };
+
   if (!images.length) return null;
 
   const currentImage = images[currentIndex];
@@ -107,6 +118,15 @@ export function ImagePreviewModal({
                     <Pencil className="h-4 w-4" />
                   </Button>
                 )}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleDownload}
+                  className="h-8 w-8 bg-background/60 hover:bg-background/80"
+                  title="Download full quality"
+                >
+                  <Download className="h-4 w-4" />
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon"

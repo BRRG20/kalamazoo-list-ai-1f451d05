@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, ImageIcon, Trash2, GripVertical, ZoomIn, Check, ChevronsUpDown, AlertTriangle, Eraser, Loader2, Undo2, Shirt, User, RefreshCw } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, ImageIcon, Trash2, GripVertical, ZoomIn, Check, ChevronsUpDown, AlertTriangle, Eraser, Loader2, Undo2, Shirt, User, RefreshCw, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
@@ -14,6 +14,7 @@ import { supabase } from '@/integrations/supabase/client';
 import type { ProductImage, Product } from '@/types';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { downloadImage } from '@/lib/image-download';
 
 interface ImageGalleryProps {
   images: ProductImage[];
@@ -736,6 +737,27 @@ export function ImageGallery({
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>Place on AI model</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-primary hover:text-primary/80"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            try {
+                              await downloadImage(image.url, `image-${image.position}`);
+                              toast.success('Image downloaded');
+                            } catch {
+                              toast.error('Failed to download');
+                            }
+                          }}
+                        >
+                          <Download className="w-4 h-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Download full quality</TooltipContent>
                     </Tooltip>
                     <Button
                       variant="ghost"
