@@ -375,120 +375,199 @@ const handleSelectBatch = useCallback((id: string) => {
     }
     
     const modeLabel = mode === 'product_photos' ? 'product photo' : 'AI model';
-    startBatchExpansion(idsToProcess.length);
-    toast.info(`Expanding ${modeLabel} images for ${idsToProcess.length} product(s)...`);
+    const totalToProcess = idsToProcess.length;
+    
+    // Start batch operation
+    startBatchExpansion(totalToProcess);
+    
+    // Show initial toast with progress ID for updates
+    const toastId = toast.loading(`Expanding ${modeLabel} images: 0/${totalToProcess} products...`);
     
     let totalGenerated = 0;
     let processedCount = 0;
+    let failedCount = 0;
+    const failedProducts: string[] = [];
+    let rateLimitHit = false;
+    let creditsExhausted = false;
+    
+    console.log(`🚀 Starting BULK expand for ${totalToProcess} products in ${mode} mode`);
     
     try {
+      // Process ALL products - never stop early except for rate limit/credits
       for (const productId of idsToProcess) {
+        // Check if we hit rate limit or credits exhausted
+        if (rateLimitHit || creditsExhausted) {
+          failedProducts.push(productId);
+          failedCount++;
+          continue;
+        }
+        
         const product = products.find(p => p.id === productId);
         if (!product) {
           console.warn(`Product ${productId} not found, skipping`);
+          failedProducts.push(productId);
+          failedCount++;
           continue;
         }
         
-        updateBatchProgress(processedCount + 1, idsToProcess.length);
+        // Update progress toast
+        toast.loading(`Expanding ${modeLabel} images: ${processedCount + 1}/${totalToProcess} products...`, { id: toastId });
+        updateBatchProgress(processedCount + 1, totalToProcess);
         
-        const images = await fetchImagesForProduct(productId);
-        if (images.length === 0) {
-          console.warn(`No images for product ${productId}, skipping`);
-          continue;
-        }
-        
-        const sortedImages = [...images].sort((a, b) => a.position - b.position);
-        let sourceImageUrl: string;
-        
-        if (mode === 'product_photos') {
-          // Use original product photo (NOT model image)
-          const originalImage = sortedImages.find(img => !img.source || img.source === 'upload');
-          if (!originalImage) {
-            console.warn(`No original product image for ${productId}, skipping`);
+        try {
+          const images = await fetchImagesForProduct(productId);
+          if (images.length === 0) {
+            console.warn(`No images for product ${productId}, skipping`);
+            failedProducts.push(productId);
+            failedCount++;
             continue;
           }
-          sourceImageUrl = originalImage.url;
-          console.log(`Using original product photo for expansion: ${productId}`);
-        } else {
-          // Use existing AI model image - NEVER generate new models
-          const modelImage = sortedImages.find(img => img.source === 'model_tryon');
-          if (!modelImage) {
-            console.warn(`No AI model image for ${productId}, skipping - user must generate model first`);
-            continue;
-          }
-          sourceImageUrl = modelImage.url;
-          console.log(`Using existing AI model image for expansion: ${productId}`);
-        }
-        
-        // Call the expand-product-photos edge function with mode
-        const response = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/expand-product-photos`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-            },
-            body: JSON.stringify({
-              productId,
-              sourceImageUrl,
-              mode,
-            }),
-          }
-        );
-        
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-          console.error(`Expansion failed for ${productId}:`, errorData);
-          if (response.status === 429) {
-            toast.error('Rate limit exceeded. Please wait and try again.');
-            break;
-          } else if (response.status === 402) {
-            toast.error('AI credits exhausted. Please add credits.');
-            break;
-          }
-          continue;
-        }
-        
-        const result = await response.json();
-        
-        if (result.success && result.generatedImages?.length > 0) {
-          const currentImages = await fetchImagesForProduct(productId);
-          const nextPosition = currentImages.length;
           
-          for (let i = 0; i < result.generatedImages.length; i++) {
-            const genImg = result.generatedImages[i];
-            const { error } = await supabase
-              .from('images')
-              .insert({
-                url: genImg.url,
-                product_id: productId,
-                batch_id: selectedBatchId,
-                position: nextPosition + i,
-                include_in_shopify: true,
-                user_id: user.id,
-                source: mode === 'product_photos' ? 'product_expansion' : 'model_expansion'
-              });
-            
-            if (!error) totalGenerated++;
+          const sortedImages = [...images].sort((a, b) => a.position - b.position);
+          let sourceImageUrl: string | null = null;
+          
+          if (mode === 'product_photos') {
+            // Use original product photo (NOT model image)
+            const originalImage = sortedImages.find(img => !img.source || img.source === 'upload');
+            if (!originalImage) {
+              console.warn(`No original product image for ${productId}, skipping`);
+              failedProducts.push(productId);
+              failedCount++;
+              continue;
+            }
+            sourceImageUrl = originalImage.url;
+            console.log(`[${processedCount + 1}/${totalToProcess}] Using original product photo for: ${product.title || productId}`);
+          } else {
+            // Use existing AI model image - NEVER generate new models
+            const modelImage = sortedImages.find(img => img.source === 'model_tryon');
+            if (!modelImage) {
+              console.warn(`No AI model image for ${productId}, skipping - user must generate model first`);
+              failedProducts.push(productId);
+              failedCount++;
+              continue;
+            }
+            sourceImageUrl = modelImage.url;
+            console.log(`[${processedCount + 1}/${totalToProcess}] Using AI model image for: ${product.title || productId}`);
           }
+          
+          // Call the expand-product-photos edge function with mode
+          const response = await fetch(
+            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/expand-product-photos`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+              },
+              body: JSON.stringify({
+                productId,
+                sourceImageUrl,
+                mode,
+              }),
+            }
+          );
+          
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+            console.error(`Expansion failed for ${productId}:`, errorData);
+            
+            if (response.status === 429) {
+              rateLimitHit = true;
+              toast.error('Rate limit exceeded. Remaining products will be skipped.');
+              failedProducts.push(productId);
+              failedCount++;
+              continue; // Continue to mark remaining as failed
+            } else if (response.status === 402) {
+              creditsExhausted = true;
+              toast.error('AI credits exhausted. Remaining products will be skipped.');
+              failedProducts.push(productId);
+              failedCount++;
+              continue; // Continue to mark remaining as failed
+            }
+            
+            // Other errors - skip this product but continue with others
+            failedProducts.push(productId);
+            failedCount++;
+            continue;
+          }
+          
+          const result = await response.json();
+          
+          if (result.success && result.generatedImages?.length > 0) {
+            const currentImages = await fetchImagesForProduct(productId);
+            const nextPosition = currentImages.length;
+            
+            // Insert all generated images for this product
+            for (let i = 0; i < result.generatedImages.length; i++) {
+              const genImg = result.generatedImages[i];
+              const { error } = await supabase
+                .from('images')
+                .insert({
+                  url: genImg.url,
+                  product_id: productId,
+                  batch_id: selectedBatchId,
+                  position: nextPosition + i,
+                  include_in_shopify: true,
+                  user_id: user.id,
+                  source: mode === 'product_photos' ? 'product_expansion' : 'model_expansion'
+                });
+              
+              if (!error) {
+                totalGenerated++;
+              }
+            }
+            console.log(`✓ Generated ${result.generatedImages.length} images for product ${processedCount + 1}/${totalToProcess}`);
+          } else {
+            failedProducts.push(productId);
+            failedCount++;
+          }
+          
+        } catch (productError) {
+          console.error(`Error processing product ${productId}:`, productError);
+          failedProducts.push(productId);
+          failedCount++;
+          // Continue with next product - don't break the batch
         }
         
         processedCount++;
-        if (processedCount < idsToProcess.length) {
-          await new Promise(r => setTimeout(r, 1000));
+        
+        // Add delay between products to avoid rate limits (but still process ALL)
+        if (processedCount < totalToProcess) {
+          await new Promise(r => setTimeout(r, 800));
         }
       }
       
+      // Clear cache and refresh
       clearCache();
       await refetchProducts();
       
+      // Dismiss loading toast
+      toast.dismiss(toastId);
+      
+      // Show final summary
+      const successCount = totalToProcess - failedCount;
+      
       if (totalGenerated > 0) {
-        toast.success(`Added ${totalGenerated} ${modeLabel} images across ${processedCount} product(s)`);
+        toast.success(
+          `✓ Expanded ${successCount}/${totalToProcess} products (${totalGenerated} images added)` +
+          (failedCount > 0 ? ` | ${failedCount} failed` : ''),
+          { duration: 5000 }
+        );
+      } else if (failedCount === totalToProcess) {
+        toast.error(`All ${totalToProcess} products failed to expand. Check that products have the required source images.`);
       } else {
-        toast.error('No images were generated');
+        toast.warning(`Partial success: ${successCount}/${totalToProcess} products expanded`);
       }
+      
+      // Log failures for debugging
+      if (failedProducts.length > 0) {
+        console.warn(`Failed products (${failedProducts.length}):`, failedProducts);
+      }
+      
+      console.log(`🏁 BULK expand complete: ${successCount}/${totalToProcess} succeeded, ${totalGenerated} images generated`);
+      
     } finally {
+      // Always end batch operation to reset loading state
       endBatchExpansion();
     }
   }, [products, fetchImagesForProduct, selectedBatchId, clearCache, refetchProducts, startBatchExpansion, updateBatchProgress, endBatchExpansion]);
