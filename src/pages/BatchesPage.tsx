@@ -358,7 +358,8 @@ const handleSelectBatch = useCallback((id: string) => {
   // AI Image Expansion handler - generates additional listing images from the AI model image
   // Uses existing model_tryon image, or generates one first if none exists
   // Accepts single productId or array of productIds for bulk expansion
-  const handleExpandProductImages = useCallback(async (productIds: string | string[]) => {
+  // Optional modelId parameter allows user to specify which AI model to use
+  const handleExpandProductImages = useCallback(async (productIds: string | string[], userSelectedModelId?: string) => {
     const idsToProcess = Array.isArray(productIds) ? productIds : [productIds];
     
     if (idsToProcess.length === 0) {
@@ -420,18 +421,22 @@ const handleSelectBatch = useCallback((id: string) => {
             continue;
           }
           
-          // Determine default model based on department
+          // Determine model to use: user-selected > auto-detect based on department
           const department = product.department;
-          let defaultModelId: string;
+          let modelIdToUse: string;
           
-          if (department === 'Women') {
-            defaultModelId = DEFAULT_FEMALE_MODEL_ID; // Sophie
+          if (userSelectedModelId) {
+            // User explicitly selected a model
+            modelIdToUse = userSelectedModelId;
+            console.log(`Using user-selected model ${modelIdToUse}`);
+          } else if (department === 'Women') {
+            modelIdToUse = DEFAULT_FEMALE_MODEL_ID; // Sophie
+            console.log(`Auto-detecting: Women department -> ${modelIdToUse}`);
           } else {
             // Men, Unisex, Kids, or null - default to male model
-            defaultModelId = DEFAULT_MALE_MODEL_ID; // James
+            modelIdToUse = DEFAULT_MALE_MODEL_ID; // James
+            console.log(`Auto-detecting: ${department || 'unknown'} department -> ${modelIdToUse}`);
           }
-          
-          console.log(`Using default model ${defaultModelId} for department ${department || 'unknown'}`);
           
           // Generate model try-on image
           const response = await fetch(
@@ -444,7 +449,7 @@ const handleSelectBatch = useCallback((id: string) => {
               },
               body: JSON.stringify({
                 garmentImageUrl: originalImage.url,
-                modelId: defaultModelId,
+                modelId: modelIdToUse,
                 poseId: 'front_neutral',
                 fitStyle: 'regular',
                 styleOutfit: false,

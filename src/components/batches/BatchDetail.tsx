@@ -166,7 +166,7 @@ interface BatchDetailProps {
   onCameraCapture?: (files: File[], notes: Map<string, { note?: string; hasStain?: boolean; type?: string }>) => void;
   onQuickProductCapture?: (files: File[], notes: Map<string, { note?: string; hasStain?: boolean; type?: string }>) => void;
   // AI Image Expansion
-  onExpandProductImages?: (productIds: string | string[]) => void;
+  onExpandProductImages?: (productIds: string | string[], modelId?: string) => void;
   isExpandingImages?: boolean;
 }
 
@@ -269,7 +269,7 @@ export function BatchDetail({
   
   const { settings, isShopifyConfigured } = useSettings();
   const { isProcessing: isRemovingBg, progress: bgRemovalProgress, removeBackgroundBulk, applyGhostMannequinBulk, getUndoMap, canUndo: canUndoBgRemoval } = useBackgroundRemoval();
-  const { isProcessing: isModelProcessing, progress: modelProgress, processBulk: processModelBulk } = useModelTryOn();
+  const { isProcessing: isModelProcessing, progress: modelProgress, processBulk: processModelBulk, getModels } = useModelTryOn();
   const [bgUndoData, setBgUndoData] = useState<Map<string, { imageId: string; originalUrl: string; newUrl: string }[]>>(new Map());
   const [ghostUndoData, setGhostUndoData] = useState<Map<string, { imageId: string; originalUrl: string; newUrl: string }[]>>(new Map());
   const [modelUndoData, setModelUndoData] = useState<Map<string, { imageId: string; originalUrl: string; newUrl: string }[]>>(new Map());
@@ -284,8 +284,12 @@ export function BatchDetail({
   const [bulkSelectKey, setBulkSelectKey] = useState(0);
   const [showInfoDialog, setShowInfoDialog] = useState(false);
   const [showModelTryOnDialog, setShowModelTryOnDialog] = useState(false);
+  const [selectedExpansionModelId, setSelectedExpansionModelId] = useState<string | undefined>(undefined);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const shopifyConfigured = isShopifyConfigured();
+  
+  // Get available models for the dropdown
+  const availableModels = getModels();
   
   // Track last fetched batch to prevent unnecessary refetches
   const lastFetchedRef = useRef<string>('');
@@ -1652,20 +1656,13 @@ export function BatchDetail({
                       Undo Model
                     </Button>
                     
-                    {/* Generate Listing Images button (AI Image Expansion) */}
+                    {/* Generate Listing Images button with model selector dropdown */}
                     {onExpandProductImages && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
                           <Button 
                             variant="outline" 
                             size="sm" 
-                            onClick={() => {
-                              // Expand images for all selected products
-                              const productIds = Array.from(selectedProductIds);
-                              if (productIds.length > 0) {
-                                onExpandProductImages(productIds);
-                              }
-                            }}
                             disabled={isExpandingImages || selectedProductIds.size === 0}
                             type="button"
                             className="text-cyan-600 hover:text-cyan-700 hover:bg-cyan-50"
@@ -1679,12 +1676,73 @@ export function BatchDetail({
                               <>
                                 <Wand2 className="w-4 h-4 mr-1" />
                                 Expand Images
+                                <ChevronDown className="w-3 h-3 ml-1" />
                               </>
                             )}
                           </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Generate additional listing images (crops, close-ups) for {selectedProductIds.size} selected product(s)</TooltipContent>
-                      </Tooltip>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-56">
+                          <DropdownMenuLabel className="text-xs text-muted-foreground">
+                            Select AI model for expansion
+                          </DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => {
+                              const productIds = Array.from(selectedProductIds);
+                              if (productIds.length > 0) {
+                                onExpandProductImages(productIds, undefined); // Auto-detect based on department
+                              }
+                            }}
+                            className="flex items-center gap-2"
+                          >
+                            <Sparkles className="w-4 h-4 text-amber-500" />
+                            <div className="flex flex-col">
+                              <span className="font-medium">Auto-detect</span>
+                              <span className="text-xs text-muted-foreground">Based on product department</span>
+                            </div>
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuLabel className="text-xs text-muted-foreground">Male Models</DropdownMenuLabel>
+                          {availableModels.filter(m => m.gender === 'male').map(model => (
+                            <DropdownMenuItem
+                              key={model.id}
+                              onClick={() => {
+                                const productIds = Array.from(selectedProductIds);
+                                if (productIds.length > 0) {
+                                  onExpandProductImages(productIds, model.id);
+                                }
+                              }}
+                              className="flex items-center gap-2"
+                            >
+                              <User className="w-4 h-4 text-blue-500" />
+                              <div className="flex flex-col">
+                                <span>{model.name}</span>
+                                <span className="text-xs text-muted-foreground">{model.description}</span>
+                              </div>
+                            </DropdownMenuItem>
+                          ))}
+                          <DropdownMenuSeparator />
+                          <DropdownMenuLabel className="text-xs text-muted-foreground">Female Models</DropdownMenuLabel>
+                          {availableModels.filter(m => m.gender === 'female').map(model => (
+                            <DropdownMenuItem
+                              key={model.id}
+                              onClick={() => {
+                                const productIds = Array.from(selectedProductIds);
+                                if (productIds.length > 0) {
+                                  onExpandProductImages(productIds, model.id);
+                                }
+                              }}
+                              className="flex items-center gap-2"
+                            >
+                              <User className="w-4 h-4 text-pink-500" />
+                              <div className="flex flex-col">
+                                <span>{model.name}</span>
+                                <span className="text-xs text-muted-foreground">{model.description}</span>
+                              </div>
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     )}
                     
                     {/* Three-dots menu with actions for selected products */}
