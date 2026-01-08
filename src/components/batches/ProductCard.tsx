@@ -32,6 +32,8 @@ interface ProductCardProps {
   onMarkAsPending?: () => void;
   // Hide functionality
   onHide?: () => void;
+  // Unhide functionality (for hidden products shown inline)
+  onUnhide?: () => void;
 }
 
 export function ProductCard({
@@ -55,6 +57,7 @@ export function ProductCard({
   onMarkAsUploaded,
   onMarkAsPending,
   onHide,
+  onUnhide,
 }: ProductCardProps) {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewIndex, setPreviewIndex] = useState(0);
@@ -147,7 +150,8 @@ export function ProductCard({
           "bg-card border border-border rounded-lg overflow-hidden transition-all hover:shadow-md",
           isSelected && "ring-2 ring-primary",
           isDragOver && "ring-2 ring-primary/60 bg-primary/5",
-          isDraggingImage && "opacity-60"
+          isDraggingImage && "opacity-60",
+          product.is_hidden && "border-amber-400 bg-amber-50/30 dark:bg-amber-950/20"
         )}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -173,6 +177,13 @@ export function ProductCard({
                 <div className="absolute bottom-2 left-2 bg-emerald-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
                   <User className="w-3 h-3" />
                   AI Model
+                </div>
+              )}
+              {/* Hidden badge */}
+              {product.is_hidden && (
+                <div className="absolute bottom-2 right-2 bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <EyeOff className="w-3 h-3" />
+                  Hidden
                 </div>
               )}
             </>
@@ -394,8 +405,8 @@ export function ProductCard({
               </Button>
             )}
 
-            {/* Hide/Uploaded button */}
-            {onHide && (
+            {/* Hide/Uploaded button - only show when product is not hidden */}
+            {onHide && !product.is_hidden && (
               <Button
                 variant="outline"
                 size="sm"
@@ -407,6 +418,22 @@ export function ProductCard({
                 className="px-2 text-muted-foreground hover:text-foreground"
               >
                 <EyeOff className="w-3 h-3" />
+              </Button>
+            )}
+
+            {/* Unhide button - only show when product is hidden */}
+            {onUnhide && product.is_hidden && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onUnhide();
+                }}
+                title="Unhide this product"
+                className="px-2 text-amber-600 hover:text-amber-700 hover:bg-amber-50 border-amber-300"
+              >
+                <Eye className="w-3 h-3" />
               </Button>
             )}
           </div>
