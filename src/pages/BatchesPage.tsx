@@ -348,78 +348,99 @@ const handleSelectBatch = useCallback((id: string) => {
   }, [selectedBatchId, uploadImages, addImageToBatch]);
 
   // AI Image Expansion handler - generates additional listing images from existing product images
-  const handleExpandProductImages = useCallback(async (productId: string) => {
-    const product = products.find(p => p.id === productId);
-    if (!product) {
-      toast.error('Product not found');
+  // Accepts single productId or array of productIds for bulk expansion
+  const handleExpandProductImages = useCallback(async (productIds: string | string[]) => {
+    const idsToProcess = Array.isArray(productIds) ? productIds : [productIds];
+    
+    if (idsToProcess.length === 0) {
+      toast.error('No products selected');
       return;
     }
     
-    // Fetch product images
-    const images = await fetchImagesForProduct(productId);
-    if (images.length === 0) {
-      toast.error('No images to expand');
+    // Get current user for RLS
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      toast.error('You must be logged in');
       return;
     }
     
-    // Sort by position to get front, back, label, detail
-    const sortedImages = [...images].sort((a, b) => a.position - b.position);
+    toast.info(`Generating listing images for ${idsToProcess.length} product(s)...`);
     
-    // Find images by type or position
-    const frontImage = sortedImages[0]; // First image is typically front
-    const backImage = sortedImages.length > 1 ? sortedImages[1] : undefined;
-    const labelImage = sortedImages.find(img => img.source === 'upload' && sortedImages.indexOf(img) === 2);
-    const detailImage = sortedImages.length > 3 ? sortedImages[3] : undefined;
+    let totalGenerated = 0;
+    let processedCount = 0;
     
-    toast.info('Generating additional listing images...');
-    
-    const result = await expandProductImages(
-      productId,
-      frontImage.url,
-      backImage?.url,
-      labelImage?.url,
-      detailImage?.url,
-      8 // Target 8 total images
-    );
-    
-    if (result && result.success) {
-      // Get current user for RLS
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        toast.error('You must be logged in');
-        return;
+    for (const productId of idsToProcess) {
+      const product = products.find(p => p.id === productId);
+      if (!product) {
+        console.warn(`Product ${productId} not found, skipping`);
+        continue;
       }
       
-      // Add generated images to the product
-      const currentImages = await fetchImagesForProduct(productId);
-      const nextPosition = currentImages.length;
+      // Fetch product images
+      const images = await fetchImagesForProduct(productId);
+      if (images.length === 0) {
+        console.warn(`No images for product ${productId}, skipping`);
+        continue;
+      }
       
-      for (let i = 0; i < result.generatedImages.length; i++) {
-        const genImg = result.generatedImages[i];
+      // Sort by position to get front, back, label, detail
+      const sortedImages = [...images].sort((a, b) => a.position - b.position);
+      
+      // Find images by type or position
+      const frontImage = sortedImages[0]; // First image is typically front
+      const backImage = sortedImages.length > 1 ? sortedImages[1] : undefined;
+      const labelImage = sortedImages.find(img => img.source === 'upload' && sortedImages.indexOf(img) === 2);
+      const detailImage = sortedImages.length > 3 ? sortedImages[3] : undefined;
+      
+      const result = await expandProductImages(
+        productId,
+        frontImage.url,
+        backImage?.url,
+        labelImage?.url,
+        detailImage?.url,
+        8 // Target 8 total images
+      );
+      
+      if (result && result.success) {
+        // Add generated images to the product
+        const currentImages = await fetchImagesForProduct(productId);
+        const nextPosition = currentImages.length;
         
-        // Insert new image into database
-        const { error } = await supabase
-          .from('images')
-          .insert({
-            url: genImg.url,
-            product_id: productId,
-            batch_id: selectedBatchId,
-            position: nextPosition + i,
-            include_in_shopify: true,
-            user_id: user.id,
-            source: 'ai_expansion'
-          });
-        
-        if (error) {
-          console.error('Error adding expanded image:', error);
+        for (let i = 0; i < result.generatedImages.length; i++) {
+          const genImg = result.generatedImages[i];
+          
+          // Insert new image into database
+          const { error } = await supabase
+            .from('images')
+            .insert({
+              url: genImg.url,
+              product_id: productId,
+              batch_id: selectedBatchId,
+              position: nextPosition + i,
+              include_in_shopify: true,
+              user_id: user.id,
+              source: 'ai_expansion'
+            });
+          
+          if (error) {
+            console.error('Error adding expanded image:', error);
+          } else {
+            totalGenerated++;
+          }
         }
       }
       
-      // Clear cache and refresh
-      clearCache();
-      await refetchProducts();
-      
-      toast.success(`Added ${result.generatedImages.length} AI-generated listing images`);
+      processedCount++;
+    }
+    
+    // Clear cache and refresh
+    clearCache();
+    await refetchProducts();
+    
+    if (totalGenerated > 0) {
+      toast.success(`Added ${totalGenerated} AI-generated images across ${processedCount} product(s)`);
+    } else {
+      toast.error('No images were generated');
     }
   }, [products, fetchImagesForProduct, expandProductImages, selectedBatchId, clearCache, refetchProducts]);
 

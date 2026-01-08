@@ -166,7 +166,7 @@ interface BatchDetailProps {
   onCameraCapture?: (files: File[], notes: Map<string, { note?: string; hasStain?: boolean; type?: string }>) => void;
   onQuickProductCapture?: (files: File[], notes: Map<string, { note?: string; hasStain?: boolean; type?: string }>) => void;
   // AI Image Expansion
-  onExpandProductImages?: (productId: string) => void;
+  onExpandProductImages?: (productIds: string | string[]) => void;
   isExpandingImages?: boolean;
 }
 
@@ -1650,10 +1650,10 @@ export function BatchDetail({
                             variant="outline" 
                             size="sm" 
                             onClick={() => {
-                              // Expand images for first selected product
-                              const firstProductId = Array.from(selectedProductIds)[0];
-                              if (firstProductId) {
-                                onExpandProductImages(firstProductId);
+                              // Expand images for all selected products
+                              const productIds = Array.from(selectedProductIds);
+                              if (productIds.length > 0) {
+                                onExpandProductImages(productIds);
                               }
                             }}
                             disabled={isExpandingImages || selectedProductIds.size === 0}
@@ -1673,7 +1673,7 @@ export function BatchDetail({
                             )}
                           </Button>
                         </TooltipTrigger>
-                        <TooltipContent>Generate additional listing images (crops, close-ups) from selected product</TooltipContent>
+                        <TooltipContent>Generate additional listing images (crops, close-ups) for {selectedProductIds.size} selected product(s)</TooltipContent>
                       </Tooltip>
                     )}
                     
