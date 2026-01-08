@@ -143,50 +143,50 @@ export function ImageGallery({
     setSelectedImageIds(new Set());
   };
 
-  // Delete selected images (bulk)
+  // Delete selected images (bulk) - INSTANT parallel deletion
   const handleDeleteSelected = async () => {
     if (selectedImageIds.size === 0 || !onDeleteImage) return;
     
-    setDeletingImages(true);
     const idsToDelete = Array.from(selectedImageIds);
+    
+    // Clear selection immediately for instant feedback
+    setSelectedImageIds(new Set());
     
     // Store for undo
     recentlyDeletedRef.current = { ids: idsToDelete, timestamp: Date.now() };
     
-    // Delete all selected images
-    for (const imageId of idsToDelete) {
-      await onDeleteImage(imageId);
-    }
+    // Delete all in parallel - don't await individually
+    Promise.all(idsToDelete.map(id => onDeleteImage(id)));
     
-    setSelectedImageIds(new Set());
-    setDeletingImages(false);
-    
-    // Show toast with undo option
+    // Quick toast positioned lower, auto-dismisses fast
     toast.success(`${idsToDelete.length} image${idsToDelete.length > 1 ? 's' : ''} deleted`, {
       action: {
         label: 'Undo',
         onClick: () => handleUndoDelete(idsToDelete),
       },
-      duration: 8000,
+      duration: 4000,
+      position: 'bottom-center',
     });
   };
 
-  // Delete single image with undo
+  // Delete single image - INSTANT with auto-save
   const handleDeleteSingle = async (imageId: string) => {
     if (!onDeleteImage) return;
     
     // Store for undo
     recentlyDeletedRef.current = { ids: [imageId], timestamp: Date.now() };
     
-    await onDeleteImage(imageId);
+    // Fire and forget - don't block UI
+    onDeleteImage(imageId);
     
-    // Show toast with undo option
-    toast.success('Image deleted', {
+    // Quick toast positioned lower
+    toast.success('Deleted', {
       action: {
         label: 'Undo',
         onClick: () => handleUndoDelete([imageId]),
       },
-      duration: 8000,
+      duration: 4000,
+      position: 'bottom-center',
     });
   };
 
