@@ -28,7 +28,7 @@ export function ExpandModeDialog({
 }: ExpandModeDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-[420px] max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Choose Expansion Mode</DialogTitle>
           <DialogDescription>
@@ -36,31 +36,31 @@ export function ExpandModeDialog({
           </DialogDescription>
         </DialogHeader>
         
-        <div className="grid gap-4 py-4">
+        <div className="grid gap-3 py-3">
           {/* Mode 1: Product Photo Expand */}
           <Button
             variant="outline"
-            className="h-auto p-4 flex flex-col items-start gap-2 text-left hover:border-primary"
+            className="h-auto p-3 flex flex-col items-start gap-1.5 text-left hover:border-primary w-full"
             onClick={() => {
               onSelectMode('product_photos');
               onOpenChange(false);
             }}
           >
-            <div className="flex items-center gap-2 font-semibold">
-              <Package className="w-5 h-5 text-primary" />
+            <div className="flex items-center gap-2 font-semibold text-sm">
+              <Package className="w-4 h-4 text-primary flex-shrink-0" />
               Expand Product Photos
             </div>
-            <p className="text-sm text-muted-foreground font-normal">
+            <p className="text-xs text-muted-foreground font-normal leading-relaxed">
               Create e-commerce shots from your <strong>original product images</strong>. 
-              Generates close-up crops of details, neckline, and hem. 
-              <span className="text-primary"> No AI models involved.</span>
+              Close-up crops of details, neckline, and hem. 
+              <span className="text-primary"> No AI models.</span>
             </p>
           </Button>
 
           {/* Mode 2: AI Model Image Expand */}
           <Button
             variant="outline"
-            className="h-auto p-4 flex flex-col items-start gap-2 text-left hover:border-primary disabled:opacity-50"
+            className="h-auto p-3 flex flex-col items-start gap-1.5 text-left hover:border-primary disabled:opacity-50 w-full"
             onClick={() => {
               if (hasExistingModelImages) {
                 onSelectMode('ai_model');
@@ -69,22 +69,20 @@ export function ExpandModeDialog({
             }}
             disabled={!hasExistingModelImages}
           >
-            <div className="flex items-center gap-2 font-semibold">
-              <User className="w-5 h-5 text-cyan-600" />
+            <div className="flex items-center gap-2 font-semibold text-sm">
+              <User className="w-4 h-4 text-cyan-600 flex-shrink-0" />
               Expand AI Model Image
             </div>
-            <p className="text-sm text-muted-foreground font-normal">
-              Create additional angles from your <strong>existing AI model images</strong>. 
-              Same person, same outfit, different camera angles.
+            <p className="text-xs text-muted-foreground font-normal leading-relaxed">
+              Additional angles from your <strong>existing AI model images</strong>. 
+              Same person, same outfit, different angles.
               <span className="text-cyan-600"> Uses existing model only.</span>
             </p>
             {!hasExistingModelImages && (
-              <Alert variant="destructive" className="mt-2 py-2">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription className="text-xs">
-                  No AI model images found. Generate model images first using "Model Try-On".
-                </AlertDescription>
-              </Alert>
+              <div className="mt-1.5 flex items-start gap-2 text-destructive text-xs">
+                <AlertCircle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+                <span>No AI model images found. Use "Model Try-On" first.</span>
+              </div>
             )}
           </Button>
         </div>
