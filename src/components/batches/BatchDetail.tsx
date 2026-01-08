@@ -143,9 +143,11 @@ interface BatchDetailProps {
   undoStackLength?: number;
   onGlobalUndo?: () => void;
   lastUndoLabel?: string;
-  // Deleted products
+  // Deleted products/images
   deletedProductsCount?: number;
+  deletedImagesCount?: number;
   onOpenDeletedProducts?: () => void;
+  onOpenDeletedImages?: () => void;
   // Empty products cleanup
   onDeleteEmptyProducts?: (productIds: string[]) => Promise<void>;
   // Create product from image IDs (for Birds Eye View)
@@ -226,6 +228,8 @@ export function BatchDetail({
   lastUndoLabel,
   deletedProductsCount = 0,
   onOpenDeletedProducts,
+  deletedImagesCount,
+  onOpenDeletedImages,
   onDeleteEmptyProducts,
   onCreateProductFromImageIds,
   onMarkAsUploaded,

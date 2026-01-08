@@ -241,6 +241,7 @@ export type Database = {
         Row: {
           batch_id: string | null
           created_at: string
+          deleted_at: string | null
           id: string
           include_in_shopify: boolean
           position: number
@@ -252,6 +253,7 @@ export type Database = {
         Insert: {
           batch_id?: string | null
           created_at?: string
+          deleted_at?: string | null
           id?: string
           include_in_shopify?: boolean
           position?: number
@@ -263,6 +265,7 @@ export type Database = {
         Update: {
           batch_id?: string | null
           created_at?: string
+          deleted_at?: string | null
           id?: string
           include_in_shopify?: boolean
           position?: number

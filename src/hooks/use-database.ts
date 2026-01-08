@@ -969,17 +969,48 @@ export function useImages() {
   };
 
   const deleteImage = async (id: string) => {
+    // Soft delete: set deleted_at timestamp instead of permanently deleting
+    const { error } = await supabase
+      .from('images')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', id);
+    
+    if (error) {
+      console.error('Error soft-deleting image:', error);
+      return false;
+    }
+    
+    // Clear all caches since we don't know which product this was in
+    setImageCache({});
+    return true;
+  };
+
+  const permanentlyDeleteImage = async (id: string) => {
     const { error } = await supabase
       .from('images')
       .delete()
       .eq('id', id);
     
     if (error) {
-      console.error('Error deleting image:', error);
+      console.error('Error permanently deleting image:', error);
       return false;
     }
     
-    // Clear all caches since we don't know which product this was in
+    return true;
+  };
+
+  const recoverImage = async (id: string) => {
+    const { error } = await supabase
+      .from('images')
+      .update({ deleted_at: null })
+      .eq('id', id);
+    
+    if (error) {
+      console.error('Error recovering image:', error);
+      return false;
+    }
+    
+    // Clear cache to force refetch
     setImageCache({});
     return true;
   };
@@ -1015,9 +1046,133 @@ export function useImages() {
     updateImageProductId,
     updateImageProductIdByUrl,
     deleteImage,
+    permanentlyDeleteImage,
+    recoverImage,
     excludeLastNImages, 
     clearCache, 
     imageCache 
+  };
+}
+
+// Deleted Images Hook (for recovery)
+export function useDeletedImages(batchId: string | null) {
+  const [deletedImages, setDeletedImages] = useState<(ProductImage & { deleted_at: string })[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const fetchDeletedImages = useCallback(async () => {
+    if (!batchId) {
+      setDeletedImages([]);
+      return;
+    }
+    
+    setLoading(true);
+    // Query deleted images for this batch
+    const { data, error } = await supabase
+      .from('images')
+      .select('*')
+      .eq('batch_id', batchId)
+      .not('deleted_at', 'is', null)
+      .order('deleted_at', { ascending: false });
+    
+    if (error) {
+      console.error('Error fetching deleted images:', error);
+      setLoading(false);
+      return;
+    }
+    
+    setDeletedImages((data || []).map(row => ({
+      ...mapImage(row),
+      deleted_at: row.deleted_at,
+    })));
+    setLoading(false);
+  }, [batchId]);
+
+  useEffect(() => {
+    fetchDeletedImages();
+  }, [fetchDeletedImages]);
+
+  const recoverImage = async (id: string) => {
+    const { error } = await supabase
+      .from('images')
+      .update({ deleted_at: null })
+      .eq('id', id);
+    
+    if (error) {
+      console.error('Error recovering image:', error);
+      toast.error('Failed to recover image');
+      return false;
+    }
+    
+    setDeletedImages(prev => prev.filter(img => img.id !== id));
+    toast.success('Image recovered successfully');
+    return true;
+  };
+
+  const permanentlyDelete = async (id: string) => {
+    const { error } = await supabase
+      .from('images')
+      .delete()
+      .eq('id', id);
+    
+    if (error) {
+      console.error('Error permanently deleting image:', error);
+      toast.error('Failed to permanently delete image');
+      return false;
+    }
+    
+    setDeletedImages(prev => prev.filter(img => img.id !== id));
+    toast.success('Image permanently deleted');
+    return true;
+  };
+
+  const emptyImageTrash = async () => {
+    if (deletedImages.length === 0) return true;
+    
+    const ids = deletedImages.map(img => img.id);
+    const { error } = await supabase
+      .from('images')
+      .delete()
+      .in('id', ids);
+    
+    if (error) {
+      console.error('Error emptying image trash:', error);
+      toast.error('Failed to empty image trash');
+      return false;
+    }
+    
+    setDeletedImages([]);
+    toast.success('Image trash emptied successfully');
+    return true;
+  };
+
+  const recoverAllImages = async () => {
+    if (deletedImages.length === 0) return true;
+    
+    const ids = deletedImages.map(img => img.id);
+    const { error } = await supabase
+      .from('images')
+      .update({ deleted_at: null })
+      .in('id', ids);
+    
+    if (error) {
+      console.error('Error recovering all images:', error);
+      toast.error('Failed to recover all images');
+      return false;
+    }
+    
+    setDeletedImages([]);
+    toast.success('All images recovered successfully');
+    return true;
+  };
+
+  return { 
+    deletedImages, 
+    loading, 
+    recoverImage, 
+    permanentlyDelete, 
+    emptyImageTrash,
+    recoverAllImages,
+    refetch: fetchDeletedImages 
   };
 }
 

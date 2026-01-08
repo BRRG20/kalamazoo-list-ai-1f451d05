@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/batches/EmptyState';
 import { ProductDetailPanel } from '@/components/products/ProductDetailPanel';
 import { ShopifySuccessDialog } from '@/components/batches/ShopifySuccessDialog';
 import { DeletedProductsPanel } from '@/components/batches/DeletedProductsPanel';
+import { DeletedImagesPanel } from '@/components/batches/DeletedImagesPanel';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ImageGroup, MatchingProgress } from '@/components/batches/ImageGroupManager';
 import { 
@@ -18,6 +19,7 @@ import {
   useSettings, 
   useImageUpload,
   useDeletedProducts,
+  useDeletedImages,
   generateListingBlock,
   validateProductForExport,
   UPLOAD_LIMITS,
@@ -31,6 +33,7 @@ export default function BatchesPage() {
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const { products, createProduct, createProductWithImages, updateProduct, deleteProduct, deleteEmptyProducts, hideProduct, isMutating, acquireLock, releaseLock, refetch: refetchProducts } = useProducts(selectedBatchId);
   const { deletedProducts, recoverProduct, permanentlyDelete: permanentlyDeleteProduct, emptyTrash, refetch: refetchDeletedProducts } = useDeletedProducts(selectedBatchId);
+  const { deletedImages, recoverImage, permanentlyDelete: permanentlyDeleteImage, emptyImageTrash, recoverAllImages, refetch: refetchDeletedImages } = useDeletedImages(selectedBatchId);
   const { fetchImagesForProduct, fetchImagesForBatch, addImageToBatch, updateImage, excludeLastNImages, clearCache, deleteImage, updateImageProductIdByUrl } = useImages();
   const { settings } = useSettings();
   const { uploadImages, uploading, progress, uploadStartTime, uploadTotal, uploadCompleted } = useImageUpload();
@@ -53,8 +56,9 @@ export default function BatchesPage() {
     }
   }, [products]);
   
-  // Deleted products panel state
+  // Deleted products/images panel state
   const [showDeletedProducts, setShowDeletedProducts] = useState(false);
+  const [showDeletedImages, setShowDeletedImages] = useState(false);
   
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
@@ -967,11 +971,17 @@ const handleSelectBatch = useCallback((id: string) => {
       // Clear cache and refetch products - the products array change will trigger BatchDetail image refetch
       clearCache(productId);
       refetchProducts();
-      toast.success('Image deleted');
+      refetchDeletedImages();
+      toast.success('Image moved to trash', {
+        action: {
+          label: 'View Trash',
+          onClick: () => setShowDeletedImages(true),
+        },
+      });
     } else {
       toast.error('Failed to delete image');
     }
-  }, [deleteImage, clearCache, refetchProducts]);
+  }, [deleteImage, clearCache, refetchProducts, refetchDeletedImages]);
 
   const handleGenerateProductAI = useCallback(async (regenerateOnly?: 'title' | 'style_a' | 'style_b' | 'all') => {
     if (!editingProductId) return;
@@ -1720,7 +1730,9 @@ const handleSelectBatch = useCallback((id: string) => {
               onGlobalUndo={handleGlobalUndo}
               lastUndoLabel={undoStack.length > 0 ? undoStack[undoStack.length - 1].label : undefined}
               deletedProductsCount={deletedProducts.length}
+              deletedImagesCount={deletedImages.length}
               onOpenDeletedProducts={() => setShowDeletedProducts(true)}
+              onOpenDeletedImages={() => setShowDeletedImages(true)}
               onDeleteEmptyProducts={handleDeleteEmptyProducts}
               onCreateProductFromImageIds={handleCreateProductFromImageIds}
             />
@@ -1783,6 +1795,22 @@ const handleSelectBatch = useCallback((id: string) => {
         onProductsChanged={() => {
           refetchProducts();
           refetchDeletedProducts();
+        }}
+      />
+
+      {/* Deleted Images Panel */}
+      <DeletedImagesPanel
+        open={showDeletedImages}
+        onClose={() => setShowDeletedImages(false)}
+        deletedImages={deletedImages}
+        onRecover={recoverImage}
+        onPermanentDelete={permanentlyDeleteImage}
+        onEmptyTrash={emptyImageTrash}
+        onRecoverAll={recoverAllImages}
+        onImagesChanged={() => {
+          refetchProducts();
+          refetchDeletedImages();
+          clearCache();
         }}
       />
     </AppLayout>
