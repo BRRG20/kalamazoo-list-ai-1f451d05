@@ -269,9 +269,9 @@ serve(async (req) => {
 
     console.log(`Starting AI model image expansion for product ${productId}`);
 
-    // Calculate how many model images to generate
+    // Calculate how many model images to generate - LIMIT TO 3 to avoid timeout
     const existingCount = [frontImageUrl, backImageUrl].filter(Boolean).length;
-    const toGenerate = Math.max(0, Math.min(targetCount - existingCount, 6)); // Max 6 model images
+    const toGenerate = Math.max(0, Math.min(targetCount - existingCount, 3)); // Max 3 model images per call to avoid timeout
     
     console.log(`Existing: ${existingCount}, Target: ${targetCount}, To generate: ${toGenerate}`);
 
@@ -292,41 +292,50 @@ serve(async (req) => {
     
     const generatedImages: { type: string; url: string }[] = [];
 
-    // Generate model images
+    // Generate model images - using Promise.all for parallel generation (faster)
+    const generatePromises = [];
+    
     for (let i = 0; i < toGenerate; i++) {
       const model = shuffledModels[i % shuffledModels.length];
       const pose = shuffledPoses[i % shuffledPoses.length];
 
-      console.log(`Generating model image ${i + 1}/${toGenerate}: ${model.name} in ${pose.id} pose...`);
+      console.log(`Queuing model image ${i + 1}/${toGenerate}: ${model.name} in ${pose.id} pose...`);
       
-      const base64Image = await generateModelImage(
-        frontImageUrl,
-        model,
-        pose,
-        apiKey
+      generatePromises.push(
+        (async () => {
+          const base64Image = await generateModelImage(
+            frontImageUrl,
+            model,
+            pose,
+            apiKey
+          );
+
+          if (base64Image) {
+            // Upload to storage
+            const publicUrl = await uploadBase64ToStorage(
+              base64Image,
+              productId,
+              `${model.id}_${pose.id}`,
+              supabaseUrl,
+              supabaseKey
+            );
+
+            if (publicUrl) {
+              console.log(`Successfully generated and uploaded model image: ${model.name}/${pose.id}`);
+              return { type: `model_${model.id}_${pose.id}`, url: publicUrl };
+            }
+          }
+          console.warn(`Failed to generate model image: ${model.name}/${pose.id}`);
+          return null;
+        })()
       );
+    }
 
-      if (base64Image) {
-        // Upload to storage
-        const publicUrl = await uploadBase64ToStorage(
-          base64Image,
-          productId,
-          `${model.id}_${pose.id}`,
-          supabaseUrl,
-          supabaseKey
-        );
-
-        if (publicUrl) {
-          generatedImages.push({ type: `model_${model.id}_${pose.id}`, url: publicUrl });
-          console.log(`Successfully generated and uploaded model image: ${model.name}/${pose.id}`);
-        }
-      } else {
-        console.warn(`Failed to generate model image: ${model.name}/${pose.id}`);
-      }
-
-      // Delay between generations to avoid rate limits
-      if (i < toGenerate - 1) {
-        await new Promise(r => setTimeout(r, 1500));
+    // Wait for all generations to complete in parallel
+    const results = await Promise.all(generatePromises);
+    for (const result of results) {
+      if (result) {
+        generatedImages.push(result);
       }
     }
 
