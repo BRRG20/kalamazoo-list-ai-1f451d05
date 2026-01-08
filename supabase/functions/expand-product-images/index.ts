@@ -17,65 +17,65 @@ interface RequestBody {
 
 const MAX_RETRIES = 2;
 
-// Close-up shot types for product detail expansion
+// Close-up shot types - AI will crop/zoom into specific areas of the SAME source image
 const CLOSE_UP_SHOTS = [
   {
     id: 'fabric_texture',
     name: 'Fabric Texture Close-up',
-    prompt: `Generate a CLOSE-UP photograph showing the fabric texture and weave of this garment.
+    prompt: `TASK: Create a CROPPED close-up view of this exact garment's fabric texture.
 
-REQUIREMENTS:
-- Extreme close-up of the fabric material (macro-style shot)
-- Show the actual weave pattern, thread texture, and material quality
-- Natural lighting that reveals fabric depth and texture
-- Fill the entire frame with fabric detail
-- Plain neutral background where fabric edges are visible
-- If there's any print or pattern, show how it looks up close
+CRITICAL INSTRUCTION - SAME IMAGE ONLY:
+You must create a zoomed/cropped view from THIS EXACT source image.
+DO NOT generate a new garment or create any new imagery.
+DO NOT change any colors, patterns, textures, or details.
+This is a CROP operation, not a generation operation.
 
-CRITICAL - EXACT REPLICATION:
-- The fabric color MUST match the source image exactly
-- The texture/weave pattern MUST be identical to the source
-- If fabric is worn, pilled, or faded - show it exactly as-is
-- NO enhancement, NO smoothing, NO color correction
-- This must look like a real photo taken of the actual item`,
+CROP AREA: Focus on the main body fabric area (chest/torso region)
+- Zoom in to show fabric weave, texture, and material quality
+- The cropped area should fill the frame
+- Maintain exact pixel-perfect colors from source
+- Keep any wear, pilling, or imperfections exactly as they appear
+
+OUTPUT: A cropped/zoomed section of the source image showing fabric detail.`,
   },
   {
     id: 'collar_neckline',
     name: 'Collar/Neckline Detail',
-    prompt: `Generate a CLOSE-UP photograph of the collar, neckline, or neck area of this garment.
+    prompt: `TASK: Create a CROPPED close-up view of this exact garment's collar/neckline area.
 
-REQUIREMENTS:
-- Focused shot of the collar/neckline construction
-- Show stitching quality, collar shape, and construction details
-- Include any buttons, zippers, or closures in this area
-- Soft studio lighting to show depth and form
-- Lay flat or on form to show the detail clearly
+CRITICAL INSTRUCTION - SAME IMAGE ONLY:
+You must create a zoomed/cropped view from THIS EXACT source image.
+DO NOT generate a new garment or create any new imagery.
+DO NOT change any colors, patterns, textures, or details.
+This is a CROP operation, not a generation operation.
 
-CRITICAL - EXACT REPLICATION:
-- Colors MUST match the source image exactly
-- Stitching and construction details must be accurate
-- If there's wear on the collar - show it exactly
-- NO enhancement, NO smoothing, NO idealization
-- This must look like a real product photo`,
+CROP AREA: Focus on the collar, neckline, or top portion of the garment
+- Zoom in to show collar construction, stitching, and details
+- Include any buttons, zippers, or closures visible in this area
+- Maintain exact pixel-perfect colors from source
+- Keep any wear or imperfections exactly as they appear
+
+OUTPUT: A cropped/zoomed section of the source image showing collar/neckline detail.`,
   },
   {
-    id: 'label_branding',
-    name: 'Label/Brand Detail',
-    prompt: `Generate a CLOSE-UP photograph showing the label, brand tag, or any branding elements on this garment.
+    id: 'print_detail',
+    name: 'Print/Graphic Detail',
+    prompt: `TASK: Create a CROPPED close-up view of any print, graphic, or logo on this exact garment.
 
-REQUIREMENTS:
-- Clear, readable shot of the main label/tag
-- Show brand name, size, care instructions if visible
-- Good lighting to ensure text is legible
-- Include any embroidered logos or printed branding
-- If no visible label, show the inside neckline/collar area
+CRITICAL INSTRUCTION - SAME IMAGE ONLY:
+You must create a zoomed/cropped view from THIS EXACT source image.
+DO NOT generate a new garment or create any new imagery.
+DO NOT change any colors, patterns, textures, or details.
+This is a CROP operation, not a generation operation.
 
-CRITICAL - EXACT REPLICATION:
-- Text on labels must be accurate to what's shown in source
-- Colors and fonts must match exactly
-- Show any wear, fading, or imperfections on labels as-is
-- NO inventing brand names or labels not in source
-- This must look like a real photo of the actual label`,
+CROP AREA: Focus on the main graphic, print, logo, or pattern
+- Zoom in to show the design details clearly
+- If there's text, make sure it's readable
+- If there's no graphic, focus on any pattern or distinctive feature
+- Maintain exact pixel-perfect colors from source
+- Keep any cracking, fading, or wear exactly as they appear
+
+OUTPUT: A cropped/zoomed section of the source image showing the print/graphic detail.`,
   },
 ];
 
@@ -224,12 +224,13 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Starting close-up image expansion for product ${productId}`);
+    console.log(`Starting close-up expansion for product ${productId}`);
+    console.log(`Using SAME source image for all crops: ${frontImageUrl.substring(0, 50)}...`);
 
     const generatedImages: { type: string; url: string }[] = [];
 
-    // Generate all 3 close-up shots in parallel for speed
-    console.log(`Generating 3 close-up shots in parallel...`);
+    // Generate all 3 close-up crops in parallel
+    console.log(`Generating 3 close-up crops from the SAME source image...`);
     
     const generatePromises = CLOSE_UP_SHOTS.map(async (shotType) => {
       console.log(`Queuing ${shotType.name}...`);
@@ -250,11 +251,11 @@ serve(async (req) => {
         );
 
         if (publicUrl) {
-          console.log(`Successfully generated: ${shotType.name}`);
+          console.log(`Successfully created: ${shotType.name}`);
           return { type: shotType.id, url: publicUrl };
         }
       }
-      console.warn(`Failed to generate: ${shotType.name}`);
+      console.warn(`Failed to create: ${shotType.name}`);
       return null;
     });
 
@@ -265,7 +266,7 @@ serve(async (req) => {
       }
     }
 
-    console.log(`Close-up expansion complete. Generated ${generatedImages.length} images.`);
+    console.log(`Close-up expansion complete. Generated ${generatedImages.length} cropped images.`);
 
     return new Response(
       JSON.stringify({ 
