@@ -8,7 +8,7 @@ const corsHeaders = {
 
 interface RequestBody {
   productId: string;
-  frontImageUrl: string;
+  frontImageUrl: string; // The MODEL image to use as source (not the flat product photo)
   backImageUrl?: string;
   labelImageUrl?: string;
   detailImageUrl?: string;
@@ -17,65 +17,129 @@ interface RequestBody {
 
 const MAX_RETRIES = 2;
 
-// Close-up shot types - AI will crop/zoom into specific areas of the SAME source image
+// REALISM BLOCK - Shared across all close-up generations
+const REALISM_BLOCK = `
+🚨 HUMAN REALISM REQUIREMENTS (IF MODEL VISIBLE) 🚨
+If any part of a human model is visible in the crop:
+- Preserve natural skin texture with visible pores
+- NO airbrushing, NO smoothing, NO beauty filters
+- Hands: realistic joints, visible knuckle lines, natural nail texture
+- NO glossy/waxy skin appearance
+- Keep natural imperfections visible
+
+🔐 IDENTITY LOCK (IF MODEL VISIBLE):
+- The person in the output MUST be the SAME person from the source image
+- NEVER swap to a different person or gender
+- Maintain same skin tone, same face structure, same body
+
+⚠️ DO NOT ZOOM INTO FACE - Close-ups are PRODUCT-LED, not face-focused.
+`;
+
+// PRODUCT LOCK - Shared across all generations
+const PRODUCT_LOCK = `
+🔒 PRODUCT ACCURACY LOCK 🔒
+The GARMENT must remain IDENTICAL to source:
+- EXACT colour (no shifting, no saturation change)
+- EXACT texture (matte stays matte, no gloss/shine)
+- EXACT graphics/prints (copy character-for-character)
+- EXACT wear/fading (if vintage, show vintage)
+- NO hallucinated elements (no invented logos, no added pockets, no new seams)
+- NO "improving" or "beautifying" the fabric
+`;
+
+// Three DISTINCT close-up shot types for strong e-commerce angles
+// These MUST be clearly different compositions, not minor variations
 const CLOSE_UP_SHOTS = [
   {
-    id: 'fabric_texture',
-    name: 'Fabric Texture Close-up',
-    prompt: `TASK: Create a CROPPED close-up view of this exact garment's fabric texture.
+    id: 'detail_closeup',
+    name: '1) Detail Close-up (Graphic/Print/Label)',
+    prompt: `TASK: Create a DETAIL CLOSE-UP focusing on the most distinctive feature of this garment.
 
-CRITICAL INSTRUCTION - SAME IMAGE ONLY:
-You must create a zoomed/cropped view from THIS EXACT source image.
-DO NOT generate a new garment or create any new imagery.
-DO NOT change any colors, patterns, textures, or details.
-This is a CROP operation, not a generation operation.
+${REALISM_BLOCK}
+${PRODUCT_LOCK}
 
-CROP AREA: Focus on the main body fabric area (chest/torso region)
-- Zoom in to show fabric weave, texture, and material quality
-- The cropped area should fill the frame
-- Maintain exact pixel-perfect colors from source
-- Keep any wear, pilling, or imperfections exactly as they appear
+🎯 TARGET AREA - Choose the BEST option:
+1. If graphic/print exists → zoom into it prominently (fill 60-80% of frame)
+2. If logo/text exists → center it clearly, make readable
+3. If pattern/texture → show representative area with clear detail
+4. If branding/label on garment (NOT tag) → focus there
+5. If plain garment → focus on best construction detail (stitching, collar, button)
 
-OUTPUT: A cropped/zoomed section of the source image showing fabric detail.`,
+COMPOSITION REQUIREMENTS:
+- This is an E-COMMERCE HERO close-up - must be SELLABLE quality
+- Fill the frame with the detail - no excessive negative space
+- Sharp focus on the feature
+- This should be a "front-facing detail shot" - looking straight at the detail
+
+⚠️ DO NOT:
+- Zoom into the model's face
+- Crop awkwardly mid-limb
+- Show blurry or out-of-focus areas
+- Add any elements not in the source
+- Change colors, textures, or graphics
+
+OUTPUT: A crisp, product-focused close-up that highlights the most sellable detail.`
   },
   {
-    id: 'collar_neckline',
-    name: 'Collar/Neckline Detail',
-    prompt: `TASK: Create a CROPPED close-up view of this exact garment's collar/neckline area.
+    id: 'upper_closeup',
+    name: '2) Upper Close-up (Neckline/Shoulder/Chest)',
+    prompt: `TASK: Create an UPPER BODY close-up focusing on neckline, shoulder, and chest area.
 
-CRITICAL INSTRUCTION - SAME IMAGE ONLY:
-You must create a zoomed/cropped view from THIS EXACT source image.
-DO NOT generate a new garment or create any new imagery.
-DO NOT change any colors, patterns, textures, or details.
-This is a CROP operation, not a generation operation.
+${REALISM_BLOCK}
+${PRODUCT_LOCK}
 
-CROP AREA: Focus on the collar, neckline, or top portion of the garment
-- Zoom in to show collar construction, stitching, and details
-- Include any buttons, zippers, or closures visible in this area
-- Maintain exact pixel-perfect colors from source
-- Keep any wear or imperfections exactly as they appear
+🎯 TARGET AREA: Upper torso - neckline to mid-chest
+- Show collar construction and fit
+- Include shoulder seam and shoulder fit
+- Show neckline shape clearly (crew, V-neck, collar, etc.)
+- If buttons/closures at neck → include them
+- If hood/zipper → show the detail
 
-OUTPUT: A cropped/zoomed section of the source image showing collar/neckline detail.`,
+COMPOSITION REQUIREMENTS:
+- Frame from just above shoulders to mid-chest (chest to shoulder crop)
+- Can include partial face (chin area) but do NOT focus on face
+- This is about HOW THE GARMENT FITS at the neckline
+- Strong e-commerce angle - like a product zoom on a shopping site
+
+⚠️ DO NOT:
+- Make this a face portrait
+- Zoom into face features
+- Crop at awkward points
+- Change the garment's appearance
+- Add glossy/CGI finish
+
+OUTPUT: A strong upper-body crop showing neckline and shoulder fit.`
   },
   {
-    id: 'print_detail',
-    name: 'Print/Graphic Detail',
-    prompt: `TASK: Create a CROPPED close-up view of any print, graphic, or logo on this exact garment.
+    id: 'lower_closeup',
+    name: '3) Lower Close-up (Hem/Cuff/Pocket/Side)',
+    prompt: `TASK: Create a LOWER BODY or EDGE DETAIL close-up focusing on hem, cuff, pocket, or side seam.
 
-CRITICAL INSTRUCTION - SAME IMAGE ONLY:
-You must create a zoomed/cropped view from THIS EXACT source image.
-DO NOT generate a new garment or create any new imagery.
-DO NOT change any colors, patterns, textures, or details.
-This is a CROP operation, not a generation operation.
+${REALISM_BLOCK}
+${PRODUCT_LOCK}
 
-CROP AREA: Focus on the main graphic, print, logo, or pattern
-- Zoom in to show the design details clearly
-- If there's text, make sure it's readable
-- If there's no graphic, focus on any pattern or distinctive feature
-- Maintain exact pixel-perfect colors from source
-- Keep any cracking, fading, or wear exactly as they appear
+🎯 TARGET AREA - Choose the BEST visible option:
+1. HEM → show bottom edge of garment, stitching, finish
+2. CUFF → sleeve end, ribbing, button if present
+3. POCKET → show pocket construction, position, any details
+4. SIDE SEAM → show how garment is constructed at sides
+5. WAISTBAND → if visible, show elastic/drawstring/button
 
-OUTPUT: A cropped/zoomed section of the source image showing the print/graphic detail.`,
+COMPOSITION REQUIREMENTS:
+- Focus on CONSTRUCTION QUALITY and DETAIL
+- This tells the buyer about garment quality
+- Show fabric texture in this area
+- Include any hardware (zippers, buttons, rivets)
+- If hands/arms visible → ensure realistic anatomy (5 fingers, natural joints)
+
+⚠️ DO NOT:
+- Make this generic - choose the MOST INTERESTING lower detail
+- Crop awkwardly through hands
+- Show blurry areas
+- Add elements not in source
+- "Improve" worn or vintage details
+
+OUTPUT: A crisp edge/hem/cuff detail that shows garment quality and construction.`
   },
 ];
 
@@ -86,6 +150,8 @@ async function generateCloseUpImage(
   attempt: number = 1
 ): Promise<string | null> {
   try {
+    console.log(`Generating ${shotType.name}...`);
+    
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -142,6 +208,12 @@ async function generateCloseUpImage(
       }
     }
 
+    if (generatedImage) {
+      console.log(`Successfully generated ${shotType.name}`);
+    } else {
+      console.warn(`No image returned for ${shotType.name}`);
+    }
+
     return generatedImage || null;
   } catch (error) {
     console.error(`Error generating ${shotType.id}:`, error);
@@ -190,6 +262,7 @@ async function uploadBase64ToStorage(
       .from('product-images')
       .getPublicUrl(fileName);
 
+    console.log(`Uploaded ${imageType} to storage: ${publicUrl.publicUrl.substring(0, 60)}...`);
     return publicUrl.publicUrl;
   } catch (error) {
     console.error('Upload error:', error);
@@ -225,16 +298,14 @@ serve(async (req) => {
     }
 
     console.log(`Starting close-up expansion for product ${productId}`);
-    console.log(`Using SAME source image for all crops: ${frontImageUrl.substring(0, 50)}...`);
+    console.log(`Source image (model): ${frontImageUrl.substring(0, 60)}...`);
+    console.log(`Generating 3 DISTINCT close-up compositions...`);
 
     const generatedImages: { type: string; url: string }[] = [];
 
-    // Generate all 3 close-up crops in parallel
-    console.log(`Generating 3 close-up crops from the SAME source image...`);
-    
+    // Generate all 3 close-up shots in parallel
+    // These MUST be distinctly different compositions
     const generatePromises = CLOSE_UP_SHOTS.map(async (shotType) => {
-      console.log(`Queuing ${shotType.name}...`);
-      
       const base64Image = await generateCloseUpImage(
         frontImageUrl,
         shotType,
@@ -251,7 +322,6 @@ serve(async (req) => {
         );
 
         if (publicUrl) {
-          console.log(`Successfully created: ${shotType.name}`);
           return { type: shotType.id, url: publicUrl };
         }
       }
@@ -266,7 +336,7 @@ serve(async (req) => {
       }
     }
 
-    console.log(`Close-up expansion complete. Generated ${generatedImages.length} cropped images.`);
+    console.log(`Close-up expansion complete. Generated ${generatedImages.length}/3 images.`);
 
     return new Response(
       JSON.stringify({ 

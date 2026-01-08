@@ -506,53 +506,105 @@ IMPORTANT: Generate the SAME PERSON every time this seed ID is used. This is lik
   // Build the prompt based on whether we're styling the outfit
   let prompt: string;
   
+  // REALISM BLOCK - Apply to all generations to prevent AI-looking outputs
+  const REALISM_BLOCK = `
+🚨🚨🚨 HUMAN REALISM REQUIREMENTS (MANDATORY) 🚨🚨🚨
+The model MUST look like a REAL HUMAN being photographed, NOT an AI-generated image.
+
+SKIN TEXTURE (NON-NEGOTIABLE):
+- Preserve natural skin texture with visible pores, slight unevenness, real micro-details
+- NO airbrushing, NO smoothing, NO beauty filters
+- Skin should have natural variations in tone, not uniform/plastic
+- Include natural imperfections: subtle veins, slight redness, skin texture variation
+- Hands must have visible knuckle lines, natural nail texture, realistic finger joints
+- Neck must show natural tendons and realistic shadow
+
+FACE REALISM (CRITICAL):
+- Avoid overly symmetrical "perfect" AI faces
+- Keep natural facial asymmetry that real humans have
+- Eyes must have realistic reflections, natural tear film, visible blood vessels
+- NO over-sharpened features, NO aggressive beauty enhancement
+- Eyebrows should be natural, not perfectly groomed digital brows
+- Lips should have natural texture, not glossy/smooth CGI lips
+
+LIGHTING & FINISH (HARD RULES):
+- Use realistic STUDIO PHOTOGRAPHY lighting, not cinematic AI polish
+- Shadows must be soft and natural, not dramatic/theatrical
+- NO HDR effect, NO over-processed highlights
+- Skin should have MATTE/natural finish, not dewy/glowing AI skin
+- NO bloom effects or artificial glow around edges
+
+ANATOMICAL ACCURACY:
+- Hands: 5 fingers, natural proportions, realistic joints and creases
+- Ears: Properly shaped, realistic cartilage visible
+- Hair: Individual strands visible, natural movement, not plastic-looking
+- Neck: Realistic length and proportions, visible tendons when appropriate
+
+THE GOAL: Output should be INDISTINGUISHABLE from a real professional photo shoot.
+If it looks "too perfect" or "AI-generated" → you have FAILED the task.
+`;
+
+  // IDENTITY LOCK BLOCK - Ensure same model across all images
+  const IDENTITY_LOCK = `
+🔐🔐🔐 ABSOLUTE IDENTITY LOCK (ZERO TOLERANCE) 🔐🔐🔐
+The model specified below is the ONLY person who can appear in this image.
+
+NEVER CHANGE:
+❌ DO NOT generate a DIFFERENT PERSON
+❌ DO NOT change the GENDER under any circumstances
+❌ DO NOT swap faces for close-ups or alternates
+❌ DO NOT "improve" or "beautify" the face beyond natural
+❌ DO NOT create a composite of different people
+
+IDENTITY MUST MATCH:
+✅ Same face structure, same bone structure, same features
+✅ Same skin tone and complexion
+✅ Same hair color and style (can have minor styling variations)
+✅ Same age range (within 2 years)
+✅ Same body type and proportions
+
+This is like hiring ONE real model for a photo session. Every image from this session features THE SAME PERSON - recognizable across all shots.
+
+If the model description says "female" → output MUST be female
+If the model description says "male" → output MUST be male
+There are NO EXCEPTIONS to gender. Zero tolerance.
+`;
+
   if (styleOutfit) {
     const stylingDirection = OUTFIT_STYLE_DESCRIPTIONS[outfitStyle] || OUTFIT_STYLE_DESCRIPTIONS['stylish_casual'];
     
     prompt = `TASK: Place this EXACT garment onto a specific fashion model AND style a complete outfit around it for e-commerce product photography.
 
+${REALISM_BLOCK}
+
+${IDENTITY_LOCK}
+
 🔒🔒🔒 HARD RULE: CLOTHING LOCK (NON-NEGOTIABLE) 🔒🔒🔒
 The clothing must NOT change. This is an e-commerce image - customers must recognize the exact item they will receive.
 
-KEEP THE EXACT ORIGINAL:
-✅ Colour - exact same shades, no color correction
-✅ Fabric texture - cotton looks like cotton, not silk or vinyl
-✅ Fabric weight - heavy stays heavy, light stays light
-✅ Print / graphic - every detail pixel-perfect
-✅ Finish - matte stays matte, no added shine
+PRODUCT ACCURACY - ABSOLUTE SOURCE OF TRUTH:
+The ORIGINAL PRODUCT PHOTO (input image) is the ground truth for:
+- Exact colour (no shifting, no "correction", no saturation changes)
+- Exact texture (matte stays matte, cotton stays cotton, no vinyl/plastic look)
+- Exact fabric behavior (how it drapes, folds, wrinkles)
+- Exact graphics/prints (pixel-perfect, character-for-character text)
+- Exact wear/fading (if vintage/worn, SHOW IT as-is)
+- Exact stitching and construction details
 
-ABSOLUTELY FORBIDDEN (ZERO TOLERANCE):
-❌ NO glossing or artificial shine
-❌ NO "4D", hyper-rendered, plastic, or CGI finishes
-❌ NO fabric smoothing or artificial enhancement
-❌ NO texture "improvement" or stylisation
-❌ NO reinterpreting fabrics (cotton→silk, denim→vinyl, etc.)
-❌ NO "fashion editorial" effects that alter the garment
+ABSOLUTELY FORBIDDEN - GARMENT HALLUCINATIONS:
+❌ NO adding logos, text, or graphics that don't exist in original
+❌ NO removing or altering existing logos/text/graphics
+❌ NO changing print placement or sizing
+❌ NO inventing pockets, seams, zippers, buttons that don't exist
+❌ NO glossing, shinifying, or making fabric look "premium"
+❌ NO smoothing out wrinkles or wear
+❌ NO color "correction" or saturation boost
+❌ NO fabric "upgrade" (cotton→silk, jersey→satin, etc.)
 
-REALISM STANDARD - THE GARMENT MUST LOOK:
-- MATTE / NATURAL (exactly as the fabric appears in reality)
-- PHYSICALLY REAL (not rendered or enhanced)
-- TRUE TO LIFE (exactly how customer would receive it)
-- If WORN → show worn. If FADED → show faded. If VINTAGE → show vintage.
-
-DO NOT "improve", "upgrade", or "beautify" the garment in ANY way.
-The customer must trust that what they see is what they get.
-
-⚠️ CRITICAL: GARMENT ACCURACY IS NON-NEGOTIABLE ⚠️
-The garment in the input image is the SINGLE SOURCE OF TRUTH. You MUST:
-- COPY THE GARMENT EXACTLY AS IT APPEARS - pixel for pixel
-- ALL TEXT ON THE GARMENT MUST BE COPIED CHARACTER-FOR-CHARACTER
-- If the front says "WANT", output MUST say "WANT" - no alternatives, no reinterpretation
-- ALL graphics, logos, prints MUST be copied EXACTLY - same position, same size, same colors
-- DO NOT alter, reimagine, or "improve" ANY text or graphics
-- If you cannot read text clearly, copy it as visible marks rather than inventing text
-
-THE HERO PRODUCT (THIS IS THE MAIN FOCUS):
-The garment in the input image is the HERO ITEM. It MUST be:
-- PIXEL-PERFECT copy of the input image
-- Completely unaltered - same colors, patterns, logos, text, graphics
-- The dominant visual element of the image
-- Clearly visible and not obscured by other items
+THE GARMENT MUST LOOK:
+- MATTE / NATURAL (exactly as fabric appears in reality)
+- PHYSICALLY REAL (not rendered, not enhanced)
+- WORN as shown (if faded→show faded, if pilled→show pilled)
 
 ${consistencyInstruction}
 
@@ -565,78 +617,51 @@ STYLING RULES:
 1. The HERO GARMENT (input image) is the STAR - other items support it, don't compete
 2. Add complementary items: trousers/jeans, footwear, jacket/layers if appropriate
 3. VARY the outfit styling each generation for buyer choice
-4. Accessories encouraged: watches, bracelets, rings, subtle jewelry, quality bags
-5. Colors of complementary items MUST work with the hero garment
-6. Everything should look like something a stylish person would actually wear
+4. Colors of complementary items MUST work with the hero garment
 
-⚠️ ABSOLUTE REQUIREMENTS FOR THE HERO GARMENT (ZERO TOLERANCE):
-1. COPY ALL TEXT EXACTLY: If it says "WANT", output says "WANT" - CHARACTER FOR CHARACTER
-2. COPY ALL GRAPHICS EXACTLY: Same position, same size, same colors, same details
-3. COPY EXACTLY: every color, shade, pattern, texture from the input image
-4. COPY EXACTLY: all logos, prints - line for line, shape for shape
-5. FABRIC MUST LOOK NATURAL: MATTE finish, no gloss, no artificial shine, no CGI look
-6. The garment must look like a REAL PHOTO of a REAL GARMENT, not a digital render
-7. If fabric is worn/faded/vintage - KEEP IT THAT WAY, do not "fix" it
+⚠️ FINAL QUALITY CHECK:
+Before outputting, verify:
+1. Does the model look like a REAL human being? (not AI-generated looking)
+2. Is it the SAME person as specified? (same face, same gender)
+3. Does the garment look EXACTLY like the input? (color, texture, graphics)
+4. Is the skin texture natural? (pores visible, not airbrushed)
+5. Are the hands anatomically correct? (5 fingers, natural joints)
 
-BACKGROUND & LIGHTING (ONLY ALLOWED ADJUSTMENTS):
-✅ Background changes: soft cream/beige gradients, cool grey, warm to cool transitions, studio white
-✅ Professional studio lighting with natural soft shadows
-✅ Lighting must NEVER add shine, change fabric behaviour, or alter colour accuracy
-
-WHAT CAN VARY:
-✅ Background colors and gradients
-✅ Outfit styling and complementary pieces  
-✅ Pose variations within the cool/editorial range
-✅ Expression variations (all within cool/chic/confident range)
-✅ Hair styling variations (always elegant)
-✅ Accessories and finishing touches
-
-WHAT CANNOT CHANGE (NON-NEGOTIABLE):
-❌ The hero garment - must be EXACT copy with NATURAL matte finish
-❌ Any text/graphics on the garment - copy CHARACTER FOR CHARACTER
-❌ Fabric texture, weight, colour, or finish
-❌ The model's core identity (face structure, age range, beauty level)
-
-🔒 FINAL LOCK: If conflict between "Making it look better" vs "Making it look REAL" → ALWAYS CHOOSE REAL. No exceptions.`;
+If any answer is NO → regenerate before outputting.`;
   } else {
     // Product-only mode - just the garment on model
     prompt = `TASK: Place this EXACT garment onto a fashion model for e-commerce product photography.
 
+${REALISM_BLOCK}
+
+${IDENTITY_LOCK}
+
 🔒🔒🔒 HARD RULE: CLOTHING LOCK (NON-NEGOTIABLE) 🔒🔒🔒
 The clothing must NOT change. This is an e-commerce image - customers must recognize the exact item they will receive.
 
-KEEP THE EXACT ORIGINAL:
-✅ Colour - exact same shades, no color correction
-✅ Fabric texture - cotton looks like cotton, not silk or vinyl
-✅ Fabric weight - heavy stays heavy, light stays light
-✅ Print / graphic - every detail pixel-perfect
-✅ Finish - matte stays matte, no added shine
+PRODUCT ACCURACY - ABSOLUTE SOURCE OF TRUTH:
+The ORIGINAL PRODUCT PHOTO (input image) is the ground truth for:
+- Exact colour (no shifting, no "correction", no saturation changes)
+- Exact texture (matte stays matte, cotton stays cotton, no vinyl/plastic look)
+- Exact fabric behavior (how it drapes, folds, wrinkles)
+- Exact graphics/prints (pixel-perfect, character-for-character text)
+- Exact wear/fading (if vintage/worn, SHOW IT as-is)
+- Exact stitching and construction details
 
-ABSOLUTELY FORBIDDEN (ZERO TOLERANCE):
-❌ NO glossing or artificial shine
-❌ NO "4D", hyper-rendered, plastic, or CGI finishes
-❌ NO fabric smoothing or artificial enhancement
-❌ NO texture "improvement" or stylisation
-❌ NO reinterpreting fabrics (cotton→silk, denim→vinyl, etc.)
-❌ NO "fashion editorial" effects that alter the garment
+ABSOLUTELY FORBIDDEN - GARMENT HALLUCINATIONS:
+❌ NO adding logos, text, or graphics that don't exist in original
+❌ NO removing or altering existing logos/text/graphics
+❌ NO changing print placement or sizing
+❌ NO inventing pockets, seams, zippers, buttons that don't exist
+❌ NO glossing, shinifying, or making fabric look "premium"
+❌ NO smoothing out wrinkles or wear
+❌ NO color "correction" or saturation boost
+❌ NO fabric "upgrade" (cotton→silk, jersey→satin, etc.)
 
-REALISM STANDARD - THE GARMENT MUST LOOK:
-- MATTE / NATURAL (exactly as the fabric appears in reality)
-- PHYSICALLY REAL (not rendered or enhanced)
-- TRUE TO LIFE (exactly how customer would receive it)
-- If WORN → show worn. If FADED → show faded. If VINTAGE → show vintage.
-
-DO NOT "improve", "upgrade", or "beautify" the garment in ANY way.
-The customer must trust that what they see is what they get.
-
-⚠️ CRITICAL: GARMENT ACCURACY IS NON-NEGOTIABLE ⚠️
-The garment in the input image is the SINGLE SOURCE OF TRUTH. You MUST:
-- COPY THE GARMENT EXACTLY AS IT APPEARS - pixel for pixel
-- ALL TEXT ON THE GARMENT MUST BE COPIED CHARACTER-FOR-CHARACTER
-- If the front says "WANT", output MUST say "WANT" - no alternatives, no reinterpretation
-- ALL graphics, logos, prints MUST be copied EXACTLY - same position, same size, same colors
-- DO NOT alter, reimagine, or "improve" ANY text or graphics
-- If you cannot read text clearly, copy it as visible marks rather than inventing text
+THE GARMENT MUST LOOK:
+- MATTE / NATURAL (exactly as fabric appears in reality)
+- PHYSICALLY REAL (not rendered, not enhanced)
+- WORN as shown (if faded→show faded, if pilled→show pilled)
 
 ${consistencyInstruction}
 
@@ -646,34 +671,23 @@ ${poseDescription}
 FIT STYLE:
 ${fitInstructions}
 
-⚠️ ABSOLUTE REQUIREMENTS FOR THE GARMENT (ZERO TOLERANCE):
-1. COPY ALL TEXT EXACTLY: If garment says "WANT", output says "WANT" - CHARACTER FOR CHARACTER
-2. COPY ALL GRAPHICS EXACTLY: Same position, same size, same colors, same details
-3. COPY EXACTLY: every color, shade, pattern, texture from the input image
-4. FABRIC MUST LOOK NATURAL: MATTE finish, no gloss, no artificial shine, no CGI look
-5. The garment must look like a REAL PHOTOGRAPH of a REAL GARMENT, not a digital render
-6. If fabric is worn/faded/vintage - KEEP IT THAT WAY, do not "fix" it
-
 BACKGROUND & LIGHTING (ONLY ALLOWED ADJUSTMENTS):
-✅ Background changes: soft cream/beige gradients, cool grey, warm to cool transitions, studio white
+✅ Background: soft cream/beige gradients, cool grey, warm to cool transitions, studio white
 ✅ Professional studio lighting with natural soft shadows
 ✅ Lighting must NEVER add shine, change fabric behaviour, or alter colour accuracy
 
-WHAT CAN VARY:
-✅ Background colors and gradients
-✅ Pose variations within the cool/editorial range
-✅ Expression variations (all within cool/chic/confident range)
-✅ Hair styling variations (always elegant)
+⚠️ FINAL QUALITY CHECK:
+Before outputting, verify:
+1. Does the model look like a REAL human being? (not AI-generated looking)
+2. Is it the SAME person as specified? (same face, same gender)
+3. Does the garment look EXACTLY like the input? (color, texture, graphics)
+4. Is the skin texture natural? (pores visible, not airbrushed)
+5. Are the hands anatomically correct? (5 fingers, natural joints)
+6. Does skin have natural imperfections? (not plastic/waxy)
 
-WHAT CANNOT CHANGE (NON-NEGOTIABLE):
-❌ The garment - must be EXACT copy of input with NATURAL matte finish
-❌ Any text/graphics on the garment - copy CHARACTER FOR CHARACTER
-❌ Fabric texture, weight, colour, or finish
-❌ The model's core identity (face structure, age range 30-35, beauty level)
+If any answer is NO → regenerate before outputting.
 
-🔒 FINAL LOCK: If conflict between "Making it look better" vs "Making it look REAL" → ALWAYS CHOOSE REAL. No exceptions.
-
-The input image is your ONLY reference for the garment. Copy it EXACTLY - especially all text and graphics. Generate VARIATIONS in pose, expression, and background.`;
+The input image is your ONLY reference for the garment. Copy it EXACTLY - especially all text and graphics.`;
   }
 
   const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
