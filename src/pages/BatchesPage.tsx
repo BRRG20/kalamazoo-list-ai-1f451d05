@@ -978,17 +978,40 @@ const handleSelectBatch = useCallback((id: string) => {
   // Generate AI for a single product
   const handleGenerateSingleProduct = useCallback(async (productId: string) => {
     const product = products.find(p => p.id === productId);
-    if (!product) return;
+    if (!product) {
+      console.log('[GENAI] ProductCard click - product not found', { productId });
+      return;
+    }
+    
+    const images = await fetchImagesForProduct(productId);
+    console.log('[GENAI] ProductCard click', {
+      productId,
+      batchId: selectedBatchId,
+      hasImages: images.length > 0,
+      endpoint: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-listing`
+    });
     
     const result = await aiGeneration.generateSingleProduct(product);
-    if (!result.success && !result.skipped) {
+    
+    console.log('[GENAI] ProductCard - hook response', {
+      productId,
+      success: result.success,
+      skipped: result.skipped,
+      noImages: result.noImages,
+      error: result.error
+    });
+    
+    if (result.success) {
+      // Refresh products to show updated fields
+      await refetchProducts();
+    } else if (!result.skipped) {
       if (result.noImages) {
         toast.error('This product has no images to analyze.');
       } else {
         toast.error(`AI generation failed: ${result.error || 'Unknown error'}`);
       }
     }
-  }, [products, aiGeneration]);
+  }, [products, aiGeneration, selectedBatchId, fetchImagesForProduct, refetchProducts]);
 
   // Undo AI for a single product
   const handleUndoSingleProduct = useCallback(async (productId: string) => {
@@ -1307,16 +1330,36 @@ const handleSelectBatch = useCallback((id: string) => {
   }, [deleteImage, clearCache, refetchProducts, refetchDeletedImages]);
 
   const handleGenerateProductAI = useCallback(async (regenerateOnly?: 'title' | 'style_a' | 'style_b' | 'all') => {
-    if (!editingProductId) return;
+    if (!editingProductId) {
+      console.log('[GENAI] DetailPanel click - no editingProductId');
+      return;
+    }
     
     // Prevent double-clicks
     if (isGeneratingDetailPanel) {
-      console.warn('[AI Detail] Already generating, ignoring request');
+      console.warn('[GENAI] DetailPanel - already generating, ignoring request');
       return;
     }
     
     const product = products.find(p => p.id === editingProductId);
-    if (!product) return;
+    if (!product) {
+      console.log('[GENAI] DetailPanel click - product not found', { editingProductId });
+      return;
+    }
+    
+    // Check for images
+    const images = await fetchImagesForProduct(editingProductId);
+    if (images.length === 0) {
+      toast.error('Add at least 1 image before generating AI');
+      return;
+    }
+    
+    console.log('[GENAI] DetailPanel click', { 
+      productId: editingProductId, 
+      batchId: selectedBatchId,
+      hasImages: images.length > 0,
+      regenerateOnly 
+    });
     
     // Set loading states
     setIsGeneratingDetailPanel(true);
@@ -1325,99 +1368,87 @@ const handleSelectBatch = useCallback((id: string) => {
     }
     
     try {
-      // Get product images for AI context
-      const images = await fetchImagesForProduct(editingProductId);
-      
-      if (images.length === 0) {
-        toast.error('This product has no images to analyze.');
-        return;
-      }
-      
-      const imageUrls = images.slice(0, 2).map(img => img.url);
-      
-      console.log(`[AI Detail] Generating for product ${editingProductId} (regenerateOnly: ${regenerateOnly})`);
-      
-      // Call the edge function
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-listing`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
-        body: JSON.stringify({ 
-          product, 
-          imageUrls,
-          regenerateOnly: regenerateOnly === 'all' ? undefined : regenerateOnly
-        }),
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errorData.error || 'Generation failed');
-      }
-      
-      const data = await response.json();
-      const generated = data.generated;
-      
-      // Update product with generated content (ONLY for this specific product)
-      const updates: Partial<Product> = { status: 'generated' };
-      
-      if (!regenerateOnly || regenerateOnly === 'all' || regenerateOnly === 'title') {
-        if (generated.title) updates.title = generated.title;
-      }
-      if (!regenerateOnly || regenerateOnly === 'all' || regenerateOnly === 'style_a') {
-        if (generated.description_style_a) updates.description_style_a = generated.description_style_a;
-      }
-      if (!regenerateOnly || regenerateOnly === 'all' || regenerateOnly === 'style_b') {
-        if (generated.description_style_b) updates.description_style_b = generated.description_style_b;
-      }
+      // For 'all' or undefined, use the hook (same path as ProductCard)
       if (!regenerateOnly || regenerateOnly === 'all') {
-        if (generated.shopify_tags) updates.shopify_tags = generated.shopify_tags;
-        if (generated.etsy_tags) updates.etsy_tags = generated.etsy_tags;
-        if (generated.collections_tags) updates.collections_tags = generated.collections_tags;
+        console.log('[GENAI] DetailPanel - using hook generateSingleProduct', {
+          productId: editingProductId,
+          endpoint: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-listing`
+        });
         
-        // CRITICAL: Also update AI-inferred fields (only if not already set on product)
-        if (!product.garment_type && generated.garment_type) {
-          updates.garment_type = generated.garment_type;
+        const result = await aiGeneration.generateSingleProduct(product);
+        
+        if (result.success) {
+          console.log('[GENAI] DetailPanel - hook success', { productId: editingProductId });
+          toast.success('AI generation complete');
+          // Refresh products to show updated fields
+          await refetchProducts();
+        } else if (result.noImages) {
+          toast.error('This product has no images to analyze.');
+        } else if (!result.skipped) {
+          toast.error(`AI generation failed: ${result.error || 'Unknown error'}`);
         }
-        if (!product.fit && generated.fit) {
-          updates.fit = generated.fit;
+      } else {
+        // For specific field regeneration, use direct fetch (preserve existing behavior)
+        console.log('[GENAI] DetailPanel - direct fetch for regenerateOnly', { regenerateOnly });
+        
+        const imageUrls = images.slice(0, 2).map(img => img.url);
+        
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-listing`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({ 
+            product, 
+            imageUrls,
+            regenerateOnly
+          }),
+        });
+        
+        console.log('[GENAI] DetailPanel - direct fetch response', {
+          status: response.status,
+          ok: response.ok
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+          throw new Error(errorData.error || 'Generation failed');
         }
-        if (!product.era && generated.era) {
-          updates.era = generated.era;
+        
+        const data = await response.json();
+        const generated = data.generated;
+        
+        // Update product with generated content (ONLY for this specific product)
+        const updates: Partial<Product> = { status: 'generated' };
+        
+        if (regenerateOnly === 'title' && generated.title) {
+          updates.title = generated.title;
         }
-        if (!product.condition && generated.condition) {
-          updates.condition = generated.condition;
+        if (regenerateOnly === 'style_a' && generated.description_style_a) {
+          updates.description_style_a = generated.description_style_a;
         }
-        if (!product.department && generated.department) {
-          updates.department = generated.department;
+        if (regenerateOnly === 'style_b' && generated.description_style_b) {
+          updates.description_style_b = generated.description_style_b;
         }
-        if (!product.flaws && generated.flaws) {
-          updates.flaws = generated.flaws;
-        }
-        if (!product.made_in && generated.made_in) {
-          updates.made_in = generated.made_in;
-        }
-        if (!product.pattern && generated.pattern) {
-          updates.pattern = generated.pattern;
-        }
+        
+        console.log('[GENAI] DetailPanel - direct fetch updates', Object.keys(updates));
+        
+        await updateProduct(editingProductId, updates);
+        toast.success(`${regenerateOnly.replace('_', ' ')} regenerated`);
+        await refetchProducts();
       }
-      
-      console.log('[AI Detail] Updates to apply:', Object.keys(updates));
-      
-      // updateProduct uses the specific product ID - never affects other products
-      await updateProduct(editingProductId, updates);
-      console.log(`[AI Detail] Successfully updated product ${editingProductId}`);
-      toast.success(regenerateOnly && regenerateOnly !== 'all' ? `${regenerateOnly.replace('_', ' ')} regenerated` : 'AI generation complete');
-      
     } catch (error) {
-      console.error('[AI Detail] Generation error:', error);
+      console.error('[GENAI] DetailPanel - error', {
+        productId: editingProductId,
+        error: error instanceof Error ? error.message : String(error)
+      });
       toast.error(error instanceof Error ? error.message : 'Generation failed. Please try again.');
     } finally {
       setIsGeneratingDetailPanel(false);
       setRegeneratingField(null);
     }
-  }, [editingProductId, products, updateProduct, fetchImagesForProduct, isGeneratingDetailPanel]);
+  }, [editingProductId, products, updateProduct, fetchImagesForProduct, isGeneratingDetailPanel, aiGeneration, selectedBatchId, refetchProducts]);
 
   const getProductImagesCallback = useCallback(async (productId: string) => {
     return await fetchImagesForProduct(productId);

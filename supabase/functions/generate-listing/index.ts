@@ -207,22 +207,36 @@ Respond with ONLY valid JSON (no markdown, no code blocks):
 
 
 serve(async (req) => {
+  console.log("[generate-listing] Function start");
+  
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Global timeout guard (25 seconds)
+  const timeoutMs = 25000;
+  const abortController = new AbortController();
+  const timeoutId = setTimeout(() => {
+    console.log("[generate-listing] Timeout triggered, aborting");
+    abortController.abort();
+  }, timeoutMs);
+
   try {
     // Verify authentication before processing
+    console.log("[generate-listing] Verifying authentication");
     const authResult = await verifyAuth(req);
     if (!authResult.authenticated) {
+      clearTimeout(timeoutId);
       return unauthorizedResponse(authResult.error);
     }
 
+    console.log("[generate-listing] Parsing request body");
     const { product, imageUrls, regenerateOnly } = await req.json();
     
     // Validate product input
     const validation = validateProduct(product);
     if (!validation.valid) {
+      clearTimeout(timeoutId);
       return new Response(JSON.stringify({ error: validation.error }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -234,7 +248,14 @@ serve(async (req) => {
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+      clearTimeout(timeoutId);
+      return new Response(JSON.stringify({
+        error: true,
+        message: "LOVABLE_API_KEY is not configured"
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Build context from product fields - only include fields with values
@@ -285,23 +306,52 @@ serve(async (req) => {
       }
     }
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        max_tokens: 2000,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content }
-        ],
-      }),
-    });
+    // External API call with timeout and error handling
+    console.log("[generate-listing] Before external API call to AI gateway");
+    let response: Response;
+    try {
+      response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash",
+          max_tokens: 2000,
+          messages: [
+            { role: "system", content: SYSTEM_PROMPT },
+            { role: "user", content }
+          ],
+        }),
+        signal: abortController.signal,
+      });
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+        console.error("[generate-listing] Request aborted due to timeout");
+        return new Response(JSON.stringify({
+          error: true,
+          message: "Request timeout. Please try again."
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      console.error("[generate-listing] Fetch error:", fetchError);
+      return new Response(JSON.stringify({
+        error: true,
+        message: fetchError instanceof Error ? fetchError.message : "Network error during API call"
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    console.log("[generate-listing] After external API call, status:", response.status);
 
     if (!response.ok) {
+      clearTimeout(timeoutId);
       if (response.status === 429) {
         return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }), {
           status: 429,
@@ -314,21 +364,45 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      throw new Error("Listing generation failed");
+      let errorText: string;
+      try {
+        errorText = await response.text();
+      } catch (textError) {
+        errorText = `HTTP ${response.status}`;
+      }
+      console.error("[generate-listing] AI gateway error:", response.status, errorText);
+      return new Response(JSON.stringify({
+        error: true,
+        message: "Listing generation failed"
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    const data = await response.json();
+    let data: any;
+    try {
+      data = await response.json();
+    } catch (jsonError) {
+      clearTimeout(timeoutId);
+      console.error("[generate-listing] Failed to parse response JSON:", jsonError);
+      return new Response(JSON.stringify({
+        error: true,
+        message: "Invalid response from AI service"
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     const rawContent = data.choices?.[0]?.message?.content || "";
     
     console.log("Raw AI response:", rawContent.substring(0, 500));
     
     // Extract JSON from response - handle markdown code blocks and truncated responses
-    let generated;
+    let generated: any;
     try {
       generated = JSON.parse(rawContent);
-    } catch {
+    } catch (parseError) {
       let jsonString = rawContent;
       
       // Remove markdown code block markers (handle both complete and truncated blocks)
@@ -398,9 +472,16 @@ serve(async (req) => {
       try {
         generated = JSON.parse(jsonString);
       } catch (parseError) {
-        console.error("Failed to parse JSON after repair:", jsonString.substring(0, 500));
-        console.error("Parse error:", parseError);
-        throw new Error("Could not parse AI response");
+        clearTimeout(timeoutId);
+        console.error("[generate-listing] Failed to parse JSON after repair:", jsonString.substring(0, 500));
+        console.error("[generate-listing] Parse error:", parseError);
+        return new Response(JSON.stringify({
+          error: true,
+          message: "Could not parse AI response"
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
     }
 
@@ -477,16 +558,22 @@ serve(async (req) => {
       size_recommended: generated.size_recommended || null,
     };
     
-    console.log("[AI] Final generated fields:", Object.keys(finalGenerated).filter(k => finalGenerated[k as keyof typeof finalGenerated]));
+    console.log("[generate-listing] Final generated fields:", Object.keys(finalGenerated).filter(k => finalGenerated[k as keyof typeof finalGenerated]));
 
+    clearTimeout(timeoutId);
+    console.log("[generate-listing] Before return - success");
     return new Response(JSON.stringify({ generated: finalGenerated }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
   } catch (error) {
-    console.error("Error in generate-listing:", error);
+    clearTimeout(timeoutId);
+    console.error("[generate-listing] Error in generate-listing:", error);
     const message = error instanceof Error ? error.message : "Generation failed";
-    return new Response(JSON.stringify({ error: message }), {
+    return new Response(JSON.stringify({
+      error: true,
+      message: message
+    }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

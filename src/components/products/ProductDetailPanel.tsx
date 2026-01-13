@@ -800,13 +800,13 @@ export function ProductDetailPanel({
             </span>
           </div>
           
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2 flex-shrink-0 relative z-20">
             <Button
               variant="outline"
               size="icon"
               onClick={() => analyzeImages()}
               disabled={isAnalyzingImages || images.length === 0}
-              className="h-10 w-10 md:h-9 md:w-auto md:px-3"
+              className="h-10 w-10 md:h-9 md:w-auto md:px-3 pointer-events-auto"
               type="button"
             >
               {isAnalyzingImages ? (
@@ -819,9 +819,20 @@ export function ProductDetailPanel({
             <Button
               variant="default"
               size="icon"
-              onClick={() => onGenerateAI('all')}
+              onClick={() => {
+                console.log("[GENAI] CLICK DetailPanel", { productId: product?.id, hasImages: images.length > 0 });
+                if (!onGenerateAI) {
+                  toast.error('Generate AI handler not connected');
+                  return;
+                }
+                if (images.length === 0) {
+                  toast.error('Add at least 1 image before generating AI');
+                  return;
+                }
+                onGenerateAI('all');
+              }}
               disabled={isGenerating}
-              className="h-10 w-10 md:h-9 md:w-auto md:px-3"
+              className="h-10 w-10 md:h-9 md:w-auto md:px-3 pointer-events-auto"
               type="button"
             >
               {isGenerating && !regeneratingField ? (

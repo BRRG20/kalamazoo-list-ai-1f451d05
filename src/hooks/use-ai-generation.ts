@@ -94,50 +94,66 @@ export function useAIGeneration({
       const images = await fetchImagesForProduct(productId);
       
       if (images.length === 0) {
-        console.warn(`[AI] Product ${productId} has no images, skipping`);
+        console.warn(`[GENAI] Product ${productId} has no images, skipping`);
         return { productId, success: false, noImages: true };
       }
       
       const imageUrls = images.slice(0, 2).map(img => img.url);
       
+      const endpoint = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-listing`;
+      const payload = {
+        product: {
+          id: product.id,
+          sku: product.sku,
+          title: product.title,
+          description: product.description,
+          garment_type: product.garment_type,
+          department: product.department,
+          brand: product.brand,
+          colour_main: product.colour_main,
+          colour_secondary: product.colour_secondary,
+          pattern: product.pattern,
+          size_label: product.size_label,
+          size_recommended: product.size_recommended,
+          fit: product.fit,
+          material: product.material,
+          condition: product.condition,
+          flaws: product.flaws,
+          made_in: product.made_in,
+          era: product.era,
+          notes: product.notes,
+          price: product.price,
+          currency: product.currency,
+        },
+        imageUrls,
+      };
+      
+      console.log('[GENAI] request', {
+        endpoint,
+        productId,
+        payloadKeys: Object.keys(payload),
+        imageCount: imageUrls.length
+      });
+      
       // Call the edge function
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-listing`, {
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
-        body: JSON.stringify({
-          product: {
-            id: product.id,
-            sku: product.sku,
-            title: product.title,
-            description: product.description,
-            garment_type: product.garment_type,
-            department: product.department,
-            brand: product.brand,
-            colour_main: product.colour_main,
-            colour_secondary: product.colour_secondary,
-            pattern: product.pattern,
-            size_label: product.size_label,
-            size_recommended: product.size_recommended,
-            fit: product.fit,
-            material: product.material,
-            condition: product.condition,
-            flaws: product.flaws,
-            made_in: product.made_in,
-            era: product.era,
-            notes: product.notes,
-            price: product.price,
-            currency: product.currency,
-          },
-          imageUrls,
-        }),
+        body: JSON.stringify(payload),
+      });
+      
+      console.log('[GENAI] response', {
+        productId,
+        status: response.status,
+        ok: response.ok
       });
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        console.error(`[AI] Error for ${productId}:`, errorData);
+        console.error(`[GENAI] Error for ${productId}:`, errorData);
         await updateProduct(productId, { status: 'error' });
         return { productId, success: false, error: errorData.error || 'Generation failed' };
       }

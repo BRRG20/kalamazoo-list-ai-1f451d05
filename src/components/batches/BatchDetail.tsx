@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { useShopifyStats } from '@/hooks/use-shopify-stats';
@@ -349,6 +349,21 @@ export function BatchDetail({
   
   // For filtering, we still need to use local product data
   // but counters come from the database
+
+  // Calculate eligible products based on actual image associations
+  // A product is eligible if it has >= 1 image
+  const eligibleProducts = useMemo(() => {
+    return products.filter(product => {
+      const images = productImages[product.id] || [];
+      return images.length > 0;
+    });
+  }, [products, productImages]);
+
+  // Calculate eligible selected products
+  const selectedEligibleProducts = useMemo(() => {
+    if (selectedProductIds.size === 0) return [];
+    return eligibleProducts.filter(product => selectedProductIds.has(product.id));
+  }, [eligibleProducts, selectedProductIds]);
 
   // Filter products based on search query and Shopify filter
   // NOTE: is_hidden filter is applied at database level in useProducts hook
@@ -1355,8 +1370,31 @@ export function BatchDetail({
                   <Button
                     variant="default"
                     size="sm"
-                    onClick={() => onGenerateBulk(batchSize)}
-                    disabled={isGenerating || products.length === 0 || unprocessedCount === 0}
+                    onClick={() => {
+                      // Determine which products to generate for
+                      const productsToGenerate = selectedEligibleProducts.length > 0 
+                        ? selectedEligibleProducts 
+                        : eligibleProducts;
+                      
+                      if (productsToGenerate.length === 0) {
+                        toast.error('No eligible products. Add images first.');
+                        return;
+                      }
+                      
+                      if (products.length === 0) {
+                        toast.error('No products in this batch.');
+                        return;
+                      }
+                      
+                      // If products are selected, use onGenerateAll (handles selected products)
+                      // Otherwise, use onGenerateBulk with batch size
+                      if (selectedEligibleProducts.length > 0) {
+                        onGenerateAll();
+                      } else {
+                        onGenerateBulk(batchSize);
+                      }
+                    }}
+                    disabled={isGenerating}
                     className="text-xs md:text-sm rounded-r-none"
                   >
                     {isGenerating ? (
@@ -1364,11 +1402,21 @@ export function BatchDetail({
                     ) : (
                       <Sparkles className="w-4 h-4 mr-1 md:mr-2" />
                     )}
-                    <span className="hidden sm:inline">Generate</span> AI ({Math.min(batchSize, unprocessedCount)})
+                    <span className="hidden sm:inline">Generate</span> AI (
+                      {selectedEligibleProducts.length > 0 
+                        ? `Selected: ${selectedEligibleProducts.length}`
+                        : eligibleProducts.length}
+                    )
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>{unprocessedCount > 0 ? `Generate AI for next ${Math.min(batchSize, unprocessedCount)} unprocessed products` : 'All products have been generated'}</p>
+                  <p>
+                    {selectedEligibleProducts.length > 0
+                      ? `Generate AI for ${selectedEligibleProducts.length} selected product${selectedEligibleProducts.length > 1 ? 's' : ''}`
+                      : eligibleProducts.length > 0
+                      ? `Generate AI for ${Math.min(batchSize, eligibleProducts.length)} product${Math.min(batchSize, eligibleProducts.length) > 1 ? 's' : ''} (batch size: ${batchSize})`
+                      : 'No eligible products. Add images to products first.'}
+                  </p>
                 </TooltipContent>
               </Tooltip>
               
@@ -1378,7 +1426,7 @@ export function BatchDetail({
                   <Button
                     variant="default"
                     size="sm"
-                    disabled={isGenerating || products.length === 0 || unprocessedCount === 0}
+                    disabled={isGenerating}
                     className="text-xs md:text-sm rounded-l-none border-l border-primary-foreground/20 px-2"
                   >
                     <MoreVertical className="w-3 h-3" />

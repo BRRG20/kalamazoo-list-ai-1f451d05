@@ -5,6 +5,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { ImagePreviewModal } from './ImagePreviewModal';
 import { ShopifyStatusSection } from '@/components/products/ShopifyStatusSection';
+import { toast } from 'sonner';
 import type { Product, ProductImage } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -227,7 +228,7 @@ export function ProductCard({
 
           {/* Generating indicator overlay */}
           {(isGenerating || isRegeneratingModel) && (
-            <div className="absolute inset-0 bg-background/80 flex items-center justify-center">
+            <div className="absolute inset-0 bg-background/80 flex items-center justify-center pointer-events-none z-10">
               <div className="flex flex-col items-center gap-2">
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
                 <span className="text-sm font-medium text-foreground">
@@ -340,7 +341,7 @@ export function ProductCard({
           )}
 
           {/* Action buttons */}
-          <div className="flex gap-2">
+          <div className="flex gap-2 relative z-50">
             <Button variant="outline" size="sm" onClick={onEdit} className="flex-1">
               <Edit2 className="w-3 h-3 mr-2" />
               Edit
@@ -353,11 +354,20 @@ export function ProductCard({
                 size="sm"
                 onClick={(e) => {
                   e.stopPropagation();
+                  console.log("[GENAI] CLICK ProductCard", { productId: product.id, hasImages: images.length > 0 });
+                  if (!onGenerateAI) {
+                    toast.error('Generate AI handler not connected');
+                    return;
+                  }
+                  if (images.length === 0) {
+                    toast.error('Add at least 1 image before generating AI');
+                    return;
+                  }
                   onGenerateAI();
                 }}
-                disabled={isGenerating || images.length === 0}
-                title={images.length === 0 ? 'No images to analyze' : 'Generate AI for this product'}
-                className="px-2"
+                disabled={isGenerating}
+                title="Generate AI for this product"
+                className="px-2 pointer-events-auto"
               >
                 {isGenerating ? (
                   <Loader2 className="w-3 h-3 animate-spin" />

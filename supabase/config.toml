@@ -48,5 +48,8 @@ verify_jwt = true
 [functions.expand-product-images]
 verify_jwt = true
 
+[functions.expand-product-photos]
+verify_jwt = true
+
 [functions.precision-erase]
 verify_jwt = true
