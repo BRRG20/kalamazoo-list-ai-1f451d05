@@ -338,7 +338,17 @@ serve(async (req) => {
     const productContext = contextLines.join('\n');
 
     // Adjust prompt based on what to regenerate
-    let userPrompt = `Generate a vintage clothing listing for this product:\n${productContext}`;
+    let userPrompt = `Generate a vintage clothing listing for this product.
+
+**CRITICAL OCR TASK - DO THIS FIRST:**
+1. SCAN ALL ${validImageUrls.length} IMAGES for text/labels/signs
+2. READ any clothing labels (brand tag, size label like "L" or "XL", material composition, "Made in X")
+3. READ any handwritten measurement signs (look for pit-to-pit numbers like "22 inches" or just "22")
+4. EXTRACT the size from labels (S, M, L, XL, etc.) and populate size_label field
+5. EXTRACT pit-to-pit measurement from any sign/note and populate pit_to_pit field
+
+Product Details:
+${productContext}`;
     
     if (regenerateOnly === 'title') {
       userPrompt = `Generate ONLY the title for this product (respond with just the title field in JSON):\n${productContext}`;
@@ -356,6 +366,10 @@ serve(async (req) => {
     if (validImageUrls && validImageUrls.length > 0) {
       // Use up to 4 images to capture: front, back, label closeups, measurement signs
       const imagesToUse = validImageUrls.slice(0, 4);
+      
+      // Debug: Log actual URLs being sent (first 100 chars of each for brevity)
+      console.log(`[generate-listing] Image URLs being sent:`, imagesToUse.map(u => u.substring(0, 100) + '...'));
+      
       for (const url of imagesToUse) {
         content.push({
           type: "image_url",
@@ -372,8 +386,9 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        max_tokens: 2000,
+        // Use Gemini 2.5 Pro for better OCR/vision capabilities on labels and signs
+        model: "google/gemini-2.5-pro",
+        max_tokens: 2500,
         response_format: { type: "json_object" },
         messages: [
           { role: "system", content: SYSTEM_PROMPT + "\n\nIMPORTANT: You MUST respond with ONLY valid JSON. No markdown, no code blocks, no explanatory text. Just the raw JSON object." },
