@@ -350,6 +350,47 @@ serve(async (req) => {
         jsonString = jsonMatch[0];
       }
       
+      // Escape unescaped newlines inside JSON strings (AI often outputs literal newlines)
+      const escapeNewlinesInStrings = (str: string): string => {
+        let result = '';
+        let inString = false;
+        let escapeNext = false;
+        
+        for (let i = 0; i < str.length; i++) {
+          const char = str[i];
+          
+          if (escapeNext) {
+            result += char;
+            escapeNext = false;
+            continue;
+          }
+          
+          if (char === '\\') {
+            result += char;
+            escapeNext = true;
+            continue;
+          }
+          
+          if (char === '"') {
+            inString = !inString;
+            result += char;
+            continue;
+          }
+          
+          // If we're inside a string and hit a literal newline, escape it
+          if (inString && (char === '\n' || char === '\r')) {
+            result += char === '\n' ? '\\n' : '\\r';
+            continue;
+          }
+          
+          result += char;
+        }
+        
+        return result;
+      };
+      
+      jsonString = escapeNewlinesInStrings(jsonString);
+      
       // Try to repair truncated JSON by closing incomplete strings and braces
       const repairJson = (str: string): string => {
         // Check if JSON appears truncated (doesn't end with })
