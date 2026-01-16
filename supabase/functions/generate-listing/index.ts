@@ -381,37 +381,44 @@ ${productContext}`;
       userPrompt = `Generate ONLY Description Style B (natural minimal SEO) for this product:\n${productContext}`;
     }
 
-    // OCR extraction prompt for chunked processing
+    // OCR extraction prompt for chunked processing - minimal schema
     const OCR_ONLY_PROMPT = `You are an OCR specialist. Extract ALL visible text from these images.
-    
-Return ONLY this JSON structure:
+
+Return ONLY this JSON structure (no extra fields):
 {
   "ocr_text": {
-    "label_text": "ALL text from clothing labels (brand, size, material, made in, care instructions)",
-    "measurement_text": "ALL text from measurement signs/notes (pit-to-pit numbers, dimensions)"
-  },
-  "visual_notes": "Brief description of garment type, color, style visible"
+    "label_text": "ALL text from clothing labels (brand, size, material, made in)",
+    "measurement_text": "ALL text from measurement signs/notes (pit-to-pit numbers)"
+  }
 }
 
-If no label text visible, set label_text to "No label text visible".
-If no measurement sign visible, set measurement_text to "No measurement sign visible".
+If no label text visible, set label_text to "".
+If no measurement sign visible, set measurement_text to "".
 IMPORTANT: Respond with ONLY valid JSON.`;
 
     // Process images in chunks of 4, extracting OCR from each
     const imageChunks = chunkArray(validImageUrls, MAX_IMAGES_PER_CHUNK);
     console.log(`[generate-listing] Processing ${validImageUrls.length} images in ${imageChunks.length} chunk(s)`);
     
+    // Track which chunks have OCR content for priority image selection
+    const labelChunkIndices: number[] = [];
+    const measurementChunkIndices: number[] = [];
+    
     // Accumulated OCR text from all chunks
     let mergedLabelText = '';
     let mergedMeasurementText = '';
-    let mergedVisualNotes = '';
+    
+    // OCR model - use best model for accuracy
+    const OCR_MODEL = "google/gemini-2.5-pro";
     
     // Process OCR chunks if more than 4 images
     if (imageChunks.length > 1) {
       for (let i = 0; i < imageChunks.length; i++) {
         const chunk = imageChunks[i];
+        console.log(`[generate-listing] Chunk ${i + 1}/${imageChunks.length}: using model ${OCR_MODEL}`);
+        
         const chunkContent: any[] = [
-          { type: "text", text: `Chunk ${i + 1}/${imageChunks.length}: ${OCR_ONLY_PROMPT}` }
+          { type: "text", text: OCR_ONLY_PROMPT }
         ];
         
         for (const url of chunk) {
@@ -429,8 +436,8 @@ IMPORTANT: Respond with ONLY valid JSON.`;
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              model: "google/gemini-2.5-flash", // Use faster model for OCR chunks
-              max_tokens: 800,
+              model: OCR_MODEL,
+              max_tokens: 600,
               response_format: { type: "json_object" },
               messages: [
                 { role: "user", content: chunkContent }
@@ -443,14 +450,16 @@ IMPORTANT: Respond with ONLY valid JSON.`;
             const chunkRaw = chunkData.choices?.[0]?.message?.content || "";
             try {
               const chunkParsed = JSON.parse(chunkRaw);
-              if (chunkParsed.ocr_text?.label_text && chunkParsed.ocr_text.label_text !== "No label text visible") {
+              const hasLabel = chunkParsed.ocr_text?.label_text && chunkParsed.ocr_text.label_text.trim() !== "";
+              const hasMeasurement = chunkParsed.ocr_text?.measurement_text && chunkParsed.ocr_text.measurement_text.trim() !== "";
+              
+              if (hasLabel) {
                 mergedLabelText += (mergedLabelText ? ' | ' : '') + chunkParsed.ocr_text.label_text;
+                labelChunkIndices.push(i);
               }
-              if (chunkParsed.ocr_text?.measurement_text && chunkParsed.ocr_text.measurement_text !== "No measurement sign visible") {
+              if (hasMeasurement) {
                 mergedMeasurementText += (mergedMeasurementText ? ' | ' : '') + chunkParsed.ocr_text.measurement_text;
-              }
-              if (chunkParsed.visual_notes) {
-                mergedVisualNotes += (mergedVisualNotes ? '; ' : '') + chunkParsed.visual_notes;
+                measurementChunkIndices.push(i);
               }
             } catch {
               console.log(`[generate-listing] Chunk ${i + 1} parse failed, skipping`);
@@ -461,7 +470,7 @@ IMPORTANT: Respond with ONLY valid JSON.`;
         }
       }
       
-      console.log(`[generate-listing] Merged OCR - labels: ${mergedLabelText.length > 0}, measurements: ${mergedMeasurementText.length > 0}`);
+      console.log(`[generate-listing] Merged OCR - labels: ${mergedLabelText.length > 0} (chunks: ${labelChunkIndices.join(',')}), measurements: ${mergedMeasurementText.length > 0} (chunks: ${measurementChunkIndices.join(',')})`);
     }
     
     // Build final content with first 4 images for main generation + merged OCR context
@@ -477,16 +486,74 @@ IMPORTANT: Respond with ONLY valid JSON.`;
       if (mergedMeasurementText) {
         enhancedPrompt += `\nMeasurement text found: ${mergedMeasurementText}`;
       }
-      if (mergedVisualNotes) {
-        enhancedPrompt += `\nVisual notes: ${mergedVisualNotes}`;
-      }
       enhancedPrompt += `\n\nUse this OCR data to populate brand, size_label, material, made_in, pit_to_pit fields.`;
     }
     
     content.push({ type: "text", text: enhancedPrompt });
     
-    // Add first 4 images for main vision analysis
-    const mainImages = validImageUrls.slice(0, 4);
+    // Priority-based image selection for main vision analysis
+    // Strategy: 2 garment images (first non-OCR) + label image + measurement image
+    const selectPriorityImages = (): string[] => {
+      const selected: string[] = [];
+      const usedIndices = new Set<number>();
+      
+      // Get image indices that had OCR content
+      const labelImageIndices = new Set<number>();
+      const measurementImageIndices = new Set<number>();
+      
+      for (const chunkIdx of labelChunkIndices) {
+        const startIdx = chunkIdx * MAX_IMAGES_PER_CHUNK;
+        for (let j = 0; j < MAX_IMAGES_PER_CHUNK && startIdx + j < validImageUrls.length; j++) {
+          labelImageIndices.add(startIdx + j);
+        }
+      }
+      for (const chunkIdx of measurementChunkIndices) {
+        const startIdx = chunkIdx * MAX_IMAGES_PER_CHUNK;
+        for (let j = 0; j < MAX_IMAGES_PER_CHUNK && startIdx + j < validImageUrls.length; j++) {
+          measurementImageIndices.add(startIdx + j);
+        }
+      }
+      
+      // 1. Add first 2 non-label/non-measurement images (likely front/back garment)
+      for (let i = 0; i < validImageUrls.length && selected.length < 2; i++) {
+        if (!labelImageIndices.has(i) && !measurementImageIndices.has(i)) {
+          selected.push(validImageUrls[i]);
+          usedIndices.add(i);
+        }
+      }
+      
+      // 2. Add one image from label chunks (if any)
+      for (const idx of labelImageIndices) {
+        if (!usedIndices.has(idx) && selected.length < 3) {
+          selected.push(validImageUrls[idx]);
+          usedIndices.add(idx);
+          break;
+        }
+      }
+      
+      // 3. Add one image from measurement chunks (if any)
+      for (const idx of measurementImageIndices) {
+        if (!usedIndices.has(idx) && selected.length < 4) {
+          selected.push(validImageUrls[idx]);
+          usedIndices.add(idx);
+          break;
+        }
+      }
+      
+      // 4. Fill remaining slots with any unused images
+      for (let i = 0; i < validImageUrls.length && selected.length < 4; i++) {
+        if (!usedIndices.has(i)) {
+          selected.push(validImageUrls[i]);
+          usedIndices.add(i);
+        }
+      }
+      
+      return selected;
+    };
+    
+    const mainImages = imageChunks.length > 1 ? selectPriorityImages() : validImageUrls.slice(0, 4);
+    console.log(`[generate-listing] Main images selected: ${mainImages.length} (priority-based: ${imageChunks.length > 1})`);
+    
     for (const url of mainImages) {
       content.push({
         type: "image_url",
