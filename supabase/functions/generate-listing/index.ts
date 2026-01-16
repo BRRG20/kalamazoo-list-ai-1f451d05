@@ -737,21 +737,55 @@ ${productContext}`;
     }
     
     // CRITICAL: Sanitize descriptions to remove "null" placeholders
+    // Helper: convert null-like values to empty string for safe text rendering
+    const safeText = (val: unknown): string => {
+      if (val === null || val === undefined) return '';
+      const str = String(val).trim();
+      const lower = str.toLowerCase();
+      if (lower === 'null' || lower === 'undefined' || lower === 'n/a' || lower === 'not available' || lower === 'not specified') {
+        return '';
+      }
+      return str;
+    };
+    
     const sanitizeDescription = (desc: string | null): string | null => {
       if (!desc) return null;
-      // Remove lines containing ": null" or ": undefined" or just "null"
+      
+      // Process line by line
       let sanitized = desc
         .split('\n')
-        .filter(line => {
+        .map(line => {
+          // For attribute lines (Label: Value format), sanitize the value part
+          const colonIdx = line.indexOf(':');
+          if (colonIdx > 0) {
+            const label = line.substring(0, colonIdx + 1);
+            const value = line.substring(colonIdx + 1);
+            const sanitizedValue = safeText(value);
+            // If value is empty after sanitization, keep the line as "Label:" (blank value)
+            // But skip entire line if it's a standard attribute with no value
+            if (sanitizedValue === '') {
+              // Check if this is a standard attribute line that should be omitted entirely
+              const labelLower = label.toLowerCase().trim();
+              const omitLabels = ['brand:', 'label size:', 'pit to pit:', 'material:', 'era:', 'made in:', 'colour:', 'pattern:', 'style:', 'flaws:'];
+              if (omitLabels.some(l => labelLower.startsWith(l.replace(':', '')))) {
+                return null; // Omit this line entirely
+              }
+            }
+            return label + ' ' + sanitizedValue;
+          }
+          
+          // For regular lines, check if it's just "null" or similar
           const trimmed = line.trim().toLowerCase();
-          // Skip lines that end with ": null" or are just "null"
-          if (trimmed.endsWith(': null') || trimmed.endsWith(': undefined')) return false;
-          if (trimmed === 'null' || trimmed === 'undefined') return false;
-          return true;
+          if (trimmed === 'null' || trimmed === 'undefined' || trimmed === 'n/a') {
+            return null; // Omit this line
+          }
+          
+          // Replace any standalone "null" word in the line
+          return line.replace(/\bnull\b/gi, '').replace(/\bundefined\b/gi, '').replace(/\s{2,}/g, ' ').trim();
         })
+        .filter(line => line !== null)
         .join('\n');
-      // Also replace inline "null" values in attribute lines
-      sanitized = sanitized.replace(/:\s*null\b/gi, ': ');
+      
       // Clean up any double blank lines
       sanitized = sanitized.replace(/\n{3,}/g, '\n\n');
       return sanitized.trim() || null;
@@ -762,6 +796,17 @@ ${productContext}`;
     }
     if (generated.description_style_b) {
       generated.description_style_b = sanitizeDescription(generated.description_style_b);
+    }
+    
+    // CRITICAL: Sanitize title to remove any "null" strings
+    if (generated.title) {
+      // Remove "null", "undefined", "N/A" from title
+      generated.title = generated.title
+        .replace(/\bnull\b/gi, '')
+        .replace(/\bundefined\b/gi, '')
+        .replace(/\bN\/A\b/gi, '')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
     }
     
     // CRITICAL: Sanitize string "null" values to actual null
