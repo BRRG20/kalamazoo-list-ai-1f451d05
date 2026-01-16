@@ -647,15 +647,23 @@ const handleSelectBatch = useCallback((id: string) => {
 
   // Re-auto-group all images (from existing groups + unassigned + pending)
   const handleReAutoGroupAll = useCallback((imagesPerProduct: number) => {
-    // Collect all images from all sources
+    // Separate locked (confirmed) groups from unlocked groups
+    const lockedGroups = imageGroups.filter(g => g.isGrouped);
+    const unlockedGroups = imageGroups.filter(g => !g.isGrouped);
+    
+    // Collect images only from unlocked sources
     const allImages: string[] = [
-      ...imageGroups.flatMap(g => g.images),
+      ...unlockedGroups.flatMap(g => g.images),
       ...unassignedImages,
       ...pendingImageUrls,
     ];
 
     if (allImages.length === 0) {
-      toast.error('No images to group.');
+      if (lockedGroups.length > 0) {
+        toast.info(`All groups are confirmed. Unlock groups first to re-group them.`);
+      } else {
+        toast.error('No images to group.');
+      }
       return;
     }
 
@@ -667,7 +675,7 @@ const handleSelectBatch = useCallback((id: string) => {
       unassignedImages: [...unassignedImages],
     });
 
-    // Create new groups from all collected images
+    // Create new groups from unlocked images only
     const chunks: string[][] = [];
     for (let i = 0; i < allImages.length; i += imagesPerProduct) {
       chunks.push(allImages.slice(i, i + imagesPerProduct));
@@ -675,16 +683,24 @@ const handleSelectBatch = useCallback((id: string) => {
 
     const newGroups: ImageGroup[] = chunks.map((chunk, index) => ({
       productId: `temp-${Date.now()}-${index}`,
-      productNumber: index + 1,
+      productNumber: lockedGroups.length + index + 1,
       images: chunk,
       selectedImages: new Set<string>(),
     }));
 
-    setImageGroups(newGroups);
+    // Keep locked groups at the start, add new groups after
+    const finalGroups = [
+      ...lockedGroups.map((g, idx) => ({ ...g, productNumber: idx + 1 })),
+      ...newGroups,
+    ];
+
+    setImageGroups(finalGroups);
     setUnassignedImages([]);
     setPendingImageUrls([]);
     setShowGroupManager(true);
-    toast.success(`Re-grouped into ${chunks.length} product(s). Review and adjust, then confirm.`);
+    
+    const lockedMsg = lockedGroups.length > 0 ? ` (${lockedGroups.length} confirmed group(s) preserved)` : '';
+    toast.success(`Re-grouped into ${chunks.length} product(s)${lockedMsg}. Review and adjust, then confirm.`);
   }, [imageGroups, unassignedImages, pendingImageUrls, saveUndoState]);
 
   // Load all images from products into group manager view
@@ -753,11 +769,26 @@ const handleSelectBatch = useCallback((id: string) => {
       return;
     }
 
-    // Fetch images for all selected products
+    // Filter out confirmed/locked products
+    const lockedProductIds = productIds.filter(id => {
+      const product = products.find(p => p.id === id);
+      return product?.is_grouped;
+    });
+    const unlockedProductIds = productIds.filter(id => {
+      const product = products.find(p => p.id === id);
+      return !product?.is_grouped;
+    });
+
+    if (unlockedProductIds.length === 0) {
+      toast.info(`All ${lockedProductIds.length} selected product(s) are confirmed. Unlock them first to regroup.`);
+      return;
+    }
+
+    // Fetch images only for unlocked selected products
     const allImages: string[] = [];
     const newInitialAssignments = new Map<string, string | null>();
     
-    for (const productId of productIds) {
+    for (const productId of unlockedProductIds) {
       const images = await fetchImagesForProduct(productId);
       for (const img of images) {
         allImages.push(img.url);
@@ -767,7 +798,7 @@ const handleSelectBatch = useCallback((id: string) => {
     }
 
     if (allImages.length === 0) {
-      toast.error('No images found in selected products.');
+      toast.error('No images found in selected unlocked products.');
       return;
     }
 
@@ -784,8 +815,8 @@ const handleSelectBatch = useCallback((id: string) => {
       selectedImages: new Set<string>(),
     }));
 
-    // Delete the old products
-    for (const productId of productIds) {
+    // Delete only the unlocked old products
+    for (const productId of unlockedProductIds) {
       await deleteProduct(productId);
     }
 
@@ -804,8 +835,10 @@ const handleSelectBatch = useCallback((id: string) => {
       return updated;
     });
     setShowGroupManager(true);
-    toast.success(`Re-grouped ${allImages.length} images into ${chunks.length} product(s). Review and confirm.`);
-  }, [fetchImagesForProduct, deleteProduct]);
+    
+    const skippedMsg = lockedProductIds.length > 0 ? ` (${lockedProductIds.length} confirmed product(s) skipped)` : '';
+    toast.success(`Re-grouped ${allImages.length} images into ${chunks.length} product(s)${skippedMsg}. Review and confirm.`);
+  }, [fetchImagesForProduct, deleteProduct, products]);
 
   // Regroup unassigned images in the group manager view
   const handleRegroupUnassigned = useCallback((imagesPerProduct: number) => {
