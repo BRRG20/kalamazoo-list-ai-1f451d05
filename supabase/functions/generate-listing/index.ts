@@ -129,26 +129,42 @@ CRITICAL RULES — NEVER BREAK THESE
 8. **CRITICAL**: Title must be MAX 80 characters, with size LAST
 
 ==========================================
-TITLE RULES — CRITICAL
+TITLE RULES — CRITICAL (AIM FOR 80 CHARS MAX)
 ==========================================
 
-**MANDATORY**: The title MUST use values from:
-1. FIRST: What you READ from labels in the images (brand tag, size label)
-2. FALLBACK: What is provided in product details
+**MANDATORY**: Generate DETAILED, KEYWORD-RICH titles close to 80 characters.
 
-Format: Brand → Era (if known) → Gender → Item Type → Key Feature → Size
+**TITLE ORDER (STRICT)**:
+{Brand} {Department} {GarmentType} {Colour} {Pattern/Detail} {Neckline/Feature} {Material} Size {SizeLabel}
 
-Rules:
-- Start with the brand name from labels or product details
-- Gender: Mens / Womens / Unisex (based on garment cut visible in images)
-- If era is NOT evident from style, leave it out (do NOT guess)
-- Max 80 characters, NO punctuation
-- Size ALWAYS at the end: "Size L" or "Size XL"
-- NO hype words: "rare", "beautiful", "excellent", "amazing"
+**REQUIRED ELEMENTS** (include ALL that apply):
+1. Brand: From labels or product details (required if known)
+2. Department: Mens / Womens / Unisex (based on garment cut)
+3. Garment Type: Sweater, Hoodie, T Shirt, Jacket, etc.
+4. Colour: Primary colour (e.g. Navy, Grey, Cream, Black)
+5. Pattern/Detail: Striped, Logo, Graphic, Embroidered, Plain, Cable Knit, etc.
+6. Neckline: Crewneck, V Neck, Collared, Quarter Zip, Mock Neck (when visible)
+7. Material: Wool, Cotton, Fleece, Denim (if space allows)
+8. Size: ALWAYS LAST as "Size L" or "Size XL" (ONLY if visible on label)
 
-Examples:
-- Brand label shows "Malinmor", size label shows "L" → "Malinmor Vintage Mens Chunky Knit Wool Sweater Size L"
-- Brand label shows "Nike", size label shows "XL" → "Nike Mens Graphic Print T Shirt Size XL"
+**SIZE RULES (CRITICAL)**:
+- Extract size from label OCR ONLY (do not guess)
+- If size is visible: end title with "Size L", "Size XL", etc.
+- If NO size visible: do NOT append any size text
+- NEVER write "Size " without a value, NEVER write "Size null"
+
+**CHARACTER TARGET**:
+- AIM for 70-80 characters (use full limit for better SEO)
+- If under 60 chars: ADD more details (pattern, material, neckline, era)
+- If over 80 chars: REMOVE least important (material → era → secondary detail)
+- NEVER include: "null", "undefined", "N/A"
+
+**EXAMPLES (good titles)**:
+- "Nike Mens Grey Graphic Logo Crewneck Cotton T Shirt Size XL" (57 chars)
+- "Carhartt Mens Navy Canvas Workwear Hooded Jacket Size L" (55 chars)
+- "Vintage Womens Cream Cable Knit Wool Crewneck Sweater Size M" (60 chars)
+- "Patagonia Unisex Black Fleece Quarter Zip Pullover Size L" (57 chars)
+- "Ralph Lauren Mens Blue Striped Oxford Button Down Shirt Size L" (62 chars)
 
 ==========================================
 DESCRIPTION TONE — SOURCE OF TRUTH
@@ -278,7 +294,7 @@ The ocr_text object is MANDATORY — you must report raw extracted text.
     "label_text": "Raw text from clothing labels (brand, size, material, made in) or 'No label text visible'",
     "measurement_text": "Raw text from measurement signs (e.g., 'Pit to Pit: 24') or 'No measurement sign visible'"
   },
-  "title": "Brand + Era(optional) + Gender + Item Type + Feature + Size LAST, max 80 chars, NO null string",
+  "title": "DETAILED: Brand + Department + GarmentType + Colour + Pattern + Neckline + Material + Size LAST, aim for 70-80 chars, NO null",
   "description_style_a": "[2-4 sentences]\\n\\nBrand: [value]\\nLabel Size: [value]\\n...",
   "description_style_b": "[2-4 sentences, slightly more descriptive]\\n\\nBrand: [value]\\n...",
   "shopify_tags": "Brand, Type, Material, Era, Style",
@@ -835,8 +851,6 @@ IMPORTANT: Respond with ONLY valid JSON.`;
       condition: generated.condition,
     }));
 
-    // Get the correct size to use in title (recommended_size takes priority, then label)
-    const correctSize = product.size_recommended || product.size_label || generated.size_recommended || generated.size_label;
     
     // Normalize size helper
     const normalizeSize = (s: string | null | undefined): string | null => {
@@ -854,41 +868,202 @@ IMPORTANT: Respond with ONLY valid JSON.`;
       return sizeMap[lower] || s;
     };
     
+    // ==========================================
+    // TITLE POST-PROCESSING (CRITICAL)
+    // ==========================================
+    
+    // Helper: build optimized title from components
+    const buildOptimizedTitle = (
+      gen: Record<string, unknown>,
+      prod: Record<string, unknown>
+    ): string => {
+      // Gather all available attributes (prefer generated, fallback to product)
+      const brand = safeText(gen.brand) || safeText(prod.brand);
+      const department = safeText(gen.department) || safeText(prod.department);
+      const garmentType = safeText(gen.garment_type) || safeText(prod.garment_type);
+      const colourMain = safeText(gen.colour_main) || safeText(prod.colour_main);
+      const colourSecondary = safeText(gen.colour_secondary) || safeText(prod.colour_secondary);
+      const pattern = safeText(gen.pattern) || safeText(prod.pattern);
+      const style = safeText(gen.style) || safeText(prod.style);
+      const material = safeText(gen.material) || safeText(prod.material);
+      const fit = safeText(gen.fit) || safeText(prod.fit);
+      const era = safeText(gen.era) || safeText(prod.era);
+      
+      // Size: prefer label from OCR, fallback to recommended
+      const sizeLabel = safeText(gen.size_label) || safeText(prod.size_label);
+      const sizeRec = safeText(gen.size_recommended) || safeText(prod.size_recommended);
+      const finalSize = normalizeSize(sizeLabel || sizeRec);
+      
+      // Normalize department for title
+      const deptMap: Record<string, string> = {
+        'men': 'Mens', 'mens': 'Mens', 'male': 'Mens',
+        'women': 'Womens', 'womens': 'Womens', 'female': 'Womens',
+        'unisex': 'Unisex', 'neutral': 'Unisex'
+      };
+      const deptTitle = department ? (deptMap[department.toLowerCase()] || department) : '';
+      
+      // Extract neckline/style detail from pattern or style (crewneck, v-neck, collared, etc.)
+      const necklineKeywords = ['crewneck', 'crew neck', 'v-neck', 'v neck', 'collared', 'quarter zip', 'half zip', 'mock neck', 'turtleneck', 'hooded', 'polo'];
+      let neckline = '';
+      const patternLower = pattern?.toLowerCase() || '';
+      const styleLower = style?.toLowerCase() || '';
+      const garmentLower = garmentType?.toLowerCase() || '';
+      
+      for (const nk of necklineKeywords) {
+        if (patternLower.includes(nk) || styleLower.includes(nk) || garmentLower.includes(nk)) {
+          // Capitalize for title
+          neckline = nk.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+          break;
+        }
+      }
+      
+      // Clean pattern - remove neckline if already extracted
+      let cleanPattern = pattern || '';
+      if (neckline && cleanPattern) {
+        cleanPattern = cleanPattern.replace(new RegExp(neckline, 'gi'), '').trim();
+      }
+      
+      // Determine if pattern is meaningful (not just "Solid" or empty)
+      const isPatternMeaningful = cleanPattern && 
+        !['solid', 'plain', 'basic'].includes(cleanPattern.toLowerCase());
+      
+      // Build title parts in order of priority
+      const parts: string[] = [];
+      
+      // 1. Brand (always first if available)
+      if (brand) parts.push(brand);
+      
+      // 2. Era (only if known: 80s, 90s, Y2K, Vintage)
+      if (era && ['80s', '90s', 'y2k', 'vintage'].includes(era.toLowerCase())) {
+        parts.push(era);
+      }
+      
+      // 3. Department
+      if (deptTitle) parts.push(deptTitle);
+      
+      // 4. Colour(s)
+      if (colourMain) {
+        parts.push(colourMain);
+        // Add secondary colour if different and space allows
+        if (colourSecondary && colourSecondary.toLowerCase() !== colourMain.toLowerCase()) {
+          parts.push(colourSecondary);
+        }
+      }
+      
+      // 5. Pattern/Graphic (if meaningful)
+      if (isPatternMeaningful) {
+        parts.push(cleanPattern);
+      }
+      
+      // 6. Neckline/Style detail
+      if (neckline) parts.push(neckline);
+      
+      // 7. Material (good for SEO)
+      if (material) {
+        // Shorten common materials
+        const matShort = material.replace(/100%\s*/i, '').replace(/blend/i, '').trim();
+        if (matShort && matShort.length <= 15) {
+          parts.push(matShort);
+        }
+      }
+      
+      // 8. Fit (if distinctive)
+      if (fit && ['oversized', 'slim', 'boxy', 'relaxed'].includes(fit.toLowerCase())) {
+        parts.push(fit);
+      }
+      
+      // 9. Garment Type (required)
+      if (garmentType) parts.push(garmentType);
+      
+      // Join and clean
+      let title = parts.join(' ').replace(/\s+/g, ' ').trim();
+      
+      // 10. Add Size LAST (only if valid)
+      const sizeSuffix = finalSize ? ` Size ${finalSize}` : '';
+      
+      // Ensure we don't exceed 80 chars
+      const maxTitleLength = 80 - sizeSuffix.length;
+      
+      if (title.length > maxTitleLength) {
+        // Truncate intelligently - remove words from end until it fits
+        const words = title.split(' ');
+        while (words.length > 3 && words.join(' ').length > maxTitleLength) {
+          words.pop();
+        }
+        title = words.join(' ');
+      }
+      
+      // Append size
+      title = (title + sizeSuffix).trim();
+      
+      // Final cleanup: remove punctuation, double spaces
+      title = title.replace(/[,\-–—:;]/g, ' ').replace(/\s+/g, ' ').trim();
+      
+      return title;
+    };
+    
     // Ensure title is max 80 chars, has no punctuation, and uses CORRECT size
     if (generated.title) {
-      // Remove punctuation
-      generated.title = generated.title.replace(/[,\-–—:;]/g, ' ').replace(/\s+/g, ' ').trim();
+      // First: clean AI-generated title
+      let cleanedTitle = generated.title
+        .replace(/[,\-–—:;]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
       
       // CRITICAL: Remove any "Size null" or "Size undefined" from title
-      generated.title = generated.title.replace(/\s+Size\s+(null|undefined)\b/gi, '').trim();
+      cleanedTitle = cleanedTitle.replace(/\s+Size\s+(null|undefined)\b/gi, '').trim();
+      cleanedTitle = cleanedTitle.replace(/\bnull\b/gi, '').replace(/\bundefined\b/gi, '').replace(/\s+/g, ' ').trim();
       
-      // CRITICAL: Validate and fix size in title (only if we have a valid size)
-      const normalizedCorrect = normalizeSize(correctSize);
+      // Check if AI title is too short (under 50 chars) - rebuild it
+      if (cleanedTitle.length < 50) {
+        console.log(`[AI] Title too short (${cleanedTitle.length} chars), rebuilding...`);
+        const rebuiltTitle = buildOptimizedTitle(generated, sanitizedProduct);
+        if (rebuiltTitle.length > cleanedTitle.length) {
+          cleanedTitle = rebuiltTitle;
+          console.log(`[AI] Rebuilt title: "${cleanedTitle}" (${cleanedTitle.length} chars)`);
+        }
+      }
+      
+      // CRITICAL: Validate and fix size in title
+      const normalizedCorrect = normalizeSize(
+        generated.size_label || sanitizedProduct.size_label || 
+        generated.size_recommended || sanitizedProduct.size_recommended
+      );
       
       if (normalizedCorrect) {
         // Check if title ends with Size X pattern
         const sizePattern = /\bSize\s+([A-Z0-9]+)$/i;
-        const match = generated.title.match(sizePattern);
+        const match = cleanedTitle.match(sizePattern);
         
         if (match) {
           const titleSize = normalizeSize(match[1]);
           if (titleSize !== normalizedCorrect) {
             // Wrong size in title - replace it
             console.log(`[AI] Fixing title size: ${match[1]} -> ${normalizedCorrect}`);
-            generated.title = generated.title.replace(sizePattern, `Size ${normalizedCorrect}`);
+            cleanedTitle = cleanedTitle.replace(sizePattern, `Size ${normalizedCorrect}`);
           }
         } else {
           // No size in title - add it if there's room
-          const titleWithoutSize = generated.title.replace(/\s+Size.*$/i, '').trim();
-          if (titleWithoutSize.length + 8 + normalizedCorrect.length <= 80) {
-            generated.title = `${titleWithoutSize} Size ${normalizedCorrect}`;
+          const titleWithoutSize = cleanedTitle.replace(/\s+Size.*$/i, '').trim();
+          if (titleWithoutSize.length + 6 + normalizedCorrect.length <= 80) {
+            cleanedTitle = `${titleWithoutSize} Size ${normalizedCorrect}`;
           }
         }
+      } else {
+        // No valid size - remove any dangling "Size" text
+        cleanedTitle = cleanedTitle.replace(/\s+Size\s*$/i, '').trim();
       }
       
-      if (generated.title.length > 80) {
-        generated.title = generated.title.substring(0, 80).trim();
+      // Final length check
+      if (cleanedTitle.length > 80) {
+        cleanedTitle = cleanedTitle.substring(0, 80).trim();
       }
+      
+      generated.title = cleanedTitle;
+    } else {
+      // No title from AI - build one from scratch
+      generated.title = buildOptimizedTitle(generated, sanitizedProduct);
+      console.log(`[AI] Built title from scratch: "${generated.title}"`);
     }
     
     // CRITICAL: Sanitize descriptions to remove "null" placeholders
