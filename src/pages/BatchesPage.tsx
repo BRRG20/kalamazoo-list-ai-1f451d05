@@ -30,6 +30,7 @@ import { useDefaultTags } from '@/hooks/use-default-tags';
 import { useAIGeneration } from '@/hooks/use-ai-generation';
 import { useImageExpansion } from '@/hooks/use-image-expansion';
 import { useModelTryOn } from '@/hooks/use-model-tryon';
+import { useMajorActionUndo } from '@/hooks/use-major-action-undo';
 import type { Product, ProductImage } from '@/types';
 
 // Default model IDs based on department
@@ -64,6 +65,9 @@ export default function BatchesPage() {
   
   // Model Try-On hook for generating model images before expansion
   const modelTryOn = useModelTryOn();
+  
+  // Major action undo hook for database-level undo
+  const majorActionUndo = useMajorActionUndo(selectedBatchId);
   
   // Initialize AI generated status when products load
   useEffect(() => {
@@ -1675,6 +1679,9 @@ const handleSelectBatch = useCallback((id: string) => {
       return;
     }
     
+    // Capture undo snapshot BEFORE making changes
+    await majorActionUndo.captureSnapshot(validImageIds, 'move_images', `Move ${validImageIds.length} image(s)`);
+    
     try {
       // Get the count of images in the target product to set starting position
       const targetImages = await fetchImagesForProduct(targetProductId);
@@ -1708,7 +1715,7 @@ const handleSelectBatch = useCallback((id: string) => {
       console.error('Error moving images:', error);
       toast.error('Failed to move images');
     }
-  }, [fetchImagesForProduct, clearCache, refetchProducts, deleteEmptyProducts]);
+  }, [fetchImagesForProduct, clearCache, refetchProducts, deleteEmptyProducts, majorActionUndo]);
 
   // Handler for creating a new product from selected image IDs (used in Birds Eye View)
   // This creates a REAL product in the database and moves images to it
@@ -1730,6 +1737,9 @@ const handleSelectBatch = useCallback((id: string) => {
       toast.warning('No valid images selected');
       return null;
     }
+
+    // Capture undo snapshot BEFORE making changes
+    await majorActionUndo.captureSnapshot(validImageIds, 'bulk_create', `Create product from ${validImageIds.length} image(s)`);
 
     try {
       // Step 1: Fetch current user ID
@@ -1792,7 +1802,7 @@ const handleSelectBatch = useCallback((id: string) => {
       toast.error('Failed to create product');
       return null;
     }
-  }, [selectedBatchId, clearCache, refetchProducts, deleteEmptyProducts]);
+  }, [selectedBatchId, clearCache, refetchProducts, deleteEmptyProducts, majorActionUndo]);
 
   
   const handleReorderProductImages = useCallback(async (productId: string, imageIds: string[]) => {
@@ -1983,6 +1993,10 @@ const handleSelectBatch = useCallback((id: string) => {
                 
                 setIsConfirmingGrouping(true);
                 
+                // Capture undo snapshot BEFORE making changes
+                await majorActionUndo.captureAllBatchImages('confirm_grouping', 'Confirm Grouping');
+                
+                
                 try {
                   // Build current state: image URL -> product ID (or null for unassigned)
                   const currentAssignments = new Map<string, string | null>();
@@ -2124,6 +2138,18 @@ const handleSelectBatch = useCallback((id: string) => {
               undoStackLength={undoStack.length}
               onGlobalUndo={handleGlobalUndo}
               lastUndoLabel={undoStack.length > 0 ? undoStack[undoStack.length - 1].label : undefined}
+              // Major action undo (database-level)
+              hasMajorActionUndo={majorActionUndo.hasUndoAvailable}
+              majorActionUndoLabel={majorActionUndo.undoLabel}
+              majorActionUndoRemaining={majorActionUndo.undoRemainingSeconds}
+              isMajorActionUndoing={majorActionUndo.isUndoing}
+              onMajorActionUndo={async () => {
+                const success = await majorActionUndo.executeUndo();
+                if (success) {
+                  clearCache();
+                  await refetchProducts();
+                }
+              }}
               deletedProductsCount={deletedProducts.length}
               deletedImagesCount={deletedImages.length}
               hiddenProductsCount={hiddenProducts.length}
