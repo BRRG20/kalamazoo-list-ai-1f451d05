@@ -171,7 +171,9 @@ const handleSelectBatch = useCallback((id: string) => {
     // Reset image groups when switching batches
     setImageGroups([]);
     setUnassignedImages([]);
-  }, []);
+    // Reset batch size to 0 (unselected) on batch change
+    aiGeneration.setBatchSize(0);
+  }, [aiGeneration]);
 
   // Load all images (both assigned and unassigned) when batch is selected
   // Use products.length as dependency to avoid infinite re-renders from array reference changes
