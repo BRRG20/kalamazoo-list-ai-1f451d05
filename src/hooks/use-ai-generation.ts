@@ -184,6 +184,7 @@ export function useAIGeneration({
       }
       
       // Update product with generated content - include ALL inferred fields
+      // CRITICAL: Regenerate mode overwrites fields with AI values (if AI provided non-null value)
       const updates: Partial<Product> = {
         status: 'generated',
         title: generated.title || product.title,
@@ -194,46 +195,56 @@ export function useAIGeneration({
         collections_tags: generated.collections_tags || product.collections_tags,
       };
       
-      // CRITICAL: Update ALL inferred fields from AI (not just if empty)
-      // Only update if AI provided a value AND product doesn't already have one
-      if (!product.garment_type && generated.garment_type) {
-        updates.garment_type = generated.garment_type;
-      }
-      if (!product.fit && generated.fit) {
-        updates.fit = generated.fit;
-      }
-      if (!product.era && generated.era) {
-        // Validate era is one of the allowed values
-        const validEras = ['80s', '90s', 'Y2K', 'Modern'];
-        if (validEras.includes(generated.era)) {
-          updates.era = generated.era;
+      // Helper: update field if AI provided a non-null value
+      // Always overwrite for regenerate (force mode) since user is explicitly re-running AI
+      const updateField = <K extends keyof Product>(
+        key: K, 
+        aiValue: Product[K] | null | undefined,
+        validator?: (val: unknown) => Product[K] | null
+      ) => {
+        if (aiValue !== null && aiValue !== undefined && aiValue !== '') {
+          if (validator) {
+            const validated = validator(aiValue);
+            if (validated !== null) {
+              updates[key] = validated;
+            }
+          } else {
+            updates[key] = aiValue;
+          }
         }
-      }
+      };
       
-      // CRITICAL: Sanitize condition to match enum values
-      // Valid values: Excellent, Very good, Good, Fair
-      if (!product.condition && generated.condition) {
+      // Garment type - always update if AI provided
+      updateField('garment_type', generated.garment_type);
+      
+      // Fit - always update if AI provided
+      updateField('fit', generated.fit);
+      
+      // Era - validate before updating
+      updateField('era', generated.era, (val) => {
+        const validEras = ['80s', '90s', 'Y2K', 'Modern'];
+        return validEras.includes(String(val)) ? (String(val) as any) : null;
+      });
+      
+      // Condition - sanitize and validate
+      if (generated.condition) {
         const conditionStr = String(generated.condition);
         let sanitizedCondition: string | null = null;
         let conditionDetails: string | null = null;
         
-        // Extract the base condition and any details in parentheses
         const conditionMatch = conditionStr.match(/^(Excellent|Very good|Good|Fair)/i);
         if (conditionMatch) {
-          // Normalize the case
           const baseCondition = conditionMatch[1].toLowerCase();
           if (baseCondition === 'excellent') sanitizedCondition = 'Excellent';
           else if (baseCondition === 'very good') sanitizedCondition = 'Very good';
           else if (baseCondition === 'good') sanitizedCondition = 'Good';
           else if (baseCondition === 'fair') sanitizedCondition = 'Fair';
           
-          // Extract details in parentheses if any
           const detailsMatch = conditionStr.match(/\(([^)]+)\)/);
           if (detailsMatch) {
             conditionDetails = detailsMatch[1].trim();
           }
         } else {
-          // Try to map common variations
           const lowerCondition = conditionStr.toLowerCase();
           if (lowerCondition.includes('excellent')) sanitizedCondition = 'Excellent';
           else if (lowerCondition.includes('very good')) sanitizedCondition = 'Very good';
@@ -243,66 +254,38 @@ export function useAIGeneration({
         
         if (sanitizedCondition) {
           updates.condition = sanitizedCondition as any;
-          
-          // If there were condition details, add them to flaws
-          if (conditionDetails && !product.flaws) {
+          if (conditionDetails) {
             updates.flaws = conditionDetails;
           }
         }
       }
       
-      if (!product.department && generated.department) {
-        // Validate department matches enum
+      // Department - validate and normalize
+      updateField('department', generated.department, (val) => {
         const validDepartments = ['Women', 'Men', 'Unisex', 'Kids'];
-        const normalizedDept = generated.department.charAt(0).toUpperCase() + generated.department.slice(1).toLowerCase();
-        if (validDepartments.includes(normalizedDept)) {
-          updates.department = normalizedDept as any;
-        } else if (generated.department.toLowerCase().includes('men') && !generated.department.toLowerCase().includes('women')) {
-          updates.department = 'Men';
-        } else if (generated.department.toLowerCase().includes('women')) {
-          updates.department = 'Women';
-        } else if (generated.department.toLowerCase().includes('unisex')) {
-          updates.department = 'Unisex';
-        }
-      }
+        const dept = String(val);
+        const normalizedDept = dept.charAt(0).toUpperCase() + dept.slice(1).toLowerCase();
+        if (validDepartments.includes(normalizedDept)) return normalizedDept as any;
+        if (dept.toLowerCase().includes('men') && !dept.toLowerCase().includes('women')) return 'Men' as any;
+        if (dept.toLowerCase().includes('women')) return 'Women' as any;
+        if (dept.toLowerCase().includes('unisex')) return 'Unisex' as any;
+        return null;
+      });
       
-      // NEW: Also update these fields if AI inferred them
-      if (!product.flaws && generated.flaws && !updates.flaws) {
-        updates.flaws = generated.flaws;
-      }
-      if (!product.made_in && generated.made_in) {
-        updates.made_in = generated.made_in;
-      }
-      if (!product.pattern && generated.pattern) {
-        updates.pattern = generated.pattern;
-      }
+      // Other inferred fields - always update if AI provided
+      updateField('flaws', generated.flaws);
+      updateField('made_in', generated.made_in);
+      updateField('pattern', generated.pattern);
+      updateField('style', generated.style);
       
-      // CRITICAL: Map ALL OCR/Vision extracted fields from AI response
-      // These are the fields that can be read from labels and measurement signs
-      if (!product.brand && generated.brand) {
-        updates.brand = generated.brand;
-      }
-      if (!product.material && generated.material) {
-        updates.material = generated.material;
-      }
-      if (!product.size_label && generated.size_label) {
-        updates.size_label = generated.size_label;
-      }
-      if (!product.size_recommended && generated.size_recommended) {
-        updates.size_recommended = generated.size_recommended;
-      }
-      if (!product.pit_to_pit && generated.pit_to_pit) {
-        updates.pit_to_pit = generated.pit_to_pit;
-      }
-      if (!product.colour_main && generated.colour_main) {
-        updates.colour_main = generated.colour_main;
-      }
-      if (!product.colour_secondary && generated.colour_secondary) {
-        updates.colour_secondary = generated.colour_secondary;
-      }
-      if (!product.style && generated.style) {
-        updates.style = generated.style;
-      }
+      // OCR fields - CRITICAL: always update if AI extracted from labels/signs
+      updateField('brand', generated.brand);
+      updateField('material', generated.material);
+      updateField('size_label', generated.size_label);
+      updateField('size_recommended', generated.size_recommended);
+      updateField('pit_to_pit', generated.pit_to_pit);
+      updateField('colour_main', generated.colour_main);
+      updateField('colour_secondary', generated.colour_secondary);
       
       // GENERATE SKU after AI categorization using the proper format
       // Format: [CATEGORY]-[STYLE]-[SIZE]-[NUMBER]
