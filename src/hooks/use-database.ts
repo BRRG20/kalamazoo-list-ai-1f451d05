@@ -298,7 +298,8 @@ export function useProducts(batchId: string | null, includeHidden: boolean = fal
     let query = supabase
       .from('products')
       .select('*')
-      .eq('batch_id', batchId);
+      .eq('batch_id', batchId)
+      .is('deleted_at', null); // Exclude soft-deleted products
     
     // Only filter out hidden products when not including them
     if (!includeHidden) {
