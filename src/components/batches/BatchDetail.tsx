@@ -316,6 +316,10 @@ export function BatchDetail({
   const [searchQuery, setSearchQuery] = useState('');
   const [showBirdsEyeView, setShowBirdsEyeView] = useState(false);
   const [bulkSelectKey, setBulkSelectKey] = useState(0);
+  
+  // Pagination: Load more - show 20 products initially for performance
+  const PRODUCTS_PER_PAGE = 20;
+  const [displayCount, setDisplayCount] = useState(PRODUCTS_PER_PAGE);
   const [showInfoDialog, setShowInfoDialog] = useState(false);
   const [showModelTryOnDialog, setShowModelTryOnDialog] = useState(false);
   const [showExpandModeDialog, setShowExpandModeDialog] = useState(false);
@@ -395,7 +399,20 @@ export function BatchDetail({
     );
   });
 
-  // Hide selected products - persists to database via onHideProduct
+  // Reset pagination when filter/search changes to show first page
+  useEffect(() => {
+    setDisplayCount(PRODUCTS_PER_PAGE);
+  }, [searchQuery, shopifyFilter]);
+
+  // Paginated products for display (only render what's visible)
+  const displayedProducts = filteredProducts.slice(0, displayCount);
+  const hasMoreProducts = filteredProducts.length > displayCount;
+  const remainingCount = filteredProducts.length - displayCount;
+
+  // Load more products handler
+  const handleLoadMore = useCallback(() => {
+    setDisplayCount(prev => prev + PRODUCTS_PER_PAGE);
+  }, []);
   const handleHideSelected = useCallback(async () => {
     if (selectedProductIds.size === 0 || !onHideProduct) return;
     
@@ -2103,13 +2120,12 @@ export function BatchDetail({
               </select>
             </div>
             
-            {/* Product count */}
-            {(searchQuery || shopifyFilter !== 'all') && (
-              <p className="text-sm text-muted-foreground">
-                Showing {filteredProducts.length} of {products.length} products
-                {shopifyFilter !== 'all' && ` (filtered by: ${shopifyFilter.replace('_', ' ')})`}
-              </p>
-            )}
+            {/* Product count - always show when paginated */}
+            <p className="text-sm text-muted-foreground">
+              Showing {displayedProducts.length} of {filteredProducts.length} products
+              {filteredProducts.length !== products.length && ` (${products.length} total)`}
+              {shopifyFilter !== 'all' && ` • filtered by: ${shopifyFilter.replace('_', ' ')}`}
+            </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {imagesLoading && (
@@ -2118,7 +2134,7 @@ export function BatchDetail({
                   Loading images...
                 </div>
               )}
-              {filteredProducts.map((product) => (
+              {displayedProducts.map((product) => (
                 <ProductCard
                   key={product.id}
                   product={product}
@@ -2176,6 +2192,24 @@ export function BatchDetail({
                 </div>
               )}
             </div>
+            
+            {/* Load More button - pagination for performance */}
+            {hasMoreProducts && !imagesLoading && (
+              <div className="flex flex-col items-center justify-center py-6 gap-2">
+                <p className="text-sm text-muted-foreground">
+                  Showing {displayedProducts.length} of {filteredProducts.length} products
+                </p>
+                <Button 
+                  variant="outline" 
+                  size="lg"
+                  onClick={handleLoadMore}
+                  className="min-w-[200px]"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Load more ({remainingCount} remaining)
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </div>
