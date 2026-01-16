@@ -638,6 +638,29 @@ ${productContext}`;
     // Debug: Log raw OCR text extraction (Step 1 of 2-step process)
     if (generated.ocr_text) {
       console.log("[generate-listing] OCR Step 1 - Raw text:", JSON.stringify(generated.ocr_text));
+      
+      // CRITICAL: Fallback regex extraction for pit_to_pit if AI didn't map it
+      // This catches cases where ocr_text.measurement_text has a number but pit_to_pit is still null
+      if (!generated.pit_to_pit && generated.ocr_text.measurement_text) {
+        const measureText = generated.ocr_text.measurement_text;
+        // Match patterns like "24", "24 inches", "24in", "24"", "Pit to Pit: 24", "PTP 22"
+        const pitMatch = measureText.match(/(?:pit[- ]?to[- ]?pit|ptp)?[:\s]*(\d+(?:\.\d+)?)\s*(?:inches?|in|"|'')?/i);
+        if (pitMatch) {
+          generated.pit_to_pit = `${pitMatch[1]} inches`;
+          console.log(`[generate-listing] REGEX FALLBACK: Extracted pit_to_pit "${generated.pit_to_pit}" from measurement_text`);
+        }
+      }
+      
+      // CRITICAL: Fallback for size_label from label_text if AI didn't map it
+      if (!generated.size_label && generated.ocr_text.label_text) {
+        const labelText = generated.ocr_text.label_text;
+        // Match common size patterns
+        const sizeMatch = labelText.match(/\b(XXS|XS|S|M|L|XL|XXL|XXXL|2XL|3XL|\d{1,2})\b/i);
+        if (sizeMatch) {
+          generated.size_label = sizeMatch[1].toUpperCase();
+          console.log(`[generate-listing] REGEX FALLBACK: Extracted size_label "${generated.size_label}" from label_text`);
+        }
+      }
     } else {
       console.log("[generate-listing] WARNING: ocr_text object missing from response");
     }
