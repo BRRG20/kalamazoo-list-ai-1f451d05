@@ -443,7 +443,8 @@ export function BatchDetail({
   // Fetch ALL images for the batch in a SINGLE query, then group by product_id
   // This eliminates N+1 queries and dramatically improves performance
   useEffect(() => {
-    const fetchKey = `${batch.id}:${products.length}`;
+    // Use product IDs in cache key to detect reshuffles (not just length)
+    const fetchKey = `${batch.id}:${products.map(p => p.id).join(',')}`;
     
     // Skip if we already fetched for this batch with same product count
     if (lastFetchedRef.current === fetchKey) {
@@ -465,11 +466,12 @@ export function BatchDetail({
       setImagesLoading(true);
       
       try {
-        // SINGLE query to fetch ALL images for the batch
+        // SINGLE query to fetch ALL images for the batch (exclude soft-deleted)
         const { data, error } = await supabase
           .from('images')
           .select('*')
           .eq('batch_id', batch.id)
+          .is('deleted_at', null)
           .order('position', { ascending: true });
         
         if (error) {
@@ -576,11 +578,12 @@ export function BatchDetail({
     try {
       console.log('Refreshing images for batch', batch.id);
       
-      // SINGLE query to fetch ALL images for the batch
+      // SINGLE query to fetch ALL images for the batch (exclude soft-deleted)
       const { data, error } = await supabase
         .from('images')
         .select('*')
         .eq('batch_id', batch.id)
+        .is('deleted_at', null)
         .order('position', { ascending: true });
       
       if (error) {
@@ -614,7 +617,7 @@ export function BatchDetail({
       
       console.log('Loaded', totalImages, 'images across', Object.keys(imagesMap).length, 'products');
       setProductImages(imagesMap);
-      lastFetchedRef.current = `${batch.id}:${products.length}`;
+      lastFetchedRef.current = `${batch.id}:${products.map(p => p.id).join(',')}`;
     } catch (error) {
       console.error('Error refreshing images:', error);
     } finally {
