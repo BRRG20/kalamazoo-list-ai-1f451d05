@@ -73,6 +73,8 @@ export interface Product {
   category_path?: string;
   // Hidden state - persisted in database
   is_hidden?: boolean;
+  // Grouping lock - prevents auto-group from reshuffling this product
+  is_grouped?: boolean;
 }
 
 export interface ProductImage {

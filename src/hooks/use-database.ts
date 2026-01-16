@@ -103,6 +103,8 @@ function mapProduct(row: any): Product {
     category_path: row.category_path || '',
     // Hidden state - persisted in database
     is_hidden: row.is_hidden || false,
+    // Grouping lock state - persisted in database
+    is_grouped: row.is_grouped || false,
   };
 }
 
@@ -474,6 +476,8 @@ export function useProducts(batchId: string | null, includeHidden: boolean = fal
     if (updates.who_made !== undefined) dbUpdates.who_made = updates.who_made;
     if (updates.when_made !== undefined) dbUpdates.when_made = updates.when_made;
     if (updates.category_path !== undefined) dbUpdates.category_path = updates.category_path;
+    // Grouping lock
+    if (updates.is_grouped !== undefined) dbUpdates.is_grouped = updates.is_grouped;
     
     const { error } = await supabase
       .from('products')

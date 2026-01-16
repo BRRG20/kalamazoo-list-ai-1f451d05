@@ -223,6 +223,7 @@ const handleSelectBatch = useCallback((id: string) => {
           productNumber: index + 1,
           images: imagesByProduct[product.id] || [],
           selectedImages: new Set<string>(),
+          isGrouped: product.is_grouped || false,
         }));
       
       setImageGroups(groups);
@@ -2077,6 +2078,18 @@ const handleSelectBatch = useCallback((id: string) => {
               onExpandProductImages={handleExpandProductImages}
               isExpandingImages={isExpandingImages}
               imageRefreshKey={imageRefreshKey}
+              onToggleGroupLock={async (productId: string) => {
+                const group = imageGroups.find(g => g.productId === productId);
+                if (!group) return;
+                const newLockState = !group.isGrouped;
+                // Update database
+                await updateProduct(productId, { is_grouped: newLockState });
+                // Update local state
+                setImageGroups(prev => prev.map(g => 
+                  g.productId === productId ? { ...g, isGrouped: newLockState } : g
+                ));
+                toast.success(newLockState ? 'Group confirmed (locked)' : 'Group unlocked');
+              }}
             />
           ) : (
             <EmptyState />
