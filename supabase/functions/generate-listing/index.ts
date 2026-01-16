@@ -65,6 +65,9 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
   return chunks;
 }
 
+// Maximum images for single-call mode (API supports up to 10 reliably)
+const MAX_SINGLE_CALL_IMAGES = 9;
+
 const SYSTEM_PROMPT = `You are generating product listings for Kalamazoo, a vintage clothing app.
 You have STRONG OCR/Vision capabilities. You MUST carefully read all text visible in images.
 
@@ -396,26 +399,41 @@ If no label text visible, set label_text to "".
 If no measurement sign visible, set measurement_text to "".
 IMPORTANT: Respond with ONLY valid JSON.`;
 
-    // Process images in chunks of 4, extracting OCR from each
-    const imageChunks = chunkArray(validImageUrls, MAX_IMAGES_PER_CHUNK);
-    console.log(`[generate-listing] Processing ${validImageUrls.length} images in ${imageChunks.length} chunk(s)`);
+    // COST-EFFECTIVE APPROACH: Use single call for ≤9 images (typical workflow)
+    // Only fallback to chunking for >9 images
+    const useSingleCallMode = validImageUrls.length <= MAX_SINGLE_CALL_IMAGES;
     
-    // Track which chunks have OCR content for priority image selection
-    const labelChunkIndices: number[] = [];
-    const measurementChunkIndices: number[] = [];
+    console.log(`[generate-listing] Product images: ${validImageUrls.length}, mode: ${useSingleCallMode ? 'SINGLE-CALL' : 'CHUNK-FALLBACK'}`);
     
-    // Accumulated OCR text from all chunks
+    // Accumulated OCR text (only used in chunk mode)
     let mergedLabelText = '';
     let mergedMeasurementText = '';
+    
+    // Track which chunks have OCR content for priority image selection (chunk mode only)
+    const labelChunkIndices: number[] = [];
+    const measurementChunkIndices: number[] = [];
     
     // OCR model - use best model for accuracy
     const OCR_MODEL = "google/gemini-2.5-pro";
     
-    // Process OCR chunks if more than 4 images
-    if (imageChunks.length > 1) {
+    // CHUNK FALLBACK MODE: Only for >9 images
+    if (!useSingleCallMode) {
+      const imageChunks = chunkArray(validImageUrls, MAX_IMAGES_PER_CHUNK);
+      console.log(`[generate-listing] Chunk fallback: ${imageChunks.length} chunks, model: ${OCR_MODEL}`);
+      
+      // Early stop flags - stop chunking once we have both label and measurement text
+      let foundLabel = false;
+      let foundMeasurement = false;
+      
       for (let i = 0; i < imageChunks.length; i++) {
+        // Early stop if we already have both OCR types
+        if (foundLabel && foundMeasurement) {
+          console.log(`[generate-listing] Early stop: both OCR types found after ${i} chunks`);
+          break;
+        }
+        
         const chunk = imageChunks[i];
-        console.log(`[generate-listing] Chunk ${i + 1}/${imageChunks.length}: using model ${OCR_MODEL}`);
+        console.log(`[generate-listing] Chunk ${i + 1}/${imageChunks.length}: ${chunk.length} images`);
         
         const chunkContent: any[] = [
           { type: "text", text: OCR_ONLY_PROMPT }
@@ -450,16 +468,22 @@ IMPORTANT: Respond with ONLY valid JSON.`;
             const chunkRaw = chunkData.choices?.[0]?.message?.content || "";
             try {
               const chunkParsed = JSON.parse(chunkRaw);
-              const hasLabel = chunkParsed.ocr_text?.label_text && chunkParsed.ocr_text.label_text.trim() !== "";
-              const hasMeasurement = chunkParsed.ocr_text?.measurement_text && chunkParsed.ocr_text.measurement_text.trim() !== "";
+              const hasLabel = chunkParsed.ocr_text?.label_text && 
+                chunkParsed.ocr_text.label_text.trim() !== "" &&
+                chunkParsed.ocr_text.label_text !== "No label text visible";
+              const hasMeasurement = chunkParsed.ocr_text?.measurement_text && 
+                chunkParsed.ocr_text.measurement_text.trim() !== "" &&
+                chunkParsed.ocr_text.measurement_text !== "No measurement sign visible";
               
               if (hasLabel) {
                 mergedLabelText += (mergedLabelText ? ' | ' : '') + chunkParsed.ocr_text.label_text;
                 labelChunkIndices.push(i);
+                foundLabel = true;
               }
               if (hasMeasurement) {
                 mergedMeasurementText += (mergedMeasurementText ? ' | ' : '') + chunkParsed.ocr_text.measurement_text;
                 measurementChunkIndices.push(i);
+                foundMeasurement = true;
               }
             } catch {
               console.log(`[generate-listing] Chunk ${i + 1} parse failed, skipping`);
@@ -470,15 +494,15 @@ IMPORTANT: Respond with ONLY valid JSON.`;
         }
       }
       
-      console.log(`[generate-listing] Merged OCR - labels: ${mergedLabelText.length > 0} (chunks: ${labelChunkIndices.join(',')}), measurements: ${mergedMeasurementText.length > 0} (chunks: ${measurementChunkIndices.join(',')})`);
+      console.log(`[generate-listing] Merged OCR - labels: ${mergedLabelText.length > 0}, measurements: ${mergedMeasurementText.length > 0}`);
     }
     
-    // Build final content with first 4 images for main generation + merged OCR context
+    // Build final content
     const content: any[] = [];
     
-    // Add merged OCR context if we have it
+    // Add merged OCR context if we have it (chunk mode only)
     let enhancedPrompt = userPrompt;
-    if (mergedLabelText || mergedMeasurementText) {
+    if (!useSingleCallMode && (mergedLabelText || mergedMeasurementText)) {
       enhancedPrompt += `\n\n**PRE-EXTRACTED OCR FROM ALL ${validImageUrls.length} IMAGES:**`;
       if (mergedLabelText) {
         enhancedPrompt += `\nLabel text found: ${mergedLabelText}`;
@@ -491,68 +515,76 @@ IMPORTANT: Respond with ONLY valid JSON.`;
     
     content.push({ type: "text", text: enhancedPrompt });
     
-    // Priority-based image selection for main vision analysis
-    // Strategy: 2 garment images (first non-OCR) + label image + measurement image
-    const selectPriorityImages = (): string[] => {
-      const selected: string[] = [];
-      const usedIndices = new Set<number>();
-      
-      // Get image indices that had OCR content
-      const labelImageIndices = new Set<number>();
-      const measurementImageIndices = new Set<number>();
-      
-      for (const chunkIdx of labelChunkIndices) {
-        const startIdx = chunkIdx * MAX_IMAGES_PER_CHUNK;
-        for (let j = 0; j < MAX_IMAGES_PER_CHUNK && startIdx + j < validImageUrls.length; j++) {
-          labelImageIndices.add(startIdx + j);
-        }
-      }
-      for (const chunkIdx of measurementChunkIndices) {
-        const startIdx = chunkIdx * MAX_IMAGES_PER_CHUNK;
-        for (let j = 0; j < MAX_IMAGES_PER_CHUNK && startIdx + j < validImageUrls.length; j++) {
-          measurementImageIndices.add(startIdx + j);
-        }
-      }
-      
-      // 1. Add first 2 non-label/non-measurement images (likely front/back garment)
-      for (let i = 0; i < validImageUrls.length && selected.length < 2; i++) {
-        if (!labelImageIndices.has(i) && !measurementImageIndices.has(i)) {
-          selected.push(validImageUrls[i]);
-          usedIndices.add(i);
-        }
-      }
-      
-      // 2. Add one image from label chunks (if any)
-      for (const idx of labelImageIndices) {
-        if (!usedIndices.has(idx) && selected.length < 3) {
-          selected.push(validImageUrls[idx]);
-          usedIndices.add(idx);
-          break;
-        }
-      }
-      
-      // 3. Add one image from measurement chunks (if any)
-      for (const idx of measurementImageIndices) {
-        if (!usedIndices.has(idx) && selected.length < 4) {
-          selected.push(validImageUrls[idx]);
-          usedIndices.add(idx);
-          break;
-        }
-      }
-      
-      // 4. Fill remaining slots with any unused images
-      for (let i = 0; i < validImageUrls.length && selected.length < 4; i++) {
-        if (!usedIndices.has(i)) {
-          selected.push(validImageUrls[i]);
-          usedIndices.add(i);
-        }
-      }
-      
-      return selected;
-    };
+    // Select images for main generation call
+    let mainImages: string[];
     
-    const mainImages = imageChunks.length > 1 ? selectPriorityImages() : validImageUrls.slice(0, 4);
-    console.log(`[generate-listing] Main images selected: ${mainImages.length} (priority-based: ${imageChunks.length > 1})`);
+    if (useSingleCallMode) {
+      // SINGLE-CALL MODE: Send ALL images (up to 9)
+      mainImages = validImageUrls;
+      console.log(`[generate-listing] Single-call mode: sending ALL ${mainImages.length} images`);
+    } else {
+      // CHUNK FALLBACK: Priority-based selection of 4 representative images
+      const selectPriorityImages = (): string[] => {
+        const selected: string[] = [];
+        const usedIndices = new Set<number>();
+        
+        // Get image indices that had OCR content
+        const labelImageIndices = new Set<number>();
+        const measurementImageIndices = new Set<number>();
+        
+        for (const chunkIdx of labelChunkIndices) {
+          const startIdx = chunkIdx * MAX_IMAGES_PER_CHUNK;
+          for (let j = 0; j < MAX_IMAGES_PER_CHUNK && startIdx + j < validImageUrls.length; j++) {
+            labelImageIndices.add(startIdx + j);
+          }
+        }
+        for (const chunkIdx of measurementChunkIndices) {
+          const startIdx = chunkIdx * MAX_IMAGES_PER_CHUNK;
+          for (let j = 0; j < MAX_IMAGES_PER_CHUNK && startIdx + j < validImageUrls.length; j++) {
+            measurementImageIndices.add(startIdx + j);
+          }
+        }
+        
+        // 1. Add first 2 non-label/non-measurement images (likely front/back garment)
+        for (let i = 0; i < validImageUrls.length && selected.length < 2; i++) {
+          if (!labelImageIndices.has(i) && !measurementImageIndices.has(i)) {
+            selected.push(validImageUrls[i]);
+            usedIndices.add(i);
+          }
+        }
+        
+        // 2. Add one image from label chunks (if any)
+        for (const idx of labelImageIndices) {
+          if (!usedIndices.has(idx) && selected.length < 3) {
+            selected.push(validImageUrls[idx]);
+            usedIndices.add(idx);
+            break;
+          }
+        }
+        
+        // 3. Add one image from measurement chunks (if any)
+        for (const idx of measurementImageIndices) {
+          if (!usedIndices.has(idx) && selected.length < 4) {
+            selected.push(validImageUrls[idx]);
+            usedIndices.add(idx);
+            break;
+          }
+        }
+        
+        // 4. Fill remaining slots with any unused images
+        for (let i = 0; i < validImageUrls.length && selected.length < 4; i++) {
+          if (!usedIndices.has(i)) {
+            selected.push(validImageUrls[i]);
+            usedIndices.add(i);
+          }
+        }
+        
+        return selected;
+      };
+      
+      mainImages = selectPriorityImages();
+      console.log(`[generate-listing] Chunk fallback: selected ${mainImages.length} priority images`);
+    }
     
     for (const url of mainImages) {
       content.push({
