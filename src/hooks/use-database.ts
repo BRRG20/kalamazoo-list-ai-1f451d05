@@ -908,10 +908,12 @@ export function useImages() {
   const addImageToBatch = async (batchId: string, url: string, position: number) => {
     const userId = await getCurrentUserId();
     if (!userId) {
-      console.error('No user ID for image upload');
+      console.error('[DB] addImageToBatch: No user ID for image upload');
       return null;
     }
 
+    console.log(`[DB] addImageToBatch: Inserting image to batch=${batchId}, position=${position}`);
+    
     const { data, error } = await supabase
       .from('images')
       .insert({ 
@@ -926,10 +928,11 @@ export function useImages() {
       .single();
     
     if (error) {
-      console.error('Error adding image to batch:', error);
+      console.error('[DB] addImageToBatch: FAILED to insert image:', error.message, error.details);
       return null;
     }
     
+    console.log(`[DB] addImageToBatch: SUCCESS - id=${data.id}, product_id=null (unassigned)`);
     return mapImage(data);
   };
 

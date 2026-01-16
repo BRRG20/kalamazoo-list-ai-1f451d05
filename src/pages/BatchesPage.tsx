@@ -190,10 +190,14 @@ const handleSelectBatch = useCallback((id: string) => {
         return;
       }
       
-      // Fetch all images for the batch
+      // Fetch all images for the batch from database
+      // This is the SOURCE OF TRUTH for cross-device sync
+      console.log(`[SYNC] Loading images for batch: ${selectedBatchId}`);
       const allBatchImages = await fetchImagesForBatch(selectedBatchId);
+      console.log(`[SYNC] Fetched ${allBatchImages.length} total images from DB`);
       
       if (allBatchImages.length === 0) {
+        console.log(`[SYNC] No images found in batch, clearing state`);
         setUnassignedImages([]);
         setImageGroups([]);
         setInitialImageAssignments(new Map());
@@ -218,6 +222,10 @@ const handleSelectBatch = useCallback((id: string) => {
           unassigned.push(img.url);
         }
       }
+      
+      // Log cross-device sync info
+      console.log(`[SYNC] Unassigned images count: ${unassigned.length}`);
+      console.log(`[SYNC] Assigned to products: ${Object.keys(imagesByProduct).length} products`);
       
       // Create groups from existing products that have images
       const groups: ImageGroup[] = products
@@ -282,20 +290,37 @@ const handleSelectBatch = useCallback((id: string) => {
     const urls = await uploadImages(files, selectedBatchId);
     
     if (urls.length > 0) {
-      // Save images to database immediately (not assigned to any product yet)
+      // CRITICAL: Save images to database AND verify each insert succeeds
+      // Only add to local state URLs that were successfully persisted to DB
+      const persistedUrls: string[] = [];
+      let failedCount = 0;
+      
       for (let i = 0; i < urls.length; i++) {
-        await addImageToBatch(selectedBatchId, urls[i], i);
+        const result = await addImageToBatch(selectedBatchId, urls[i], i);
+        if (result) {
+          persistedUrls.push(urls[i]);
+          console.log(`[UPLOAD] Image persisted to DB: id=${result.id}, url=${urls[i].substring(0, 50)}...`);
+        } else {
+          failedCount++;
+          console.error(`[UPLOAD] FAILED to persist image to DB: ${urls[i]}`);
+        }
       }
       
-      if (addToUnassigned) {
-        // Add directly to unassigned pool
-        setUnassignedImages(prev => [...prev, ...urls]);
-        setShowGroupManager(true);
-        toast.success(`${urls.length} image(s) added to unassigned pool.`);
-      } else {
-        // Add to pending for auto-grouping
-        setPendingImageUrls(prev => [...prev, ...urls]);
-        toast.success(`${urls.length} image(s) uploaded. Click "Auto-group" to create products.`);
+      if (failedCount > 0) {
+        toast.error(`${failedCount} image(s) failed to save to database. Please retry.`);
+      }
+      
+      if (persistedUrls.length > 0) {
+        if (addToUnassigned) {
+          // Add directly to unassigned pool
+          setUnassignedImages(prev => [...prev, ...persistedUrls]);
+          setShowGroupManager(true);
+          toast.success(`${persistedUrls.length} image(s) added to unassigned pool.`);
+        } else {
+          // Add to pending for auto-grouping
+          setPendingImageUrls(prev => [...prev, ...persistedUrls]);
+          toast.success(`${persistedUrls.length} image(s) uploaded. Click "Auto-group" to create products.`);
+        }
       }
     } else {
       toast.error('Failed to upload images');
@@ -315,26 +340,40 @@ const handleSelectBatch = useCallback((id: string) => {
     const urls = await uploadImages(files, selectedBatchId);
     
     if (urls.length > 0) {
-      // Save images to database with notes metadata
+      // CRITICAL: Save images to database AND verify each insert succeeds
+      const persistedUrls: string[] = [];
+      let failedCount = 0;
+      
       for (let i = 0; i < urls.length; i++) {
         const file = files[i];
         const noteData = notes.get(file.name);
         
-        // Add image to batch
-        await addImageToBatch(selectedBatchId, urls[i], i);
+        // Add image to batch - MUST succeed before adding to local state
+        const result = await addImageToBatch(selectedBatchId, urls[i], i);
         
-        // If there are notes, update the image with metadata
-        // Note: Notes are stored as part of the image flow for AI to read
-        if (noteData && (noteData.note || noteData.hasStain)) {
-          // Store notes in product notes field when product is created
-          // For now, notes travel with the pending URL as metadata
-          console.log(`Image ${file.name} has note:`, noteData);
+        if (result) {
+          persistedUrls.push(urls[i]);
+          console.log(`[CAMERA] Image persisted to DB: id=${result.id}, url=${urls[i].substring(0, 50)}...`);
+          
+          // If there are notes, log them (notes metadata handled separately)
+          if (noteData && (noteData.note || noteData.hasStain)) {
+            console.log(`[CAMERA] Image ${file.name} has note:`, noteData);
+          }
+        } else {
+          failedCount++;
+          console.error(`[CAMERA] FAILED to persist image to DB: ${urls[i]}`);
         }
       }
       
-      // Add to pending for auto-grouping (same as regular uploads)
-      setPendingImageUrls(prev => [...prev, ...urls]);
-      toast.success(`${urls.length} camera image(s) uploaded. Click "Auto-group" to create products.`);
+      if (failedCount > 0) {
+        toast.error(`${failedCount} image(s) failed to save to database. Please retry.`);
+      }
+      
+      if (persistedUrls.length > 0) {
+        // Add only successfully persisted URLs to pending for auto-grouping
+        setPendingImageUrls(prev => [...prev, ...persistedUrls]);
+        toast.success(`${persistedUrls.length} camera image(s) uploaded. Click "Auto-group" to create products.`);
+      }
     } else {
       toast.error('Failed to upload camera images');
     }
@@ -353,19 +392,35 @@ const handleSelectBatch = useCallback((id: string) => {
     const urls = await uploadImages(files, selectedBatchId);
     
     if (urls.length > 0) {
-      // Save images to database
+      // CRITICAL: Save images to database AND verify each insert succeeds
+      const persistedUrls: string[] = [];
+      let failedCount = 0;
+      
       for (let i = 0; i < urls.length; i++) {
-        await addImageToBatch(selectedBatchId, urls[i], i);
+        const result = await addImageToBatch(selectedBatchId, urls[i], i);
+        if (result) {
+          persistedUrls.push(urls[i]);
+          console.log(`[QUICK] Image persisted to DB: id=${result.id}, url=${urls[i].substring(0, 50)}...`);
+        } else {
+          failedCount++;
+          console.error(`[QUICK] FAILED to persist image to DB: ${urls[i]}`);
+        }
       }
       
-      // For quick product shots, create a product group immediately
-      setPendingImageUrls(prev => [...prev, ...urls]);
-      setShowGroupManager(true);
+      if (failedCount > 0) {
+        toast.error(`${failedCount} image(s) failed to save to database. Please retry.`);
+      }
       
-      toast.success(
-        `${urls.length} quick shot(s) uploaded. ` +
-        `Group them and use "Expand Images" to generate additional listing photos.`
-      );
+      if (persistedUrls.length > 0) {
+        // For quick product shots, add to pending and show group manager
+        setPendingImageUrls(prev => [...prev, ...persistedUrls]);
+        setShowGroupManager(true);
+        
+        toast.success(
+          `${persistedUrls.length} quick shot(s) uploaded. ` +
+          `Group them and use "Expand Images" to generate additional listing photos.`
+        );
+      }
     } else {
       toast.error('Failed to upload quick product shots');
     }
