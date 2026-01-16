@@ -317,6 +317,26 @@ export function useAIGeneration({
         }
       }
       
+      // AUTO-SET PRICE using rule-based pricing (if not already set)
+      // This uses all the AI-parsed fields to determine accurate pricing
+      const existingPrice = product.price;
+      if (!existingPrice || existingPrice <= 0) {
+        const { getDefaultPrice } = await import('@/hooks/use-database');
+        const suggestedPrice = getDefaultPrice(
+          updates.garment_type || product.garment_type,
+          {
+            brand: updates.brand || product.brand,
+            material: updates.material || product.material,
+            condition: updates.condition || product.condition,
+            collections_tags: updates.collections_tags || product.collections_tags,
+            title: updates.title || product.title,
+            style: updates.style || product.style,
+          }
+        );
+        updates.price = suggestedPrice;
+        console.log(`[AI] Auto-set price: £${suggestedPrice}`);
+      }
+      
       console.log('[AI] Updates to save:', Object.keys(updates));
       
       await updateProduct(productId, updates);
