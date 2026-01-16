@@ -1186,6 +1186,8 @@ const handleSelectBatch = useCallback((id: string) => {
   }, []);
 
   // Sync selection with current products - remove any stale IDs that no longer exist
+  // Sync selection with products - clear stale IDs and filter out products with no images
+  // This effect only runs when the products list changes (batch switch, delete, etc.)
   useEffect(() => {
     if (products.length === 0) {
       setSelectedProductIds(new Set());
@@ -1194,13 +1196,16 @@ const handleSelectBatch = useCallback((id: string) => {
     
     const validProductIds = new Set(products.map(p => p.id));
     setSelectedProductIds(prev => {
+      // If no previous selection, keep it empty (don't auto-select)
+      if (prev.size === 0) return prev;
+      
       const validSelection = new Set<string>();
       prev.forEach(id => {
         if (validProductIds.has(id)) {
           validSelection.add(id);
         }
       });
-      // Only update if something changed
+      // Only update if something changed (size differs means stale IDs were removed)
       if (validSelection.size !== prev.size) {
         return validSelection;
       }

@@ -442,7 +442,22 @@ serve(async (req) => {
       } catch (parseError) {
         console.error("Failed to parse JSON after repair:", jsonString.substring(0, 500));
         console.error("Parse error:", parseError);
-        throw new Error("Could not parse AI response");
+        
+        // Final fallback: return minimal valid response instead of failing
+        console.log("[AI] Using minimal fallback response");
+        generated = {
+          title: null,
+          description_style_a: null,
+          description_style_b: null,
+          shopify_tags: null,
+          etsy_tags: null,
+          collections_tags: null,
+          garment_type: null,
+          fit: null,
+          era: null,
+          condition: null,
+          department: null,
+        };
       }
     }
 
