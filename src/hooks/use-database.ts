@@ -352,7 +352,7 @@ export function useProducts(batchId: string | null, includeHidden: boolean = fal
     }
     
     const newProduct = mapProduct(data);
-    setProducts(prev => [...prev, newProduct]);
+    setProducts(prev => [newProduct, ...prev]);
     return newProduct;
   };
 
@@ -427,7 +427,7 @@ export function useProducts(batchId: string | null, includeHidden: boolean = fal
     }
 
     console.log(`Created product ${newProduct.id} with ${linkedCount} images`);
-    setProducts(prev => [...prev, newProduct]);
+    setProducts(prev => [newProduct, ...prev]);
     return newProduct;
   };
 
