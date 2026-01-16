@@ -23,7 +23,9 @@ const UNDO_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
 export function useMajorActionUndo(batchId: string | null) {
   const [lastAction, setLastAction] = useState<MajorActionUndo | null>(null);
   const [isUndoing, setIsUndoing] = useState(false);
+  const [remainingSeconds, setRemainingSeconds] = useState(0);
   const expiryTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Clear expired undo on mount and when batch changes
   useEffect(() => {
@@ -31,25 +33,55 @@ export function useMajorActionUndo(batchId: string | null) {
       clearTimeout(expiryTimerRef.current);
       expiryTimerRef.current = null;
     }
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
     
     // Clear undo when batch changes
     setLastAction(null);
+    setRemainingSeconds(0);
   }, [batchId]);
 
-  // Check if undo is available and not expired
-  const hasUndoAvailable = useCallback(() => {
-    if (!lastAction) return false;
-    const elapsed = Date.now() - lastAction.created_at;
-    return elapsed < UNDO_EXPIRY_MS;
+  // Update countdown every second when we have an action
+  useEffect(() => {
+    if (!lastAction) {
+      setRemainingSeconds(0);
+      return;
+    }
+
+    // Calculate and set initial remaining time
+    const updateRemaining = () => {
+      const elapsed = Date.now() - lastAction.created_at;
+      const remaining = Math.max(0, UNDO_EXPIRY_MS - elapsed);
+      setRemainingSeconds(Math.ceil(remaining / 1000));
+      
+      // If expired, clear the action
+      if (remaining <= 0) {
+        setLastAction(null);
+        if (countdownIntervalRef.current) {
+          clearInterval(countdownIntervalRef.current);
+          countdownIntervalRef.current = null;
+        }
+      }
+    };
+
+    // Set initial value
+    updateRemaining();
+
+    // Update every second
+    countdownIntervalRef.current = setInterval(updateRemaining, 1000);
+
+    return () => {
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+        countdownIntervalRef.current = null;
+      }
+    };
   }, [lastAction]);
 
-  // Get remaining time for undo in seconds
-  const getUndoRemainingSeconds = useCallback(() => {
-    if (!lastAction) return 0;
-    const elapsed = Date.now() - lastAction.created_at;
-    const remaining = Math.max(0, UNDO_EXPIRY_MS - elapsed);
-    return Math.ceil(remaining / 1000);
-  }, [lastAction]);
+  // Check if undo is available and not expired
+  const hasUndoAvailable = lastAction !== null && remainingSeconds > 0;
 
   // Capture snapshot of images before a major action
   const captureSnapshot = useCallback(async (
@@ -102,6 +134,13 @@ export function useMajorActionUndo(batchId: string | null) {
       }, UNDO_EXPIRY_MS);
 
       console.log(`[undo] Captured ${snapshots.length} image snapshots for "${label}"`);
+      
+      // Show toast with undo button
+      toast.success(`${label} completed`, {
+        description: `${snapshots.length} images affected • Undo available for 5 min`,
+        duration: 5000,
+      });
+      
       return actionId;
     } catch (err) {
       console.error('Error capturing undo snapshot:', err);
@@ -205,15 +244,16 @@ export function useMajorActionUndo(batchId: string | null) {
       expiryTimerRef.current = null;
     }
     setLastAction(null);
+    setRemainingSeconds(0);
   }, []);
 
   return {
     // State
     lastAction,
     isUndoing,
-    hasUndoAvailable: hasUndoAvailable(),
+    hasUndoAvailable,
     undoLabel: lastAction?.label || null,
-    undoRemainingSeconds: getUndoRemainingSeconds(),
+    undoRemainingSeconds: remainingSeconds,
     
     // Actions
     captureSnapshot,
