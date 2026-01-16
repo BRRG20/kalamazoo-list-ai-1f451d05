@@ -34,6 +34,8 @@ import {
   useHiddenProducts,
   generateListingBlock,
   validateProductForExport,
+  generateAutoTitle,
+  getDefaultPrice,
   UPLOAD_LIMITS,
 } from '@/hooks/use-database';
 import { useDefaultTags } from '@/hooks/use-default-tags';
@@ -1258,19 +1260,35 @@ const handleSelectBatch = useCallback((id: string) => {
       
       toast.info(`Uploading ${productsToCreate.length} products with ${totalImages} images...`);
       
-      // Prepare product payloads with description
-      const productPayloads = productsToCreate.map(p => ({
-        id: p.id,
-        title: p.title,
-        description: p.description_style_a || p.description || '',
-        price: p.price,
-        currency: p.currency,
-        sku: p.sku,
-        brand: p.brand,
-        garment_type: p.garment_type,
-        shopify_tags: p.shopify_tags,
-        collections_tags: p.collections_tags,
-      }));
+      // Prepare product payloads with auto-fill for missing title/price
+      const productPayloads = productsToCreate.map(p => {
+        // Auto-generate title if missing
+        let title = p.title;
+        if (!title || title.trim() === '') {
+          title = generateAutoTitle(p);
+          console.log(`[Shopify] Auto-generated title for ${p.sku || p.id}: "${title}"`);
+        }
+        
+        // Auto-set price if missing
+        let price = p.price;
+        if (!price || price <= 0) {
+          price = getDefaultPrice(p.garment_type);
+          console.log(`[Shopify] Auto-set price for ${p.sku || p.id}: £${price}`);
+        }
+        
+        return {
+          id: p.id,
+          title,
+          description: p.description_style_a || p.description || '',
+          price,
+          currency: p.currency,
+          sku: p.sku,
+          brand: p.brand,
+          garment_type: p.garment_type,
+          shopify_tags: p.shopify_tags,
+          collections_tags: p.collections_tags,
+        };
+      });
       
       // Get the current session for auth token
       const { data: { session } } = await supabase.auth.getSession();

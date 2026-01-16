@@ -21,11 +21,14 @@ export function validateProductForExport(product: Product, imageCount: number): 
   const missingFields: string[] = [];
   const warnings: string[] = [];
   
-  if (!product.title || product.title.trim() === '') missingFields.push('title');
-  if (!product.price || product.price <= 0) missingFields.push('price');
+  // ONLY images is truly required (blocks upload)
   if (imageCount === 0) missingFields.push('images');
   
-  // Warnings (not blocking but flagged)
+  // Title and price are auto-filled, so just warn if missing
+  if (!product.title || product.title.trim() === '') warnings.push('title (auto-filled)');
+  if (!product.price || product.price <= 0) warnings.push('price (auto-filled)');
+  
+  // Other warnings (not blocking but flagged)
   if (!product.brand) warnings.push('brand');
   if (!product.department) warnings.push('department');
   if (!product.garment_type) warnings.push('type');
@@ -37,6 +40,88 @@ export function validateProductForExport(product: Product, imageCount: number): 
     missingFields,
     warnings,
   };
+}
+
+// Helper: Generate title from product attributes (max 80 chars)
+export function generateAutoTitle(product: Product): string {
+  const parts: string[] = [];
+  
+  // Brand first
+  if (product.brand) parts.push(product.brand);
+  
+  // Era if known
+  if (product.era && ['80s', '90s', 'Y2K'].includes(product.era)) {
+    parts.push(product.era);
+  }
+  
+  // Department
+  const deptMap: Record<string, string> = {
+    'Men': 'Mens', 'Women': 'Womens', 'Unisex': 'Unisex'
+  };
+  if (product.department) {
+    parts.push(deptMap[product.department] || product.department);
+  }
+  
+  // Main colour
+  if (product.colour_main) parts.push(product.colour_main);
+  
+  // Pattern/detail (skip generic ones)
+  if (product.pattern && !['solid', 'plain'].includes(product.pattern.toLowerCase())) {
+    parts.push(product.pattern);
+  }
+  
+  // Material if short
+  if (product.material) {
+    const mat = product.material.replace(/100%\s*/i, '').trim();
+    if (mat.length <= 12) parts.push(mat);
+  }
+  
+  // Garment type (required)
+  if (product.garment_type) {
+    parts.push(product.garment_type);
+  } else {
+    parts.push('Vintage Item');
+  }
+  
+  // Build title
+  let title = parts.join(' ').replace(/\s+/g, ' ').trim();
+  
+  // Add size at end if available
+  const size = product.size_label || product.size_recommended;
+  if (size && size.toLowerCase() !== 'null') {
+    const sizeNorm = size.toUpperCase().trim();
+    if (title.length + 6 + sizeNorm.length <= 80) {
+      title = `${title} Size ${sizeNorm}`;
+    }
+  }
+  
+  // Truncate to 80 chars
+  if (title.length > 80) {
+    title = title.substring(0, 80).trim();
+  }
+  
+  // Fallback if empty
+  return title || 'Vintage Clothing Item';
+}
+
+// Helper: Get default price based on garment type
+export function getDefaultPrice(garmentType: string | null): number {
+  const type = (garmentType || '').toLowerCase();
+  
+  // Price defaults by garment type (in GBP)
+  if (type.includes('t-shirt') || type.includes('tee') || type.includes('t shirt')) return 22;
+  if (type.includes('hoodie') || type.includes('hooded')) return 28;
+  if (type.includes('sweater') || type.includes('jumper') || type.includes('knit')) return 34;
+  if (type.includes('sweatshirt')) return 28;
+  if (type.includes('jacket') || type.includes('coat')) return 45;
+  if (type.includes('fleece')) return 32;
+  if (type.includes('shirt') || type.includes('flannel')) return 28;
+  if (type.includes('cardigan')) return 34;
+  if (type.includes('polo')) return 24;
+  if (type.includes('vest') || type.includes('gilet')) return 30;
+  
+  // Default fallback
+  return 28;
 }
 
 // Helper to get current user ID
