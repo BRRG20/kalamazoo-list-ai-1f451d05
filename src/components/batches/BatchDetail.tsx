@@ -143,10 +143,16 @@ interface BatchDetailProps {
   isMatching?: boolean;
   matchingProgress?: MatchingProgress;
   isConfirmingGrouping?: boolean;
-  // Global undo
+  // Global undo (local preview state)
   undoStackLength?: number;
   onGlobalUndo?: () => void;
   lastUndoLabel?: string;
+  // Major action undo (database-level)
+  hasMajorActionUndo?: boolean;
+  majorActionUndoLabel?: string | null;
+  majorActionUndoRemaining?: number;
+  isMajorActionUndoing?: boolean;
+  onMajorActionUndo?: () => void;
   // Deleted products/images
   deletedProductsCount?: number;
   deletedImagesCount?: number;
@@ -250,6 +256,11 @@ export function BatchDetail({
   undoStackLength = 0,
   onGlobalUndo,
   lastUndoLabel,
+  hasMajorActionUndo = false,
+  majorActionUndoLabel,
+  majorActionUndoRemaining = 0,
+  isMajorActionUndoing = false,
+  onMajorActionUndo,
   deletedProductsCount = 0,
   onOpenDeletedProducts,
   deletedImagesCount,
@@ -1327,6 +1338,34 @@ export function BatchDetail({
                 </TooltipTrigger>
                 <TooltipContent>
                   <p>Undo: {history[history.length - 1]?.label || lastUndoLabel || 'last action'}</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+
+            {/* Major Action Undo button - for database-level undo (auto-group, moves, etc.) */}
+            {hasMajorActionUndo && onMajorActionUndo && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onMajorActionUndo}
+                    disabled={isMajorActionUndoing}
+                    className="text-xs md:text-sm text-orange-600 hover:text-orange-700 border-orange-300 hover:border-orange-400 hover:bg-orange-50 dark:hover:bg-orange-950"
+                  >
+                    {isMajorActionUndoing ? (
+                      <Loader2 className="w-4 h-4 mr-1 md:mr-2 animate-spin" />
+                    ) : (
+                      <Undo2 className="w-4 h-4 mr-1 md:mr-2" />
+                    )}
+                    Undo Action
+                    {majorActionUndoRemaining > 0 && majorActionUndoRemaining <= 60 && (
+                      <span className="ml-1 text-[10px] opacity-70">({Math.floor(majorActionUndoRemaining / 60)}:{(majorActionUndoRemaining % 60).toString().padStart(2, '0')})</span>
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Undo: {majorActionUndoLabel || 'last major action'} (expires in {Math.ceil(majorActionUndoRemaining / 60)} min)</p>
                 </TooltipContent>
               </Tooltip>
             )}
