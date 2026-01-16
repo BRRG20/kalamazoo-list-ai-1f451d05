@@ -377,13 +377,76 @@ ${productContext}`;
       { type: "text", text: userPrompt }
     ];
 
+    // Deterministic image selection: prioritize label + measurement sign images
+    const selectPriorityImages = (urls: string[]): string[] => {
+      if (urls.length <= 4) return urls;
+      
+      const lowerUrls = urls.map(u => u.toLowerCase());
+      
+      // Find label image (clothing tag with size/material/brand)
+      const labelIdx = lowerUrls.findIndex(u => 
+        u.includes('label') || u.includes('tag') || u.includes('care') || 
+        u.includes('fabric') || u.includes('size-label') || u.includes('sizelabel')
+      );
+      
+      // Find measurement sign image (pit-to-pit sign)
+      const measureIdx = lowerUrls.findIndex(u => 
+        u.includes('pit') || u.includes('ptp') || u.includes('measure') || 
+        u.includes('measurement') || u.includes('sign')
+      );
+      
+      const usedIndices = new Set<number>();
+      const result: string[] = [];
+      
+      // Priority 1: Label image
+      if (labelIdx !== -1) {
+        result.push(urls[labelIdx]);
+        usedIndices.add(labelIdx);
+      }
+      
+      // Priority 2: Measurement sign image
+      if (measureIdx !== -1 && !usedIndices.has(measureIdx)) {
+        result.push(urls[measureIdx]);
+        usedIndices.add(measureIdx);
+      }
+      
+      // Priority 3: Front/main garment (first non-label/non-measure image, or index 0)
+      const frontIdx = lowerUrls.findIndex((u, i) => 
+        !usedIndices.has(i) && (u.includes('front') || u.includes('main') || u.includes('primary'))
+      );
+      if (frontIdx !== -1) {
+        result.push(urls[frontIdx]);
+        usedIndices.add(frontIdx);
+      } else {
+        // Default to first available non-used image
+        const firstAvail = urls.findIndex((_, i) => !usedIndices.has(i));
+        if (firstAvail !== -1) {
+          result.push(urls[firstAvail]);
+          usedIndices.add(firstAvail);
+        }
+      }
+      
+      // Priority 4: Extra detail (next available)
+      for (let i = 0; i < urls.length && result.length < 4; i++) {
+        if (!usedIndices.has(i)) {
+          result.push(urls[i]);
+          usedIndices.add(i);
+        }
+      }
+      
+      return result;
+    };
+
     // Add images if provided (up to 4 for comprehensive OCR/vision analysis)
     if (validImageUrls && validImageUrls.length > 0) {
-      // Use up to 4 images to capture: front, back, label closeups, measurement signs
-      const imagesToUse = validImageUrls.slice(0, 4);
+      const imagesToUse = selectPriorityImages(validImageUrls);
       
-      // Debug: Log actual URLs being sent (first 100 chars of each for brevity)
-      console.log(`[generate-listing] Image URLs being sent:`, imagesToUse.map(u => u.substring(0, 100) + '...'));
+      // Log selected image roles for debugging
+      const lowerSelected = imagesToUse.map(u => u.toLowerCase());
+      console.log(`[generate-listing] Image selection: ${imagesToUse.length} of ${validImageUrls.length} images`, {
+        hasLabel: lowerSelected.some(u => u.includes('label') || u.includes('tag') || u.includes('care')),
+        hasMeasure: lowerSelected.some(u => u.includes('pit') || u.includes('ptp') || u.includes('measure')),
+      });
       
       for (const url of imagesToUse) {
         content.push({
@@ -391,7 +454,6 @@ ${productContext}`;
           image_url: { url }
         });
       }
-      console.log(`[AI] Using ${imagesToUse.length} images for OCR/Vision analysis`);
     }
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
