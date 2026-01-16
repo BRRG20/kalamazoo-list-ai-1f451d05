@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { toast } from 'sonner';
-import { AlertTriangle, Plus, Check, X, Eye, Trash2, Grid3X3 } from 'lucide-react';
+import { AlertTriangle, Plus, Check, X, Eye, Trash2, Grid3X3, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -30,6 +30,7 @@ interface UnassignedImagePoolProps {
   onDeleteImage: (url: string) => void;
   groups: ImageGroup[];
   onAutoGroupUnassigned?: (imagesPerProduct: number) => void;
+  onCreateProductFromUrls?: (urls: string[]) => Promise<string | null>;
 }
 
 export function UnassignedImagePool({
@@ -39,10 +40,12 @@ export function UnassignedImagePool({
   onDeleteImage,
   groups,
   onAutoGroupUnassigned,
+  onCreateProductFromUrls,
 }: UnassignedImagePoolProps) {
   const [selectedImages, setSelectedImages] = useState<Set<string>>(new Set());
   const [targetGroupId, setTargetGroupId] = useState<string>('');
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
 
   const { setNodeRef, isOver } = useDroppable({
     id: 'unassigned-pool',
@@ -81,7 +84,7 @@ export function UnassignedImagePool({
     setSelectedImages(new Set());
   };
 
-  const handleCreateGroup = () => {
+  const handleCreateGroup = async () => {
     // Filter selected images to only include those still in the pool
     const validSelected = [...selectedImages].filter(url => images.includes(url));
     
@@ -99,8 +102,27 @@ export function UnassignedImagePool({
     }
     
     console.log('Creating group with images:', imagesToUse);
-    onCreateGroup(imagesToUse);
-    setSelectedImages(new Set());
+    
+    // Use direct DB persistence if available
+    if (onCreateProductFromUrls) {
+      setIsCreating(true);
+      try {
+        const productId = await onCreateProductFromUrls(imagesToUse);
+        if (productId) {
+          toast.success(`Product created with ${imagesToUse.length} image(s)`);
+          setSelectedImages(new Set());
+        }
+      } catch (error) {
+        console.error('Error creating product:', error);
+        toast.error('Failed to create product');
+      } finally {
+        setIsCreating(false);
+      }
+    } else {
+      // Fallback to local state management (temp group)
+      onCreateGroup(imagesToUse);
+      setSelectedImages(new Set());
+    }
   };
 
   const handleAddToExistingGroup = () => {
@@ -301,14 +323,20 @@ export function UnassignedImagePool({
           <Button 
             size="sm" 
             onClick={handleCreateGroup}
-            disabled={images.length === 0}
+            disabled={images.length === 0 || isCreating}
           >
-            <Plus className="w-4 h-4 mr-1" />
-            {selectedImages.size > 0 
-              ? `Create New Product (${selectedImages.size} images)` 
-              : images.length === 1 
-                ? 'Create New Product (1 image)'
-                : 'Create New Product (select images first)'
+            {isCreating ? (
+              <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+            ) : (
+              <Plus className="w-4 h-4 mr-1" />
+            )}
+            {isCreating 
+              ? 'Creating...'
+              : selectedImages.size > 0 
+                ? `Create New Product (${selectedImages.size} images)` 
+                : images.length === 1 
+                  ? 'Create New Product (1 image)'
+                  : 'Create New Product (select images first)'
             }
           </Button>
 

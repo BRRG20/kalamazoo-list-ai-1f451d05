@@ -1859,6 +1859,63 @@ const handleSelectBatch = useCallback((id: string) => {
     }
   }, [selectedBatchId, clearCache, refetchProducts, deleteEmptyProducts, majorActionUndo]);
 
+  // Create product from image URLs (for UnassignedImagePool direct creation)
+  const handleCreateProductFromUrls = useCallback(async (urls: string[]): Promise<string | null> => {
+    if (!selectedBatchId) {
+      console.warn('handleCreateProductFromUrls: No batch selected');
+      return null;
+    }
+
+    if (!urls || urls.length === 0) {
+      toast.warning('No images selected');
+      return null;
+    }
+
+    // Filter out any empty URLs
+    const validUrls = urls.filter(url => url && url.trim() !== '');
+    if (validUrls.length === 0) {
+      toast.warning('No valid images selected');
+      return null;
+    }
+
+    try {
+      // Step 1: Lookup image IDs from URLs
+      const { data: imageRecords, error: lookupError } = await supabase
+        .from('images')
+        .select('id, url')
+        .eq('batch_id', selectedBatchId)
+        .in('url', validUrls);
+
+      if (lookupError) {
+        console.error('Error looking up images:', lookupError);
+        toast.error('Failed to find images');
+        return null;
+      }
+
+      if (!imageRecords || imageRecords.length === 0) {
+        toast.error('No images found in database');
+        return null;
+      }
+
+      // Get the image IDs in the same order as URLs
+      const imageIds = imageRecords.map(r => r.id);
+
+      // Step 2: Use the existing function to create product from IDs
+      const productId = await handleCreateProductFromImageIds(imageIds);
+
+      if (productId) {
+        // Remove from unassigned images local state
+        setUnassignedImages(prev => prev.filter(url => !validUrls.includes(url)));
+      }
+
+      return productId;
+    } catch (error) {
+      console.error('Error creating product from URLs:', error);
+      toast.error('Failed to create product');
+      return null;
+    }
+  }, [selectedBatchId, handleCreateProductFromImageIds]);
+
   
   const handleReorderProductImages = useCallback(async (productId: string, imageIds: string[]) => {
     // Update positions for all images in the new order
@@ -2238,6 +2295,7 @@ const handleSelectBatch = useCallback((id: string) => {
                 toast.success(newLockState ? 'Group confirmed (locked)' : 'Group unlocked');
               }}
               onRefreshProducts={refetchProducts}
+              onCreateProductFromUrls={handleCreateProductFromUrls}
             />
           ) : (
             <EmptyState />
