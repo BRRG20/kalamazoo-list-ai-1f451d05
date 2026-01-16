@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 interface CapturedImage {
   id: string;
@@ -18,7 +19,7 @@ interface CapturedImage {
 interface MobileCaptureInterfaceProps {
   isOpen: boolean;
   onClose: () => void;
-  onComplete: (images: File[], notes: Map<string, { note?: string; hasStain?: boolean; type?: string; productIndex?: number }>) => void;
+  onComplete: (images: File[], notes: Map<string, { note?: string; hasStain?: boolean; type?: string; productIndex?: number }>) => Promise<void> | void;
   mode: 'batch' | 'quick-product' | 'quick-product-batch';
 }
 
@@ -33,6 +34,7 @@ export function MobileCaptureInterface({
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
   const [noteText, setNoteText] = useState('');
   const [markAsStain, setMarkAsStain] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Quick product batch mode tracking - 4 shots per product
@@ -56,6 +58,7 @@ export function MobileCaptureInterface({
       setMarkAsStain(false);
       setCurrentProductIndex(0);
       setCurrentShotIndex(0);
+      setIsSaving(false);
     }
   }, [isOpen]);
 
@@ -185,7 +188,10 @@ export function MobileCaptureInterface({
     }
   }, [currentShotIndex]);
 
-  const handleComplete = useCallback(() => {
+  const handleComplete = useCallback(async () => {
+    if (isSaving) return; // Prevent double-tap
+    setIsSaving(true);
+    
     const files = capturedImages.map(img => img.file);
     const notes = new Map<string, { note?: string; hasStain?: boolean; type?: string; productIndex?: number }>();
     
@@ -199,12 +205,20 @@ export function MobileCaptureInterface({
       });
     });
 
-    // Cleanup object URLs
-    capturedImages.forEach(img => URL.revokeObjectURL(img.previewUrl));
-    
-    onComplete(files, notes);
-    onClose();
-  }, [capturedImages, onComplete, onClose]);
+    try {
+      // CRITICAL: Await persistence before closing to prevent data loss
+      await onComplete(files, notes);
+      
+      // Cleanup object URLs only after successful persistence
+      capturedImages.forEach(img => URL.revokeObjectURL(img.previewUrl));
+      
+      onClose();
+    } catch (error) {
+      console.error('Camera capture persistence failed:', error);
+      toast.error('Upload failed. Please try again.');
+      setIsSaving(false);
+    }
+  }, [capturedImages, onComplete, onClose, isSaving]);
 
   if (!isOpen) return null;
 
@@ -258,10 +272,10 @@ export function MobileCaptureInterface({
           variant="default" 
           size="sm" 
           onClick={handleComplete}
-          disabled={capturedImages.length === 0}
+          disabled={capturedImages.length === 0 || isSaving}
         >
           <Check className="w-4 h-4 mr-1" />
-          Done
+          {isSaving ? 'Saving...' : 'Done'}
         </Button>
       </div>
 
