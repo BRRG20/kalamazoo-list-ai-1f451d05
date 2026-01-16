@@ -1852,6 +1852,9 @@ const handleSelectBatch = useCallback((id: string) => {
       // Step 6: Clean up empty source products in background (don't await)
       deleteEmptyProducts().catch(err => console.error('Cleanup error:', err));
 
+      // Note: imageGroups and unassignedImages will be updated by the loadBatchImages 
+      // effect when productIds changes after refetchProducts completes
+
       return newProductId;
     } catch (error) {
       console.error('Error creating product from images:', error);
@@ -1905,6 +1908,19 @@ const handleSelectBatch = useCallback((id: string) => {
       const productId = await handleCreateProductFromImageIds(imageIds);
 
       if (productId) {
+        // Optimistically update imageGroups to show new product at TOP immediately
+        setImageGroups(prev => {
+          const newGroup: ImageGroup = {
+            productId: productId,
+            productNumber: 1, // Will be renumbered by effect
+            images: validUrls,
+            selectedImages: new Set<string>(),
+            isGrouped: false,
+          };
+          // Add new group at top, renumber existing groups
+          return [newGroup, ...prev.map((g, i) => ({ ...g, productNumber: i + 2 }))];
+        });
+        
         // Remove from unassigned images local state
         setUnassignedImages(prev => prev.filter(url => !validUrls.includes(url)));
       }
