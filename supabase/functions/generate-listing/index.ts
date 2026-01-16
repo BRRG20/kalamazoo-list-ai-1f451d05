@@ -61,30 +61,38 @@ const SYSTEM_PROMPT = `You are generating product listings for Kalamazoo, a vint
 You have STRONG OCR/Vision capabilities. You MUST carefully read all text visible in images.
 
 ==========================================
-IMAGE ANALYSIS — CRITICAL (USE OCR)
+IMAGE ANALYSIS — CRITICAL (USE OCR) — PRIORITY #1
 ==========================================
 
-MANDATORY: For EVERY image provided, you MUST:
-1. READ ALL TEXT using OCR: labels, tags, signs, handwritten notes, price stickers
-2. EXTRACT from clothing labels:
-   - Brand name (read the brand tag carefully)
-   - Size (read size labels: S, M, L, XL, or numeric)
-   - Material composition (e.g., "100% Cotton", "50% Wool 50% Acrylic")
-   - Country of origin ("Made in USA", "Made in Italy", etc.)
-3. EXTRACT from signs/notes in images:
-   - Pit-to-pit measurements (look for numbers with "inches" or measurements)
-   - Price if visible
-   - Any handwritten condition notes
-4. ANALYZE the garment visually:
-   - Garment type (T-Shirt, Hoodie, Sweater, Jacket, etc.)
-   - Department (Men, Women, Unisex based on cut and style)
-   - Fit (Oversized, Slim, Regular, Boxy)
-   - Colour (main colour and secondary)
-   - Pattern (Striped, Solid, Graphic, etc.)
-   - Era (80s, 90s, Y2K ONLY if style clearly indicates)
-   - Condition (look for wear, stains, damage)
+**BEFORE GENERATING ANY TEXT, FIRST SCAN ALL IMAGES FOR:**
 
-If a value is NOT visible in images and NOT provided in product details, set that field to null.
+1. LABEL CLOSE-UP IMAGES (clothing tags):
+   - READ the brand name tag (often sewn into collar or side seam)
+   - READ the size label (S, M, L, XL, or numeric like 42, 44)
+   - READ fabric composition (e.g., "100% Cotton", "50% Wool 50% Acrylic")
+   - READ country of origin ("Made in USA", "Made in Ecuador", "Made in Italy")
+
+2. MEASUREMENT SIGN/NOTE IMAGES:
+   - LOOK FOR handwritten signs or notes showing measurements
+   - READ pit-to-pit measurement (look for numbers + "inches" or just numbers like "22")
+   - This is often on a white card/paper placed near the garment
+
+3. GARMENT IMAGES (for visual analysis):
+   - Garment type (Sweater, T-Shirt, Hoodie, Jacket, Cardigan, Flannel Shirt, etc.)
+   - Department (Men, Women, Unisex — based on cut and silhouette)
+   - Fit (Oversized, Slim, Regular, Boxy, Relaxed)
+   - Era (80s, 90s, Y2K — ONLY if style/labels clearly indicate)
+   - Colours (main and secondary)
+   - Pattern (Solid, Striped, Fair Isle, Graphic, etc.)
+   - Condition (assess visible wear, stains, damage)
+   - Flaws (describe any visible issues)
+
+CRITICAL PRIORITY ORDER:
+1. ALWAYS read labels/tags first — these contain brand, size, material, country
+2. ALWAYS look for measurement signs/notes — these contain pit-to-pit
+3. Then analyze the garment visually for type, fit, era, condition
+
+If a value is NOT visible in images and NOT provided in product details, set that field to null (JSON null, not the string "null").
 DO NOT guess or hallucinate values. Leave unknown fields as null.
 
 ==========================================
@@ -147,13 +155,17 @@ ALWAYS output this structure:
 
 [blank line]
 
-Brand: [EXACT brand from product details]
-Label Size: [EXACT size from product details]
-Pit to Pit: [measurement with units if provided]
-Material: [fabric composition if provided]
-Era: [ONLY if 80s/90s/Y2K, otherwise OMIT this line]
+Brand: [EXACT brand from product details or labels - OMIT LINE if not available]
+Label Size: [EXACT size from labels - OMIT LINE if not visible/available]
+Pit to Pit: [measurement from sign/note - OMIT LINE if not visible]
+Material: [fabric from label - OMIT LINE if not visible]
+Era: [ONLY if 80s/90s/Y2K - OMIT LINE otherwise]
 Condition: [condition, with flaws in parentheses if any]
 Colour: [main colour, and secondary if applicable]
+
+CRITICAL: In descriptions, NEVER write "null", "N/A", "Unknown", or any placeholder.
+If a value is not available, OMIT THE ENTIRE LINE from the attribute block.
+Example - if no pit-to-pit measurement exists, do NOT write "Pit to Pit: null" - just skip that line entirely.
 
 ==========================================
 EXTRACT ALL FIELDS FROM IMAGES (OCR + VISION)
@@ -391,7 +403,9 @@ serve(async (req) => {
     const data = await response.json();
     const rawContent = data.choices?.[0]?.message?.content || "";
     
-    console.log("Raw AI response:", rawContent.substring(0, 500));
+    // Debug: Log raw response (truncated for brevity)
+    console.log("[generate-listing] Raw AI response (first 800 chars):", rawContent.substring(0, 800));
+    
     
     // Extract JSON from response - handle markdown code blocks and truncated responses
     let generated;
@@ -528,34 +542,53 @@ serve(async (req) => {
         };
       }
     }
+    
+    // Debug: Log OCR-extracted fields specifically to verify label/sign parsing
+    console.log("[generate-listing] OCR extracted fields:", JSON.stringify({
+      brand: generated.brand,
+      size_label: generated.size_label,
+      size_recommended: generated.size_recommended,
+      pit_to_pit: generated.pit_to_pit,
+      material: generated.material,
+      made_in: generated.made_in,
+      garment_type: generated.garment_type,
+      department: generated.department,
+      era: generated.era,
+      fit: generated.fit,
+      condition: generated.condition,
+    }));
 
     // Get the correct size to use in title (recommended_size takes priority, then label)
     const correctSize = product.size_recommended || product.size_label || generated.size_recommended || generated.size_label;
+    
+    // Normalize size helper
+    const normalizeSize = (s: string | null | undefined): string | null => {
+      if (!s || s === 'null' || s === 'undefined') return null;
+      const lower = s.toLowerCase().trim();
+      const sizeMap: Record<string, string> = {
+        'extra small': 'XS', 'xs': 'XS',
+        'small': 'S', 's': 'S',
+        'medium': 'M', 'm': 'M',
+        'large': 'L', 'l': 'L',
+        'extra large': 'XL', 'xl': 'XL',
+        'xxl': 'XXL', '2xl': 'XXL', 'extra extra large': 'XXL',
+        'xxxl': 'XXXL', '3xl': 'XXXL',
+      };
+      return sizeMap[lower] || s;
+    };
     
     // Ensure title is max 80 chars, has no punctuation, and uses CORRECT size
     if (generated.title) {
       // Remove punctuation
       generated.title = generated.title.replace(/[,\-–—:;]/g, ' ').replace(/\s+/g, ' ').trim();
       
-      // CRITICAL: Validate and fix size in title
-      if (correctSize) {
-        // Normalize size for comparison
-        const normalizeSize = (s: string) => {
-          const lower = s.toLowerCase().trim();
-          const sizeMap: Record<string, string> = {
-            'extra small': 'XS', 'xs': 'XS',
-            'small': 'S', 's': 'S',
-            'medium': 'M', 'm': 'M',
-            'large': 'L', 'l': 'L',
-            'extra large': 'XL', 'xl': 'XL',
-            'xxl': 'XXL', '2xl': 'XXL', 'extra extra large': 'XXL',
-            'xxxl': 'XXXL', '3xl': 'XXXL',
-          };
-          return sizeMap[lower] || s;
-        };
-        
-        const normalizedCorrect = normalizeSize(correctSize);
-        
+      // CRITICAL: Remove any "Size null" or "Size undefined" from title
+      generated.title = generated.title.replace(/\s+Size\s+(null|undefined)\b/gi, '').trim();
+      
+      // CRITICAL: Validate and fix size in title (only if we have a valid size)
+      const normalizedCorrect = normalizeSize(correctSize);
+      
+      if (normalizedCorrect) {
         // Check if title ends with Size X pattern
         const sizePattern = /\bSize\s+([A-Z0-9]+)$/i;
         const match = generated.title.match(sizePattern);
@@ -568,7 +601,7 @@ serve(async (req) => {
             generated.title = generated.title.replace(sizePattern, `Size ${normalizedCorrect}`);
           }
         } else {
-          // No size in title - add it
+          // No size in title - add it if there's room
           const titleWithoutSize = generated.title.replace(/\s+Size.*$/i, '').trim();
           if (titleWithoutSize.length + 8 + normalizedCorrect.length <= 80) {
             generated.title = `${titleWithoutSize} Size ${normalizedCorrect}`;
@@ -579,6 +612,34 @@ serve(async (req) => {
       if (generated.title.length > 80) {
         generated.title = generated.title.substring(0, 80).trim();
       }
+    }
+    
+    // CRITICAL: Sanitize descriptions to remove "null" placeholders
+    const sanitizeDescription = (desc: string | null): string | null => {
+      if (!desc) return null;
+      // Remove lines containing ": null" or ": undefined" or just "null"
+      let sanitized = desc
+        .split('\n')
+        .filter(line => {
+          const trimmed = line.trim().toLowerCase();
+          // Skip lines that end with ": null" or are just "null"
+          if (trimmed.endsWith(': null') || trimmed.endsWith(': undefined')) return false;
+          if (trimmed === 'null' || trimmed === 'undefined') return false;
+          return true;
+        })
+        .join('\n');
+      // Also replace inline "null" values in attribute lines
+      sanitized = sanitized.replace(/:\s*null\b/gi, ': ');
+      // Clean up any double blank lines
+      sanitized = sanitized.replace(/\n{3,}/g, '\n\n');
+      return sanitized.trim() || null;
+    };
+    
+    if (generated.description_style_a) {
+      generated.description_style_a = sanitizeDescription(generated.description_style_a);
+    }
+    if (generated.description_style_b) {
+      generated.description_style_b = sanitizeDescription(generated.description_style_b);
     }
     
     // Ensure ALL fields are included in response (complete schema)
