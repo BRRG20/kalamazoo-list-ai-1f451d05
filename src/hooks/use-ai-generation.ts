@@ -189,6 +189,7 @@ export function useAIGeneration({
       const updates: Partial<Product> = {
         status: 'generated',
         title: generated.title || product.title,
+        description: generated.description_style_a || product.description,
         description_style_a: generated.description_style_a,
         description_style_b: generated.description_style_b,
         shopify_tags: finalShopifyTags,
