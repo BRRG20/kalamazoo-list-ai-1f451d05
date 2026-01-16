@@ -58,40 +58,68 @@ function validateImageUrls(urls: unknown): string[] {
 }
 
 const SYSTEM_PROMPT = `You are generating product listings for Kalamazoo, a vintage clothing app.
+You have STRONG OCR/Vision capabilities. You MUST carefully read all text visible in images.
+
+==========================================
+IMAGE ANALYSIS — CRITICAL (USE OCR)
+==========================================
+
+MANDATORY: For EVERY image provided, you MUST:
+1. READ ALL TEXT using OCR: labels, tags, signs, handwritten notes, price stickers
+2. EXTRACT from clothing labels:
+   - Brand name (read the brand tag carefully)
+   - Size (read size labels: S, M, L, XL, or numeric)
+   - Material composition (e.g., "100% Cotton", "50% Wool 50% Acrylic")
+   - Country of origin ("Made in USA", "Made in Italy", etc.)
+3. EXTRACT from signs/notes in images:
+   - Pit-to-pit measurements (look for numbers with "inches" or measurements)
+   - Price if visible
+   - Any handwritten condition notes
+4. ANALYZE the garment visually:
+   - Garment type (T-Shirt, Hoodie, Sweater, Jacket, etc.)
+   - Department (Men, Women, Unisex based on cut and style)
+   - Fit (Oversized, Slim, Regular, Boxy)
+   - Colour (main colour and secondary)
+   - Pattern (Striped, Solid, Graphic, etc.)
+   - Era (80s, 90s, Y2K ONLY if style clearly indicates)
+   - Condition (look for wear, stains, damage)
+
+If a value is NOT visible in images and NOT provided in product details, set that field to null.
+DO NOT guess or hallucinate values. Leave unknown fields as null.
 
 ==========================================
 CRITICAL RULES — NEVER BREAK THESE
 ==========================================
 
 1. NEVER output "Unknown", "Not specified", "N/A", or placeholder text
-2. If a value is not provided, OMIT that attribute line entirely
-3. Brand in description MUST exactly match the brand provided in product details
-4. Era: ONLY include if explicitly 80s, 90s, or Y2K — otherwise OMIT
-5. Made In: ONLY include if explicitly provided — otherwise OMIT
+2. If a value is not provided AND not visible in images, set field to null
+3. Brand in description MUST exactly match the brand from labels OR product details
+4. Era: ONLY include if explicitly 80s, 90s, or Y2K from style/labels — otherwise null
+5. Made In: ONLY include if readable in image label — otherwise null
 6. The attribute block is MANDATORY — never return a description without it
-7. **CRITICAL FOR TITLE**: You MUST use the EXACT brand and size values provided in the product details. DO NOT make up or change them.
+7. **CRITICAL FOR TITLE**: Use the brand and size from labels/images or product details. DO NOT invent them.
 
 ==========================================
 TITLE RULES — CRITICAL
 ==========================================
 
-**MANDATORY**: The title MUST use these EXACT values from product details:
-- Brand: Use EXACTLY as provided (e.g., if "545" is provided, use "545" NOT something else)
-- Size: Use EXACTLY the size_label or size_recommended provided (e.g., if "Large" is provided, use "Size L" or "Size Large")
+**MANDATORY**: The title MUST use values from:
+1. FIRST: What you READ from labels in the images (brand tag, size label)
+2. FALLBACK: What is provided in product details
 
 Format: Brand → Era (if known) → Gender → Item Type → Key Feature → Size
 
 Rules:
-- Start with the EXACT brand name provided
-- Gender: Mens / Womens / Unisex (based on department field, default to Unisex)
-- If era is NOT provided or uncertain, leave it out (do NOT guess)
+- Start with the brand name from labels or product details
+- Gender: Mens / Womens / Unisex (based on garment cut visible in images)
+- If era is NOT evident from style, leave it out (do NOT guess)
 - Max 80 characters, NO punctuation
-- Size ALWAYS at the end using EXACT size provided: "Size L" or "Size XL"
+- Size ALWAYS at the end: "Size L" or "Size XL"
 - NO hype words: "rare", "beautiful", "excellent", "amazing"
 
 Examples:
-- If brand="Malinmor", size_label="Large" → "Malinmor Vintage Mens Chunky Knit Wool Sweater Size L"
-- If brand="545", size_label="Large" → "545 Mens Graphic Print T Shirt Size L"
+- Brand label shows "Malinmor", size label shows "L" → "Malinmor Vintage Mens Chunky Knit Wool Sweater Size L"
+- Brand label shows "Nike", size label shows "XL" → "Nike Mens Graphic Print T Shirt Size XL"
 
 ==========================================
 DESCRIPTION TONE — SOURCE OF TRUTH
@@ -128,15 +156,33 @@ Condition: [condition, with flaws in parentheses if any]
 Colour: [main colour, and secondary if applicable]
 
 ==========================================
-INFER MISSING FIELDS FROM IMAGES
+EXTRACT ALL FIELDS FROM IMAGES (OCR + VISION)
 ==========================================
 
-If product details are missing these fields, analyze the images to determine:
-- garment_type: What type of garment (T-Shirt, Hoodie, Sweater, etc.)
-- fit: How it fits (Regular, Oversized, Slim, Boxy)
+You MUST populate these fields by analyzing images (use OCR for text, vision for visuals):
+
+FROM LABELS (read with OCR):
+- brand: Read the brand name from clothing label/tag
+- size_label: Read size from label (S, M, L, XL, or numeric like 42)
+- material: Read fabric composition (e.g., "100% Cotton")
+- made_in: Read country of origin if visible
+
+FROM SIGNS/NOTES (read with OCR):
+- pit_to_pit: Read measurement if written on a sign (e.g., "22 inches")
+- price: Read if visible on tag/sign
+
+FROM VISUAL ANALYSIS:
+- garment_type: What type of garment (T-Shirt, Hoodie, Sweater, Jacket, Cardigan, Flannel Shirt, etc.)
+- department: Men, Women, or Unisex based on cut/style visible
+- fit: How it fits (Regular, Oversized, Slim, Boxy, Relaxed)
 - era: ONLY if clearly 80s, 90s, or Y2K style (otherwise null)
-- condition: General condition assessment from images
-- department: Men, Women, or Unisex based on cut/style
+- condition: Assess from images (Excellent, Very good, Good, Fair)
+- flaws: Describe visible damage, stains, wear if any (otherwise null)
+- colour_main: Primary colour of garment
+- colour_secondary: Secondary colour if applicable (otherwise null)
+- pattern: Pattern type (Solid, Striped, Graphic, Checked, etc.)
+- style: Style description (Casual, Streetwear, Preppy, etc.)
+- size_recommended: Your size recommendation based on fit/measurements
 
 ==========================================
 ETSY TAG RULES — CRITICAL (SEARCH-LED, CONVERSION-FOCUSED)
@@ -187,22 +233,36 @@ COLLECTIONS TAGS (collections_tags):
 - For Shopify auto-collections
 
 ==========================================
-OUTPUT FORMAT (JSON ONLY)
+OUTPUT FORMAT (STRICT JSON — ALL FIELDS REQUIRED)
 ==========================================
 
-Respond with ONLY valid JSON (no markdown, no code blocks):
+Respond with ONLY valid JSON (no markdown, no code blocks).
+EVERY key below MUST be present. Set to null if not determinable.
+
 {
-  "title": "MUST use exact brand and size from product details, max 80 chars",
-  "description_style_a": "[2-4 sentences]\\n\\nBrand: [exact value]\\nLabel Size: [exact value]\\n...",
-  "description_style_b": "[2-4 sentences, slightly more descriptive]\\n\\nBrand: [exact value]\\n...",
+  "title": "Brand + Era(optional) + Gender + Item Type + Feature + Size, max 80 chars",
+  "description_style_a": "[2-4 sentences]\\n\\nBrand: [value]\\nLabel Size: [value]\\n...",
+  "description_style_b": "[2-4 sentences, slightly more descriptive]\\n\\nBrand: [value]\\n...",
   "shopify_tags": "Brand, Type, Material, Era, Style",
-  "etsy_tags": "vintage wool jumper, 90s sweatshirt, oversized knit, mens crewneck, heavy knit sweater, winter layering, retro streetwear, crew neck pullover, chunky knitwear, casual menswear, grey marl jumper, warm winter knit, classic jumper",
+  "etsy_tags": "13 comma-separated tags, max 20 chars each",
   "collections_tags": "Collection1, Collection2",
-  "garment_type": "inferred from images if not provided, e.g. T-Shirt, Hoodie",
-  "fit": "inferred from images if not provided, e.g. Regular, Oversized",
-  "era": "ONLY 80s, 90s, Y2K if evident, otherwise null",
-  "condition": "inferred condition if not provided",
-  "department": "Men, Women, or Unisex based on images"
+  "garment_type": "T-Shirt, Hoodie, Sweater, Jacket, etc. or null",
+  "department": "Men, Women, or Unisex or null",
+  "brand": "Brand name from label/OCR or null",
+  "fit": "Regular, Oversized, Slim, Boxy, Relaxed or null",
+  "era": "80s, 90s, Y2K or null",
+  "condition": "Excellent, Very good, Good, Fair or null",
+  "flaws": "Description of visible damage or null",
+  "colour_main": "Primary colour or null",
+  "colour_secondary": "Secondary colour or null",
+  "material": "Fabric composition from label or null",
+  "made_in": "Country from label or null",
+  "pattern": "Solid, Striped, Graphic, Checked, etc. or null",
+  "style": "Casual, Streetwear, Preppy, etc. or null",
+  "size_label": "Size from label (S, M, L, XL, etc.) or null",
+  "size_recommended": "Recommended fit size or null",
+  "pit_to_pit": "Measurement in inches from sign/note or null",
+  "price": "Number only or null"
 }`;
 
 
@@ -274,15 +334,17 @@ serve(async (req) => {
       { type: "text", text: userPrompt }
     ];
 
-    // Add images if provided (up to 2 for context)
-    if (imageUrls && Array.isArray(imageUrls)) {
-      const imagesToUse = imageUrls.slice(0, 2);
+    // Add images if provided (up to 4 for comprehensive OCR/vision analysis)
+    if (validImageUrls && validImageUrls.length > 0) {
+      // Use up to 4 images to capture: front, back, label closeups, measurement signs
+      const imagesToUse = validImageUrls.slice(0, 4);
       for (const url of imagesToUse) {
         content.push({
           type: "image_url",
           image_url: { url }
         });
       }
+      console.log(`[AI] Using ${imagesToUse.length} images for OCR/Vision analysis`);
     }
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -513,7 +575,7 @@ serve(async (req) => {
       }
     }
     
-    // Ensure all inferred fields are included
+    // Ensure ALL fields are included in response (complete schema)
     const finalGenerated = {
       title: generated.title || null,
       description_style_a: generated.description_style_a || null,
@@ -521,17 +583,25 @@ serve(async (req) => {
       shopify_tags: generated.shopify_tags || null,
       etsy_tags: generated.etsy_tags || null,
       collections_tags: generated.collections_tags || null,
+      // Core attributes - must all be present
       garment_type: generated.garment_type || null,
+      department: generated.department || null,
+      brand: generated.brand || null,
       fit: generated.fit || null,
       era: generated.era || null,
       condition: generated.condition || null,
-      department: generated.department || null,
       flaws: generated.flaws || null,
+      colour_main: generated.colour_main || null,
+      colour_secondary: generated.colour_secondary || null,
+      material: generated.material || null,
       made_in: generated.made_in || null,
       pattern: generated.pattern || null,
-      // Include size inference
+      style: generated.style || null,
+      // Sizes and measurements
       size_label: generated.size_label || null,
       size_recommended: generated.size_recommended || null,
+      pit_to_pit: generated.pit_to_pit || null,
+      price: generated.price || null,
     };
     
     console.log("[AI] Final generated fields:", Object.keys(finalGenerated).filter(k => finalGenerated[k as keyof typeof finalGenerated]));
