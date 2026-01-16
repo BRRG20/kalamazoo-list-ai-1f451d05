@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { toast } from 'sonner';
 import { AlertTriangle, Plus, Check, X, Eye, Trash2, Grid3X3 } from 'lucide-react';
@@ -48,6 +48,19 @@ export function UnassignedImagePool({
     id: 'unassigned-pool',
   });
 
+  // Clean up stale selections when images array changes
+  useEffect(() => {
+    setSelectedImages(prev => {
+      const imageSet = new Set(images);
+      const cleaned = new Set([...prev].filter(url => imageSet.has(url)));
+      // Only update if there's a difference
+      if (cleaned.size !== prev.size) {
+        return cleaned;
+      }
+      return prev;
+    });
+  }, [images]);
+
   const toggleImageSelection = (url: string) => {
     setSelectedImages(prev => {
       const next = new Set(prev);
@@ -69,9 +82,12 @@ export function UnassignedImagePool({
   };
 
   const handleCreateGroup = () => {
-    // If no images are selected but there's only one image, use that
-    const imagesToUse = selectedImages.size > 0 
-      ? [...selectedImages] 
+    // Filter selected images to only include those still in the pool
+    const validSelected = [...selectedImages].filter(url => images.includes(url));
+    
+    // If no valid images are selected but there's only one image, use that
+    const imagesToUse = validSelected.length > 0 
+      ? validSelected 
       : images.length === 1 
         ? [images[0]] 
         : [];
