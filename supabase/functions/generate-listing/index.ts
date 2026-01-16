@@ -61,51 +61,61 @@ const SYSTEM_PROMPT = `You are generating product listings for Kalamazoo, a vint
 You have STRONG OCR/Vision capabilities. You MUST carefully read all text visible in images.
 
 ==========================================
-IMAGE ANALYSIS — CRITICAL (USE OCR) — PRIORITY #1
+**MANDATORY 2-STEP EXTRACTION PROCESS**
 ==========================================
 
-**BEFORE GENERATING ANY TEXT, FIRST SCAN ALL IMAGES FOR:**
+You MUST complete both steps. Step 1 forces you to extract raw text BEFORE filling structured fields.
 
-1. LABEL CLOSE-UP IMAGES (clothing tags):
-   - READ the brand name tag (often sewn into collar or side seam)
-   - READ the size label (S, M, L, XL, or numeric like 42, 44)
-   - READ fabric composition (e.g., "100% Cotton", "50% Wool 50% Acrylic")
-   - READ country of origin ("Made in USA", "Made in Ecuador", "Made in Italy")
+**STEP 1: RAW OCR TEXT EXTRACTION (DO THIS FIRST)**
+Scan ALL images and extract the EXACT text you see. Return in the ocr_text object:
 
-2. MEASUREMENT SIGN/NOTE IMAGES:
-   - LOOK FOR handwritten signs or notes showing measurements
-   - READ pit-to-pit measurement (look for numbers + "inches" or just numbers like "22")
-   - This is often on a white card/paper placed near the garment
+ocr_text.label_text = Extract ALL text from clothing labels/tags:
+  - Brand name (e.g., "La Paz", "Patagonia", "Nike")
+  - Size on label (e.g., "L", "XL", "42", "Large")
+  - Fabric composition (e.g., "100% Wool", "80% Cotton 20% Polyester")
+  - Country of origin (e.g., "Made in Ecuador", "Made in USA")
+  - Care instructions if visible
+  
+ocr_text.measurement_text = Extract ALL text from measurement signs/notes:
+  - Look for handwritten or printed signs showing measurements
+  - Extract pit-to-pit numbers (e.g., "Pit to Pit: 24", "PTP 22", "24 inches", just "24")
+  - Extract any other measurements shown
+  
+If NO text is visible for labels, set label_text to "No label text visible"
+If NO measurement sign exists, set measurement_text to "No measurement sign visible"
 
-3. GARMENT IMAGES (for visual analysis):
-   - Garment type (Sweater, T-Shirt, Hoodie, Jacket, Cardigan, Flannel Shirt, etc.)
-   - Department (Men, Women, Unisex — based on cut and silhouette)
-   - Fit (Oversized, Slim, Regular, Boxy, Relaxed)
-   - Era (80s, 90s, Y2K — ONLY if style/labels clearly indicate)
-   - Colours (main and secondary)
-   - Pattern (Solid, Striped, Fair Isle, Graphic, etc.)
-   - Condition (assess visible wear, stains, damage)
-   - Flaws (describe any visible issues)
+**STEP 2: STRUCTURED FIELD MAPPING**
+Use the raw text from Step 1 to populate structured fields:
+- brand: Extract from ocr_text.label_text
+- size_label: Extract size from ocr_text.label_text (S, M, L, XL, or numeric)
+- material: Extract fabric composition from ocr_text.label_text
+- made_in: Extract country from ocr_text.label_text
+- pit_to_pit: Extract measurement from ocr_text.measurement_text (format as "X inches")
 
-CRITICAL PRIORITY ORDER:
-1. ALWAYS read labels/tags first — these contain brand, size, material, country
-2. ALWAYS look for measurement signs/notes — these contain pit-to-pit
-3. Then analyze the garment visually for type, fit, era, condition
+CRITICAL: If pit-to-pit appears on a sign (e.g., "24" or "Pit to Pit: 24"), 
+the pit_to_pit field MUST be "24 inches". Do NOT leave it null if a number is visible.
 
-If a value is NOT visible in images and NOT provided in product details, set that field to null (JSON null, not the string "null").
-DO NOT guess or hallucinate values. Leave unknown fields as null.
+Then analyze garment visually for:
+- garment_type: What type (Sweater, Hoodie, T-Shirt, Jacket, Cardigan, Flannel Shirt, etc.)
+- department: Men, Women, or Unisex based on cut/silhouette
+- fit: Oversized, Slim, Regular, Boxy, Relaxed
+- era: 80s, 90s, Y2K ONLY if style clearly indicates — otherwise null
+- condition: Excellent, Very good, Good, Fair
+- flaws: Describe visible damage/wear or null
+- colour_main, colour_secondary, pattern, style
 
 ==========================================
 CRITICAL RULES — NEVER BREAK THESE
 ==========================================
 
 1. NEVER output "Unknown", "Not specified", "N/A", or placeholder text
-2. If a value is not provided AND not visible in images, set field to null
-3. Brand in description MUST exactly match the brand from labels OR product details
-4. Era: ONLY include if explicitly 80s, 90s, or Y2K from style/labels — otherwise null
+2. If a value is not visible AND not provided, set to JSON null (not the string "null")
+3. Brand in description MUST match the brand from labels OR product details exactly
+4. Era: ONLY include if explicitly 80s, 90s, or Y2K — otherwise null
 5. Made In: ONLY include if readable in image label — otherwise null
-6. The attribute block is MANDATORY — never return a description without it
-7. **CRITICAL FOR TITLE**: Use the brand and size from labels/images or product details. DO NOT invent them.
+6. **CRITICAL**: NEVER write the literal string "null" in title or descriptions
+7. **CRITICAL FOR TITLE**: Use brand and size from labels/images. DO NOT invent them.
+8. **CRITICAL**: Title must be MAX 80 characters, with size LAST
 
 ==========================================
 TITLE RULES — CRITICAL
@@ -250,9 +260,14 @@ OUTPUT FORMAT (STRICT JSON — ALL FIELDS REQUIRED)
 
 Respond with ONLY valid JSON (no markdown, no code blocks).
 EVERY key below MUST be present. Set to null if not determinable.
+The ocr_text object is MANDATORY — you must report raw extracted text.
 
 {
-  "title": "Brand + Era(optional) + Gender + Item Type + Feature + Size, max 80 chars",
+  "ocr_text": {
+    "label_text": "Raw text from clothing labels (brand, size, material, made in) or 'No label text visible'",
+    "measurement_text": "Raw text from measurement signs (e.g., 'Pit to Pit: 24') or 'No measurement sign visible'"
+  },
+  "title": "Brand + Era(optional) + Gender + Item Type + Feature + Size LAST, max 80 chars, NO null string",
   "description_style_a": "[2-4 sentences]\\n\\nBrand: [value]\\nLabel Size: [value]\\n...",
   "description_style_b": "[2-4 sentences, slightly more descriptive]\\n\\nBrand: [value]\\n...",
   "shopify_tags": "Brand, Type, Material, Era, Style",
@@ -260,20 +275,20 @@ EVERY key below MUST be present. Set to null if not determinable.
   "collections_tags": "Collection1, Collection2",
   "garment_type": "T-Shirt, Hoodie, Sweater, Jacket, etc. or null",
   "department": "Men, Women, or Unisex or null",
-  "brand": "Brand name from label/OCR or null",
+  "brand": "Brand name from ocr_text.label_text or null",
   "fit": "Regular, Oversized, Slim, Boxy, Relaxed or null",
   "era": "80s, 90s, Y2K or null",
   "condition": "Excellent, Very good, Good, Fair or null",
   "flaws": "Description of visible damage or null",
   "colour_main": "Primary colour or null",
   "colour_secondary": "Secondary colour or null",
-  "material": "Fabric composition from label or null",
-  "made_in": "Country from label or null",
+  "material": "Fabric from ocr_text.label_text or null",
+  "made_in": "Country from ocr_text.label_text or null",
   "pattern": "Solid, Striped, Graphic, Checked, etc. or null",
   "style": "Casual, Streetwear, Preppy, etc. or null",
-  "size_label": "Size from label (S, M, L, XL, etc.) or null",
+  "size_label": "Size from ocr_text.label_text (S, M, L, XL) or null",
   "size_recommended": "Recommended fit size or null",
-  "pit_to_pit": "Measurement in inches from sign/note or null",
+  "pit_to_pit": "Measurement from ocr_text.measurement_text as 'X inches' or null",
   "price": "Number only or null"
 }`;
 
@@ -558,8 +573,15 @@ ${productContext}`;
       }
     }
     
+    // Debug: Log raw OCR text extraction (Step 1 of 2-step process)
+    if (generated.ocr_text) {
+      console.log("[generate-listing] OCR Step 1 - Raw text:", JSON.stringify(generated.ocr_text));
+    } else {
+      console.log("[generate-listing] WARNING: ocr_text object missing from response");
+    }
+    
     // Debug: Log OCR-extracted fields specifically to verify label/sign parsing
-    console.log("[generate-listing] OCR extracted fields:", JSON.stringify({
+    console.log("[generate-listing] OCR Step 2 - Mapped fields:", JSON.stringify({
       brand: generated.brand,
       size_label: generated.size_label,
       size_recommended: generated.size_recommended,
