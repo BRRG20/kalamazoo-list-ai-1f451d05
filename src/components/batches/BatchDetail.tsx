@@ -1355,8 +1355,8 @@ export function BatchDetail({
                   <Button
                     variant="default"
                     size="sm"
-                    onClick={() => onGenerateBulk(batchSize as 5 | 10 | 20)}
-                    disabled={isGenerating || products.length === 0 || unprocessedCount === 0 || batchSize === 0}
+                    onClick={() => onGenerateBulk(batchSize)}
+                    disabled={isGenerating || products.length === 0 || unprocessedCount === 0}
                     className="text-xs md:text-sm rounded-r-none"
                   >
                     {isGenerating ? (
@@ -1364,7 +1364,7 @@ export function BatchDetail({
                     ) : (
                       <Sparkles className="w-4 h-4 mr-1 md:mr-2" />
                     )}
-                    <span className="hidden sm:inline">Generate</span> AI ({batchSize === 0 ? 0 : Math.min(batchSize, unprocessedCount)})
+                    <span className="hidden sm:inline">Generate</span> AI ({Math.min(batchSize, unprocessedCount)})
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
@@ -1385,7 +1385,7 @@ export function BatchDetail({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>Batch Size {batchSize > 0 && `(${batchSize})`}</DropdownMenuLabel>
+                  <DropdownMenuLabel>Batch Size</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   {BATCH_SIZE_OPTIONS.map(size => (
                     <DropdownMenuItem
@@ -1396,17 +1396,6 @@ export function BatchDetail({
                       {size} products {batchSize === size && '✓'}
                     </DropdownMenuItem>
                   ))}
-                  {batchSize > 0 && (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onClick={() => onBatchSizeChange(0)}
-                        className="text-muted-foreground"
-                      >
-                        Clear selection
-                      </DropdownMenuItem>
-                    </>
-                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
