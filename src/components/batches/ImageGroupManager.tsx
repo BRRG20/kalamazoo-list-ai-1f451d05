@@ -44,6 +44,7 @@ export interface ImageGroup {
   productNumber: number;
   images: string[]; // URLs
   selectedImages: Set<string>;
+  isGrouped?: boolean; // Lock status - prevents auto-group from reshuffling
 }
 
 // Progress state for AI matching
@@ -101,6 +102,7 @@ interface ImageGroupManagerProps {
   matchingProgress?: MatchingProgress;
   onOpenProduct?: (productId: string) => void;
   isConfirmingGrouping?: boolean;
+  onToggleGroupLock?: (productId: string) => void;
 }
 
 export function ImageGroupManager({
@@ -119,6 +121,7 @@ export function ImageGroupManager({
   matchingProgress,
   onOpenProduct,
   isConfirmingGrouping,
+  onToggleGroupLock,
 }: ImageGroupManagerProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeSource, setActiveSource] = useState<{ type: 'group' | 'unassigned'; groupId?: string } | null>(null);
@@ -650,6 +653,7 @@ export function ImageGroupManager({
               unassignedImages={unassignedImages}
               onAddFromUnassigned={(url) => handleAddFromUnassigned(group.productId, url)}
               onOpenProduct={onOpenProduct ? () => onOpenProduct(group.productId) : undefined}
+              onToggleGroupLock={onToggleGroupLock ? () => onToggleGroupLock(group.productId) : undefined}
             />
           ))}
         </div>

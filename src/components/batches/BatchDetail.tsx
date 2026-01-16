@@ -181,6 +181,8 @@ interface BatchDetailProps {
   getProductHasModelImage?: (productId: string) => boolean;
   // Force refresh images - increment to force refetch
   imageRefreshKey?: number;
+  // Toggle group lock (confirm/unlock individual group)
+  onToggleGroupLock?: (productId: string) => void;
 }
 
 export function BatchDetail({
@@ -269,6 +271,7 @@ export function BatchDetail({
   isExpandingImages,
   getProductHasModelImage,
   imageRefreshKey,
+  onToggleGroupLock,
 }: BatchDetailProps) {
   // Early return if batch is missing (defensive guard)
   if (!batch || !batch.id) {

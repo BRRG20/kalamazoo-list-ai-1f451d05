@@ -15,6 +15,8 @@ import {
   MoreHorizontal,
   Eye,
   Pencil,
+  Lock,
+  Unlock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -155,6 +157,7 @@ interface ImageGroupCardProps {
   unassignedImages: string[];
   onAddFromUnassigned: (url: string) => void;
   onOpenProduct?: () => void;
+  onToggleGroupLock?: () => void;
 }
 
 export function ImageGroupCard({
@@ -175,6 +178,7 @@ export function ImageGroupCard({
   unassignedImages,
   onAddFromUnassigned,
   onOpenProduct,
+  onToggleGroupLock,
 }: ImageGroupCardProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showAddPopover, setShowAddPopover] = useState(false);
@@ -197,6 +201,8 @@ export function ImageGroupCard({
           "bg-card border-2 rounded-lg overflow-hidden transition-all duration-200 relative",
           isOver 
             ? "border-primary ring-2 ring-primary/30 bg-primary/5 scale-[1.01] shadow-lg" 
+            : group.isGrouped
+            ? "border-emerald-400 ring-1 ring-emerald-200"
             : "border-border"
         )}
       >
@@ -210,7 +216,10 @@ export function ImageGroupCard({
           </div>
         )}
         {/* Header */}
-        <div className="flex items-center justify-between p-3 bg-muted/30 border-b border-border">
+        <div className={cn(
+          "flex items-center justify-between p-3 border-b border-border",
+          group.isGrouped ? "bg-emerald-50/50 dark:bg-emerald-950/20" : "bg-muted/30"
+        )}>
           <div 
             className={cn(
               "flex items-center gap-3",
@@ -222,6 +231,12 @@ export function ImageGroupCard({
             <span className="font-semibold text-foreground">
               Product {String(group.productNumber).padStart(3, '0')}
             </span>
+            {group.isGrouped && (
+              <span className="bg-emerald-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                <Lock className="w-2.5 h-2.5" />
+                Confirmed
+              </span>
+            )}
             <span className="text-sm text-muted-foreground">
               Images ({group.images.length})
             </span>
@@ -233,6 +248,30 @@ export function ImageGroupCard({
           </div>
 
           <div className="flex items-center gap-1">
+            {/* Lock/Unlock group button */}
+            {onToggleGroupLock && (
+              <Button
+                variant={group.isGrouped ? "default" : "ghost"}
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleGroupLock();
+                }}
+                title={group.isGrouped ? "Unlock group (allow regrouping)" : "Confirm group (lock from regrouping)"}
+                className={cn(
+                  group.isGrouped 
+                    ? "bg-emerald-500 hover:bg-emerald-600 text-white" 
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {group.isGrouped ? (
+                  <Lock className="w-4 h-4" />
+                ) : (
+                  <Unlock className="w-4 h-4" />
+                )}
+              </Button>
+            )}
+
             {/* Edit product button */}
             {onOpenProduct && (
               <Button
