@@ -1342,16 +1342,21 @@ export function BatchDetail({
               </Tooltip>
             )}
 
-            {/* Major Action Undo button - for database-level undo (auto-group, moves, etc.) */}
-            {hasMajorActionUndo && onMajorActionUndo && (
+            {/* Major Action Undo button - always visible, disabled when no undo available */}
+            {onMajorActionUndo && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={onMajorActionUndo}
-                    disabled={isMajorActionUndoing}
-                    className="text-xs md:text-sm text-orange-600 hover:text-orange-700 border-orange-300 hover:border-orange-400 hover:bg-orange-50 dark:hover:bg-orange-950"
+                    disabled={!hasMajorActionUndo || isMajorActionUndoing}
+                    className={cn(
+                      "text-xs md:text-sm",
+                      hasMajorActionUndo
+                        ? "text-orange-600 hover:text-orange-700 border-orange-300 hover:border-orange-400 hover:bg-orange-50 dark:hover:bg-orange-950"
+                        : "text-muted-foreground border-border"
+                    )}
                   >
                     {isMajorActionUndoing ? (
                       <Loader2 className="w-4 h-4 mr-1 md:mr-2 animate-spin" />
@@ -1359,13 +1364,17 @@ export function BatchDetail({
                       <Undo2 className="w-4 h-4 mr-1 md:mr-2" />
                     )}
                     Undo Action
-                    {majorActionUndoRemaining > 0 && majorActionUndoRemaining <= 60 && (
+                    {hasMajorActionUndo && majorActionUndoRemaining > 0 && majorActionUndoRemaining <= 60 && (
                       <span className="ml-1 text-[10px] opacity-70">({Math.floor(majorActionUndoRemaining / 60)}:{(majorActionUndoRemaining % 60).toString().padStart(2, '0')})</span>
                     )}
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Undo: {majorActionUndoLabel || 'last major action'} (expires in {Math.ceil(majorActionUndoRemaining / 60)} min)</p>
+                  {hasMajorActionUndo ? (
+                    <p>Undo: {majorActionUndoLabel || 'last major action'} (expires in {Math.ceil(majorActionUndoRemaining / 60)} min)</p>
+                  ) : (
+                    <p>No recent action to undo. Available after Confirm Grouping or moving images.</p>
+                  )}
                 </TooltipContent>
               </Tooltip>
             )}
