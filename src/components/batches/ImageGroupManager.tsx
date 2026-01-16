@@ -103,6 +103,7 @@ interface ImageGroupManagerProps {
   onOpenProduct?: (productId: string) => void;
   isConfirmingGrouping?: boolean;
   onToggleGroupLock?: (productId: string) => void;
+  onCreateProductFromUrls?: (urls: string[]) => Promise<string | null>;
 }
 
 export function ImageGroupManager({
@@ -122,6 +123,7 @@ export function ImageGroupManager({
   onOpenProduct,
   isConfirmingGrouping,
   onToggleGroupLock,
+  onCreateProductFromUrls,
 }: ImageGroupManagerProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeSource, setActiveSource] = useState<{ type: 'group' | 'unassigned'; groupId?: string } | null>(null);
@@ -628,6 +630,7 @@ export function ImageGroupManager({
               saveToHistory('Before auto-group');
               onRegroupUnassigned(num);
             } : undefined}
+            onCreateProductFromUrls={onCreateProductFromUrls}
           />
         )}
 

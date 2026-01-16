@@ -191,6 +191,8 @@ interface BatchDetailProps {
   onToggleGroupLock?: (productId: string) => void;
   // Manual sync - refresh products and images from server
   onRefreshProducts?: () => Promise<void>;
+  // Create product directly from image URLs (immediate DB persist)
+  onCreateProductFromUrls?: (urls: string[]) => Promise<string | null>;
 }
 
 export function BatchDetail({
@@ -286,6 +288,7 @@ export function BatchDetail({
   imageRefreshKey,
   onToggleGroupLock,
   onRefreshProducts,
+  onCreateProductFromUrls,
 }: BatchDetailProps) {
   // Early return if batch is missing (defensive guard)
   if (!batch || !batch.id) {
@@ -2124,6 +2127,7 @@ export function BatchDetail({
               onOpenProduct={onEditProduct}
               isConfirmingGrouping={isConfirmingGrouping}
               onToggleGroupLock={onToggleGroupLock}
+              onCreateProductFromUrls={onCreateProductFromUrls}
             />
           </ErrorBoundary>
         ) : products.length === 0 ? (
