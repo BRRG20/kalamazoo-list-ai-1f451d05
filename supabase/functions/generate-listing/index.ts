@@ -741,32 +741,44 @@ ${productContext}`;
       generated.description_style_b = sanitizeDescription(generated.description_style_b);
     }
     
+    // CRITICAL: Sanitize string "null" values to actual null
+    // AI sometimes outputs the literal string "null" instead of JSON null
+    const sanitizeNullString = (val: unknown): string | null => {
+      if (val === null || val === undefined) return null;
+      if (typeof val !== 'string') return String(val);
+      const trimmed = val.trim().toLowerCase();
+      if (trimmed === 'null' || trimmed === 'undefined' || trimmed === 'n/a' || trimmed === '') {
+        return null;
+      }
+      return val;
+    };
+    
     // Ensure ALL fields are included in response (complete schema)
     const finalGenerated = {
-      title: generated.title || null,
+      title: sanitizeNullString(generated.title),
       description_style_a: generated.description_style_a || null,
       description_style_b: generated.description_style_b || null,
-      shopify_tags: generated.shopify_tags || null,
-      etsy_tags: generated.etsy_tags || null,
-      collections_tags: generated.collections_tags || null,
+      shopify_tags: sanitizeNullString(generated.shopify_tags),
+      etsy_tags: sanitizeNullString(generated.etsy_tags),
+      collections_tags: sanitizeNullString(generated.collections_tags),
       // Core attributes - must all be present
-      garment_type: generated.garment_type || null,
-      department: generated.department || null,
-      brand: generated.brand || null,
-      fit: generated.fit || null,
-      era: generated.era || null,
-      condition: generated.condition || null,
-      flaws: generated.flaws || null,
-      colour_main: generated.colour_main || null,
-      colour_secondary: generated.colour_secondary || null,
-      material: generated.material || null,
-      made_in: generated.made_in || null,
-      pattern: generated.pattern || null,
-      style: generated.style || null,
-      // Sizes and measurements
-      size_label: generated.size_label || null,
-      size_recommended: generated.size_recommended || null,
-      pit_to_pit: generated.pit_to_pit || null,
+      garment_type: sanitizeNullString(generated.garment_type),
+      department: sanitizeNullString(generated.department),
+      brand: sanitizeNullString(generated.brand),
+      fit: sanitizeNullString(generated.fit),
+      era: sanitizeNullString(generated.era),
+      condition: sanitizeNullString(generated.condition),
+      flaws: sanitizeNullString(generated.flaws),
+      colour_main: sanitizeNullString(generated.colour_main),
+      colour_secondary: sanitizeNullString(generated.colour_secondary),
+      material: sanitizeNullString(generated.material),
+      made_in: sanitizeNullString(generated.made_in),
+      pattern: sanitizeNullString(generated.pattern),
+      style: sanitizeNullString(generated.style),
+      // Sizes and measurements - CRITICAL: sanitize these especially
+      size_label: sanitizeNullString(generated.size_label),
+      size_recommended: sanitizeNullString(generated.size_recommended),
+      pit_to_pit: sanitizeNullString(generated.pit_to_pit),
       price: generated.price || null,
     };
     
