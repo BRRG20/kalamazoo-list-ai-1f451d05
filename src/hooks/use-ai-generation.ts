@@ -4,11 +4,11 @@ import type { Product } from '@/types';
 import { useAIUndo, ProductAIState } from './use-ai-undo';
 import { generateSKU } from '@/lib/sku-generator';
 
-// Batch size options for bulk generation
+// Batch size options for bulk generation (0 = unselected/disabled)
 export const BATCH_SIZE_OPTIONS = [5, 10, 20] as const;
-export type BatchSizeOption = typeof BATCH_SIZE_OPTIONS[number];
+export type BatchSizeOption = 0 | typeof BATCH_SIZE_OPTIONS[number];
 
-const DEFAULT_BATCH_SIZE = 20;
+const DEFAULT_BATCH_SIZE: BatchSizeOption = 0;
 const CONCURRENT_REQUESTS = 3; // Reduced to prevent overwhelming the event loop
 
 interface GenerationResult {
