@@ -641,14 +641,20 @@ export function useAIGeneration({
   }, []);
 
   // Initialize AI generated status from products
+  // CRITICAL: Clear all old data first to avoid stale IDs from previous batches
   const initializeAIGeneratedStatus = useCallback((products: Product[]) => {
+    // Clear generating refs to prevent stale locks from previous batch
+    generatingProductIdsRef.current.clear();
+    setGeneratingProductIds(new Set());
+    
+    // Build fresh set from current batch's products only
     const generated = new Set<string>();
     products.forEach(p => {
       if (p.status === 'generated' || p.status === 'ready_for_shopify' || p.status === 'created_in_shopify') {
         generated.add(p.id);
       }
     });
-    // Update both ref and state
+    // Update both ref and state with fresh data
     aiGeneratedProductsRef.current = generated;
     setAiGeneratedProducts(generated);
   }, []);
