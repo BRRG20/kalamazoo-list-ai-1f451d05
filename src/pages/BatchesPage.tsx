@@ -1448,6 +1448,31 @@ const handleSelectBatch = useCallback((id: string) => {
         if (!product.pattern && generated.pattern) {
           updates.pattern = generated.pattern;
         }
+        // CRITICAL: Include OCR/vision extracted fields (brand, material, sizes, measurements, colours)
+        if (!product.brand && generated.brand) {
+          updates.brand = generated.brand;
+        }
+        if (!product.material && generated.material) {
+          updates.material = generated.material;
+        }
+        if (!product.size_label && generated.size_label) {
+          updates.size_label = generated.size_label;
+        }
+        if (!product.size_recommended && generated.size_recommended) {
+          updates.size_recommended = generated.size_recommended;
+        }
+        if (!product.pit_to_pit && generated.pit_to_pit) {
+          updates.pit_to_pit = generated.pit_to_pit;
+        }
+        if (!product.colour_main && generated.colour_main) {
+          updates.colour_main = generated.colour_main;
+        }
+        if (!product.colour_secondary && generated.colour_secondary) {
+          updates.colour_secondary = generated.colour_secondary;
+        }
+        if (!product.style && generated.style) {
+          updates.style = generated.style;
+        }
       }
       
       console.log('[AI Detail] Updates to apply:', Object.keys(updates));
