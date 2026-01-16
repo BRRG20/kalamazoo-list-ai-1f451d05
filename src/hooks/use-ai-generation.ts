@@ -98,14 +98,32 @@ export function useAIGeneration({
         return { productId, success: false, noImages: true };
       }
       
-      const imageUrls = images.slice(0, 2).map(img => img.url);
+      // Only use valid HTTP/HTTPS URLs (filter out data URLs and blobs)
+      const imageUrls = images
+        .slice(0, 2)
+        .map(img => img.url)
+        .filter(url => url && /^https?:\/\/.+/i.test(url));
       
-      // Call the edge function
+      if (imageUrls.length === 0) {
+        console.warn(`[AI] Product ${productId} has no valid HTTP URLs, skipping`);
+        return { productId, success: false, noImages: true, error: 'No valid image URLs' };
+      }
+      
+      // Get the user's access token for authenticated edge function calls
+      const { supabase } = await import('@/integrations/supabase/client');
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.access_token) {
+        console.error(`[AI] No user session for product ${productId}`);
+        return { productId, success: false, error: 'Not authenticated' };
+      }
+      
+      // Call the edge function with user's access token
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-listing`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
           product: {

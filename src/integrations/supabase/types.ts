@@ -342,6 +342,104 @@ export type Database = {
         }
         Relationships: []
       }
+      lister_item_images: {
+        Row: {
+          created_at: string
+          id: string
+          lister_item_id: string
+          original_url: string
+          position: number
+          seo_filename: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          lister_item_id: string
+          original_url: string
+          position?: number
+          seo_filename: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          lister_item_id?: string
+          original_url?: string
+          position?: number
+          seo_filename?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lister_item_images_lister_item_id_fkey"
+            columns: ["lister_item_id"]
+            isOneToOne: false
+            referencedRelation: "lister_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lister_items: {
+        Row: {
+          brand: string | null
+          created_at: string
+          descriptor: string | null
+          garment_type: string | null
+          gender: string | null
+          id: string
+          key_feature: string | null
+          primary_colour: string | null
+          sku: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          brand?: string | null
+          created_at?: string
+          descriptor?: string | null
+          garment_type?: string | null
+          gender?: string | null
+          id?: string
+          key_feature?: string | null
+          primary_colour?: string | null
+          sku: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          brand?: string | null
+          created_at?: string
+          descriptor?: string | null
+          garment_type?: string | null
+          gender?: string | null
+          id?: string
+          key_feature?: string | null
+          primary_colour?: string | null
+          sku?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      lister_sku_sequence: {
+        Row: {
+          created_at: string
+          id: string
+          last_number: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_number?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_number?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       marketplace_connections: {
         Row: {
           connected_at: string
@@ -651,6 +749,7 @@ export type Database = {
         Args: { p_category_code: string; p_era_code: string; p_size: string }
         Returns: string
       }
+      get_next_lister_sku: { Args: never; Returns: string }
       is_email_authorized: { Args: { check_email: string }; Returns: boolean }
     }
     Enums: {
