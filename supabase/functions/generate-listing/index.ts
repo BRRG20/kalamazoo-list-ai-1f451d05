@@ -280,6 +280,9 @@ serve(async (req) => {
 
     const { product, imageUrls, regenerateOnly } = await req.json();
     
+    // Debug: Log incoming request details
+    console.log(`[generate-listing] Received ${imageUrls?.length || 0} image URLs`);
+    
     // Validate product input
     const validation = validateProduct(product);
     if (!validation.valid) {
@@ -291,6 +294,9 @@ serve(async (req) => {
     
     const sanitizedProduct = validation.sanitized!;
     const validImageUrls = validateImageUrls(imageUrls);
+    
+    // Debug: Log validated image count
+    console.log(`[generate-listing] Valid image URLs after validation: ${validImageUrls.length}`);
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
