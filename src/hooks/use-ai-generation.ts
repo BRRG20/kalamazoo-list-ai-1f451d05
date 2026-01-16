@@ -98,7 +98,7 @@ export function useAIGeneration({
         return { productId, success: false, noImages: true };
       }
       
-      const imageUrls = images.slice(0, 2).map(img => img.url);
+      const imageUrls = images.slice(0, 9).map(img => img.url);
       
       const endpoint = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-listing`;
       const payload = {
