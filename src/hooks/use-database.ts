@@ -477,6 +477,9 @@ export function useProducts(batchId: string | null, includeHidden: boolean = fal
     if (updates.who_made !== undefined) dbUpdates.who_made = updates.who_made;
     if (updates.when_made !== undefined) dbUpdates.when_made = updates.when_made;
     if (updates.category_path !== undefined) dbUpdates.category_path = updates.category_path;
+    // Shopify upload tracking
+    if (updates.uploaded_at !== undefined) dbUpdates.uploaded_at = updates.uploaded_at;
+    if (updates.upload_error !== undefined) dbUpdates.upload_error = updates.upload_error;
     // Grouping lock
     if (updates.is_grouped !== undefined) dbUpdates.is_grouped = updates.is_grouped;
     
