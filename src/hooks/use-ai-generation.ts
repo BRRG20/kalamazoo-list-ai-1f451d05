@@ -99,9 +99,9 @@ export function useAIGeneration({
       }
       
       // Only use valid HTTP/HTTPS URLs (filter out data URLs and blobs)
-      // CRITICAL: Use up to 4 images to capture garment, labels, and measurement signs
+      // CRITICAL: Use up to 9 images for OCR (labels, pit-to-pit signs) - edge function supports single-call mode for 9
       const imageUrls = images
-        .slice(0, 4)
+        .slice(0, 9)
         .map(img => img.url)
         .filter(url => url && /^https?:\/\/.+/i.test(url));
       
