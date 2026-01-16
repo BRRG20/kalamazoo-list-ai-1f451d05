@@ -189,6 +189,8 @@ interface BatchDetailProps {
   imageRefreshKey?: number;
   // Toggle group lock (confirm/unlock individual group)
   onToggleGroupLock?: (productId: string) => void;
+  // Manual sync - refresh products and images from server
+  onRefreshProducts?: () => Promise<void>;
 }
 
 export function BatchDetail({
@@ -283,6 +285,7 @@ export function BatchDetail({
   getProductHasModelImage,
   imageRefreshKey,
   onToggleGroupLock,
+  onRefreshProducts,
 }: BatchDetailProps) {
   // Early return if batch is missing (defensive guard)
   if (!batch || !batch.id) {
@@ -313,6 +316,7 @@ export function BatchDetail({
   const [imagesPerProduct, setImagesPerProduct] = useState(settings?.default_images_per_product || 9);
   const [productImages, setProductImages] = useState<Record<string, ProductImage[]>>({});
   const [imagesLoading, setImagesLoading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showBirdsEyeView, setShowBirdsEyeView] = useState(false);
   const [bulkSelectKey, setBulkSelectKey] = useState(0);
@@ -624,6 +628,30 @@ export function BatchDetail({
       setImagesLoading(false);
     }
   };
+
+  // Manual sync: refresh products + images from server
+  const handleManualSync = useCallback(async () => {
+    setIsSyncing(true);
+    try {
+      console.log('[SYNC] Manual sync started');
+      
+      // Refresh products first (if available)
+      if (onRefreshProducts) {
+        await onRefreshProducts();
+      }
+      
+      // Then refresh images
+      await handleRefreshImages();
+      
+      toast.success('Synced');
+      console.log('[SYNC] Manual sync complete');
+    } catch (error) {
+      console.error('[SYNC] Manual sync failed:', error);
+      toast.error('Sync failed');
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [onRefreshProducts]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, addToUnassigned: boolean = false) => {
     const files = e.target.files;
@@ -1418,6 +1446,29 @@ export function BatchDetail({
                 </TooltipContent>
               </Tooltip>
             )}
+
+            {/* Manual Sync button - refresh products + images from server */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleManualSync}
+                  disabled={isSyncing}
+                  className="text-xs md:text-sm"
+                >
+                  {isSyncing ? (
+                    <Loader2 className="w-4 h-4 mr-1 md:mr-2 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-4 h-4 mr-1 md:mr-2" />
+                  )}
+                  <span className="hidden sm:inline">Manual </span>Sync
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Refresh products and images from server</p>
+              </TooltipContent>
+            </Tooltip>
 
             {/* Generate AI with batch size dropdown */}
             <div className="flex items-center gap-1">
