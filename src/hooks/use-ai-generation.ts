@@ -379,13 +379,32 @@ export function useAIGeneration({
     let productsToProcess: Product[];
     
     if (selectedProductIds && selectedProductIds.size > 0) {
+      // When user explicitly selects products, use those (will filter by images later)
       productsToProcess = allProducts.filter(p => selectedProductIds.has(p.id));
     } else {
+      // Bulk mode: only process 'new' products not yet generated
       productsToProcess = allProducts.filter(p => 
         !aiGeneratedProductsRef.current.has(p.id) && 
         p.status === 'new' &&
         !generatingProductIdsRef.current.has(p.id)
       );
+    }
+    
+    // Pre-filter products that have no images (before hitting the API)
+    // This prevents "No images" errors from cluttering the output
+    const productsWithImages = await Promise.all(
+      productsToProcess.map(async (product) => {
+        const images = await fetchImagesForProduct(product.id);
+        return { product, hasImages: images.length > 0 };
+      })
+    );
+    productsToProcess = productsWithImages
+      .filter(({ hasImages }) => hasImages)
+      .map(({ product }) => product);
+    
+    const skippedCount = productsWithImages.filter(({ hasImages }) => !hasImages).length;
+    if (skippedCount > 0) {
+      console.log(`[AI] Skipped ${skippedCount} products with no images`);
     }
 
     // Limit to configured batch size
