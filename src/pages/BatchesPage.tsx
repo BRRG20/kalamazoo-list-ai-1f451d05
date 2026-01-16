@@ -13,6 +13,16 @@ import { DeletedImagesPanel } from '@/components/batches/DeletedImagesPanel';
 import { HiddenProductsPanel } from '@/components/batches/HiddenProductsPanel';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ImageGroup, MatchingProgress } from '@/components/batches/ImageGroupManager';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { 
   useBatches, 
   useProducts, 
@@ -90,6 +100,14 @@ export default function BatchesPage() {
   const [pendingImageUrls, setPendingImageUrls] = useState<string[]>([]);
   const [productCounts, setProductCounts] = useState<Record<string, number>>({});
   const [shopifySuccessData, setShopifySuccessData] = useState<{ successCount: number; errorCount: number } | null>(null);
+  
+  // Shopify upload warning dialog state
+  const [shopifyWarningData, setShopifyWarningData] = useState<{
+    show: boolean;
+    missingCount: number;
+    totalCount: number;
+    productIds: string[];
+  } | null>(null);
   
   // Use AI generation state from hook
   const isGenerating = aiGeneration.isGenerating;
@@ -1105,6 +1123,59 @@ const handleSelectBatch = useCallback((id: string) => {
     toast.success('Excluded last 2 images from Shopify for all products');
   }, [selectedBatchId, products, excludeLastNImages, clearCache]);
 
+  // Helper to check if a product is missing key fields
+  const checkProductMissingFields = useCallback((product: Product): boolean => {
+    const keyFields = [
+      product.garment_type,
+      product.department,
+      product.era,
+      product.brand,
+      product.size_label || product.size_recommended, // Either one is ok
+      product.material,
+      product.condition,
+      product.pit_to_pit,
+    ];
+    // If any key field is missing/empty, count as incomplete
+    return keyFields.some(f => !f || (typeof f === 'string' && f.trim() === ''));
+  }, []);
+
+  // Pre-upload check that shows warning dialog if products have missing fields
+  const handleShopifyUploadCheck = useCallback((productIds: string[]) => {
+    if (!settings?.shopify_store_url) {
+      toast.error('Shopify store URL is not configured. Go to Settings to add it.');
+      return;
+    }
+    
+    const uniqueProductIds = Array.from(new Set(productIds));
+    const allProducts = uniqueProductIds
+      .map(id => products.find(p => p.id === id))
+      .filter(Boolean) as Product[];
+    
+    // Filter out already uploaded products
+    const productsToCreate = allProducts.filter(p => !p.shopify_product_id && p.status !== 'created_in_shopify');
+    
+    if (productsToCreate.length === 0) {
+      toast.success('All selected products are already uploaded to Shopify');
+      return;
+    }
+    
+    // Count products with missing fields
+    const missingCount = productsToCreate.filter(checkProductMissingFields).length;
+    
+    if (missingCount > 0) {
+      // Show warning dialog
+      setShopifyWarningData({
+        show: true,
+        missingCount,
+        totalCount: productsToCreate.length,
+        productIds: uniqueProductIds,
+      });
+    } else {
+      // No missing fields, proceed directly
+      handleCreateInShopify(uniqueProductIds);
+    }
+  }, [settings?.shopify_store_url, products, checkProductMissingFields]);
+
   const handleCreateInShopify = useCallback(async (productIds: string[]) => {
     if (!settings?.shopify_store_url) {
       toast.error('Shopify store URL is not configured. Go to Settings to add it.');
@@ -2025,7 +2096,7 @@ const handleSelectBatch = useCallback((id: string) => {
               batchSize={aiGeneration.batchSize}
               onBatchSizeChange={aiGeneration.setBatchSize}
               onExcludeLast2All={handleExcludeLast2All}
-              onCreateInShopify={handleCreateInShopify}
+              onCreateInShopify={handleShopifyUploadCheck}
               onClearFailedStatus={async (productIds) => {
                 // Reset failed products to 'new' status so they can be retried
                 for (const id of productIds) {
@@ -2414,6 +2485,42 @@ const handleSelectBatch = useCallback((id: string) => {
           refetchHiddenProducts();
         }}
       />
+
+      {/* Shopify Upload Warning Dialog */}
+      <AlertDialog 
+        open={shopifyWarningData?.show ?? false} 
+        onOpenChange={(open) => !open && setShopifyWarningData(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Some items are missing details</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>
+                Missing details: <strong>{shopifyWarningData?.missingCount ?? 0} / {shopifyWarningData?.totalCount ?? 0}</strong> items
+              </p>
+              <p className="text-muted-foreground text-sm">
+                (e.g. size, era, material, brand, pit-to-pit)
+              </p>
+              <p>Upload anyway?</p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShopifyWarningData(null)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (shopifyWarningData?.productIds) {
+                  handleCreateInShopify(shopifyWarningData.productIds);
+                }
+                setShopifyWarningData(null);
+              }}
+            >
+              Upload Anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 }
