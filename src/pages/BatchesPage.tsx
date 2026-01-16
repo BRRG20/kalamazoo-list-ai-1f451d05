@@ -2237,6 +2237,7 @@ const handleSelectBatch = useCallback((id: string) => {
                 ));
                 toast.success(newLockState ? 'Group confirmed (locked)' : 'Group unlocked');
               }}
+              onRefreshProducts={refetchProducts}
             />
           ) : (
             <EmptyState />
