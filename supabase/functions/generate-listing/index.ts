@@ -4,7 +4,7 @@ import { verifyAuth, unauthorizedResponse, corsHeaders } from "../_shared/auth.t
 // Input validation
 const MAX_STRING_LENGTH = 1000;
 const MAX_DESCRIPTION_LENGTH = 2000;
-const MAX_IMAGE_URLS = 4;
+const MAX_IMAGES_PER_CHUNK = 4; // Vision model limit per request
 const MAX_URL_LENGTH = 2048;
 const URL_PATTERN = /^https?:\/\/.+/i;
 
@@ -50,11 +50,19 @@ function validateProduct(product: unknown): { valid: boolean; error?: string; sa
 
 function validateImageUrls(urls: unknown): string[] {
   if (!Array.isArray(urls)) return [];
-  return urls
-    .filter((url): url is string => 
-      typeof url === 'string' && URL_PATTERN.test(url) && url.length <= MAX_URL_LENGTH
-    )
-    .slice(0, MAX_IMAGE_URLS);
+  // No limit - process ALL images via chunking
+  return urls.filter((url): url is string => 
+    typeof url === 'string' && URL_PATTERN.test(url) && url.length <= MAX_URL_LENGTH
+  );
+}
+
+// Helper to chunk array into groups
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) {
+    chunks.push(arr.slice(i, i + size));
+  }
+  return chunks;
 }
 
 const SYSTEM_PROMPT = `You are generating product listings for Kalamazoo, a vintage clothing app.
@@ -373,87 +381,117 @@ ${productContext}`;
       userPrompt = `Generate ONLY Description Style B (natural minimal SEO) for this product:\n${productContext}`;
     }
 
-    const content: any[] = [
-      { type: "text", text: userPrompt }
-    ];
+    // OCR extraction prompt for chunked processing
+    const OCR_ONLY_PROMPT = `You are an OCR specialist. Extract ALL visible text from these images.
+    
+Return ONLY this JSON structure:
+{
+  "ocr_text": {
+    "label_text": "ALL text from clothing labels (brand, size, material, made in, care instructions)",
+    "measurement_text": "ALL text from measurement signs/notes (pit-to-pit numbers, dimensions)"
+  },
+  "visual_notes": "Brief description of garment type, color, style visible"
+}
 
-    // Deterministic image selection: prioritize label + measurement sign images
-    const selectPriorityImages = (urls: string[]): string[] => {
-      if (urls.length <= 4) return urls;
-      
-      const lowerUrls = urls.map(u => u.toLowerCase());
-      
-      // Find label image (clothing tag with size/material/brand)
-      const labelIdx = lowerUrls.findIndex(u => 
-        u.includes('label') || u.includes('tag') || u.includes('care') || 
-        u.includes('fabric') || u.includes('size-label') || u.includes('sizelabel')
-      );
-      
-      // Find measurement sign image (pit-to-pit sign)
-      const measureIdx = lowerUrls.findIndex(u => 
-        u.includes('pit') || u.includes('ptp') || u.includes('measure') || 
-        u.includes('measurement') || u.includes('sign')
-      );
-      
-      const usedIndices = new Set<number>();
-      const result: string[] = [];
-      
-      // Priority 1: Label image
-      if (labelIdx !== -1) {
-        result.push(urls[labelIdx]);
-        usedIndices.add(labelIdx);
-      }
-      
-      // Priority 2: Measurement sign image
-      if (measureIdx !== -1 && !usedIndices.has(measureIdx)) {
-        result.push(urls[measureIdx]);
-        usedIndices.add(measureIdx);
-      }
-      
-      // Priority 3: Front/main garment (first non-label/non-measure image, or index 0)
-      const frontIdx = lowerUrls.findIndex((u, i) => 
-        !usedIndices.has(i) && (u.includes('front') || u.includes('main') || u.includes('primary'))
-      );
-      if (frontIdx !== -1) {
-        result.push(urls[frontIdx]);
-        usedIndices.add(frontIdx);
-      } else {
-        // Default to first available non-used image
-        const firstAvail = urls.findIndex((_, i) => !usedIndices.has(i));
-        if (firstAvail !== -1) {
-          result.push(urls[firstAvail]);
-          usedIndices.add(firstAvail);
+If no label text visible, set label_text to "No label text visible".
+If no measurement sign visible, set measurement_text to "No measurement sign visible".
+IMPORTANT: Respond with ONLY valid JSON.`;
+
+    // Process images in chunks of 4, extracting OCR from each
+    const imageChunks = chunkArray(validImageUrls, MAX_IMAGES_PER_CHUNK);
+    console.log(`[generate-listing] Processing ${validImageUrls.length} images in ${imageChunks.length} chunk(s)`);
+    
+    // Accumulated OCR text from all chunks
+    let mergedLabelText = '';
+    let mergedMeasurementText = '';
+    let mergedVisualNotes = '';
+    
+    // Process OCR chunks if more than 4 images
+    if (imageChunks.length > 1) {
+      for (let i = 0; i < imageChunks.length; i++) {
+        const chunk = imageChunks[i];
+        const chunkContent: any[] = [
+          { type: "text", text: `Chunk ${i + 1}/${imageChunks.length}: ${OCR_ONLY_PROMPT}` }
+        ];
+        
+        for (const url of chunk) {
+          chunkContent.push({
+            type: "image_url",
+            image_url: { url }
+          });
+        }
+        
+        try {
+          const chunkResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${LOVABLE_API_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "google/gemini-2.5-flash", // Use faster model for OCR chunks
+              max_tokens: 800,
+              response_format: { type: "json_object" },
+              messages: [
+                { role: "user", content: chunkContent }
+              ],
+            }),
+          });
+          
+          if (chunkResponse.ok) {
+            const chunkData = await chunkResponse.json();
+            const chunkRaw = chunkData.choices?.[0]?.message?.content || "";
+            try {
+              const chunkParsed = JSON.parse(chunkRaw);
+              if (chunkParsed.ocr_text?.label_text && chunkParsed.ocr_text.label_text !== "No label text visible") {
+                mergedLabelText += (mergedLabelText ? ' | ' : '') + chunkParsed.ocr_text.label_text;
+              }
+              if (chunkParsed.ocr_text?.measurement_text && chunkParsed.ocr_text.measurement_text !== "No measurement sign visible") {
+                mergedMeasurementText += (mergedMeasurementText ? ' | ' : '') + chunkParsed.ocr_text.measurement_text;
+              }
+              if (chunkParsed.visual_notes) {
+                mergedVisualNotes += (mergedVisualNotes ? '; ' : '') + chunkParsed.visual_notes;
+              }
+            } catch {
+              console.log(`[generate-listing] Chunk ${i + 1} parse failed, skipping`);
+            }
+          }
+        } catch (err) {
+          console.log(`[generate-listing] Chunk ${i + 1} request failed:`, err);
         }
       }
       
-      // Priority 4: Extra detail (next available)
-      for (let i = 0; i < urls.length && result.length < 4; i++) {
-        if (!usedIndices.has(i)) {
-          result.push(urls[i]);
-          usedIndices.add(i);
-        }
+      console.log(`[generate-listing] Merged OCR - labels: ${mergedLabelText.length > 0}, measurements: ${mergedMeasurementText.length > 0}`);
+    }
+    
+    // Build final content with first 4 images for main generation + merged OCR context
+    const content: any[] = [];
+    
+    // Add merged OCR context if we have it
+    let enhancedPrompt = userPrompt;
+    if (mergedLabelText || mergedMeasurementText) {
+      enhancedPrompt += `\n\n**PRE-EXTRACTED OCR FROM ALL ${validImageUrls.length} IMAGES:**`;
+      if (mergedLabelText) {
+        enhancedPrompt += `\nLabel text found: ${mergedLabelText}`;
       }
-      
-      return result;
-    };
-
-    // Add images if provided (up to 4 for comprehensive OCR/vision analysis)
-    if (validImageUrls && validImageUrls.length > 0) {
-      const imagesToUse = selectPriorityImages(validImageUrls);
-      
-      // Log selected image roles for debugging
-      const lowerSelected = imagesToUse.map(u => u.toLowerCase());
-      console.log(`[generate-listing] Image selection: ${imagesToUse.length} of ${validImageUrls.length} images`, {
-        hasLabel: lowerSelected.some(u => u.includes('label') || u.includes('tag') || u.includes('care')),
-        hasMeasure: lowerSelected.some(u => u.includes('pit') || u.includes('ptp') || u.includes('measure')),
+      if (mergedMeasurementText) {
+        enhancedPrompt += `\nMeasurement text found: ${mergedMeasurementText}`;
+      }
+      if (mergedVisualNotes) {
+        enhancedPrompt += `\nVisual notes: ${mergedVisualNotes}`;
+      }
+      enhancedPrompt += `\n\nUse this OCR data to populate brand, size_label, material, made_in, pit_to_pit fields.`;
+    }
+    
+    content.push({ type: "text", text: enhancedPrompt });
+    
+    // Add first 4 images for main vision analysis
+    const mainImages = validImageUrls.slice(0, 4);
+    for (const url of mainImages) {
+      content.push({
+        type: "image_url",
+        image_url: { url }
       });
-      
-      for (const url of imagesToUse) {
-        content.push({
-          type: "image_url",
-          image_url: { url }
-        });
-      }
     }
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -647,7 +685,7 @@ ${productContext}`;
         const pitMatch = measureText.match(/(?:pit[- ]?to[- ]?pit|ptp)?[:\s]*(\d+(?:\.\d+)?)\s*(?:inches?|in|"|'')?/i);
         if (pitMatch) {
           generated.pit_to_pit = `${pitMatch[1]} inches`;
-          console.log(`[generate-listing] REGEX FALLBACK: Extracted pit_to_pit "${generated.pit_to_pit}" from measurement_text`);
+          console.log(`[generate-listing] REGEX FALLBACK: Extracted pit_to_pit "${generated.pit_to_pit}" from response ocr_text`);
         }
       }
       
@@ -658,11 +696,29 @@ ${productContext}`;
         const sizeMatch = labelText.match(/\b(XXS|XS|S|M|L|XL|XXL|XXXL|2XL|3XL|\d{1,2})\b/i);
         if (sizeMatch) {
           generated.size_label = sizeMatch[1].toUpperCase();
-          console.log(`[generate-listing] REGEX FALLBACK: Extracted size_label "${generated.size_label}" from label_text`);
+          console.log(`[generate-listing] REGEX FALLBACK: Extracted size_label "${generated.size_label}" from response ocr_text`);
         }
       }
     } else {
       console.log("[generate-listing] WARNING: ocr_text object missing from response");
+    }
+    
+    // CRITICAL: Additional fallback from merged chunk OCR (covers ALL images)
+    // This catches pit-to-pit and labels from images beyond the first 4
+    if (!generated.pit_to_pit && mergedMeasurementText) {
+      const pitMatch = mergedMeasurementText.match(/(?:pit[- ]?to[- ]?pit|ptp)?[:\s]*(\d+(?:\.\d+)?)\s*(?:inches?|in|"|'')?/i);
+      if (pitMatch) {
+        generated.pit_to_pit = `${pitMatch[1]} inches`;
+        console.log(`[generate-listing] CHUNK FALLBACK: Extracted pit_to_pit "${generated.pit_to_pit}" from merged OCR`);
+      }
+    }
+    
+    if (!generated.size_label && mergedLabelText) {
+      const sizeMatch = mergedLabelText.match(/\b(XXS|XS|S|M|L|XL|XXL|XXXL|2XL|3XL|\d{1,2})\b/i);
+      if (sizeMatch) {
+        generated.size_label = sizeMatch[1].toUpperCase();
+        console.log(`[generate-listing] CHUNK FALLBACK: Extracted size_label "${generated.size_label}" from merged OCR`);
+      }
     }
     
     // Debug: Log OCR-extracted fields specifically to verify label/sign parsing
