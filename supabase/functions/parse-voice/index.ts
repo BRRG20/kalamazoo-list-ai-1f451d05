@@ -168,8 +168,9 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         model: "google/gemini-2.5-flash",
+        response_format: { type: "json_object" },
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: SYSTEM_PROMPT + "\n\nIMPORTANT: You MUST respond with ONLY valid JSON. No markdown, no code blocks, no explanatory text." },
           { role: "user", content: userPrompt }
         ],
       }),
@@ -198,14 +199,35 @@ serve(async (req) => {
     
     console.log("AI response:", rawContent);
     
-    // Extract JSON from response
+    // Extract JSON from response with robust parsing
     let parsed;
     try {
       parsed = JSON.parse(rawContent);
     } catch {
-      const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+      // Try to extract JSON from markdown code blocks or mixed content
+      let jsonString = rawContent;
+      
+      // Remove markdown code block markers
+      const codeBlockMatch = rawContent.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (codeBlockMatch) {
+        jsonString = codeBlockMatch[1].trim();
+      } else {
+        // Handle truncated code block
+        const truncatedMatch = rawContent.match(/```(?:json)?\s*([\s\S]*)/);
+        if (truncatedMatch) {
+          jsonString = truncatedMatch[1].trim();
+        }
+      }
+      
+      // Try to find JSON object
+      const jsonMatch = jsonString.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        parsed = JSON.parse(jsonMatch[0]);
+        try {
+          parsed = JSON.parse(jsonMatch[0]);
+        } catch {
+          console.log("Failed to parse extracted JSON, using empty object");
+          parsed = {};
+        }
       } else {
         console.log("No valid JSON found in response");
         parsed = {};
