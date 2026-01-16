@@ -217,10 +217,14 @@ export function useAIGeneration({
       };
       
       // Garment type - always update if AI provided
-      updateField('garment_type', generated.garment_type);
+      if (generated.garment_type && generated.garment_type !== 'null') {
+        updates.garment_type = generated.garment_type;
+      }
       
       // Fit - always update if AI provided
-      updateField('fit', generated.fit);
+      if (generated.fit && generated.fit !== 'null') {
+        updates.fit = generated.fit;
+      }
       
       // Era - validate before updating
       updateField('era', generated.era, (val) => {
