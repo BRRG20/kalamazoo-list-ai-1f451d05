@@ -99,8 +99,9 @@ export function useAIGeneration({
       }
       
       // Only use valid HTTP/HTTPS URLs (filter out data URLs and blobs)
+      // CRITICAL: Use up to 4 images to capture garment, labels, and measurement signs
       const imageUrls = images
-        .slice(0, 2)
+        .slice(0, 4)
         .map(img => img.url)
         .filter(url => url && /^https?:\/\/.+/i.test(url));
       
@@ -276,12 +277,40 @@ export function useAIGeneration({
         updates.pattern = generated.pattern;
       }
       
+      // CRITICAL: Map ALL OCR/Vision extracted fields from AI response
+      // These are the fields that can be read from labels and measurement signs
+      if (!product.brand && generated.brand) {
+        updates.brand = generated.brand;
+      }
+      if (!product.material && generated.material) {
+        updates.material = generated.material;
+      }
+      if (!product.size_label && generated.size_label) {
+        updates.size_label = generated.size_label;
+      }
+      if (!product.size_recommended && generated.size_recommended) {
+        updates.size_recommended = generated.size_recommended;
+      }
+      if (!product.pit_to_pit && generated.pit_to_pit) {
+        updates.pit_to_pit = generated.pit_to_pit;
+      }
+      if (!product.colour_main && generated.colour_main) {
+        updates.colour_main = generated.colour_main;
+      }
+      if (!product.colour_secondary && generated.colour_secondary) {
+        updates.colour_secondary = generated.colour_secondary;
+      }
+      if (!product.style && generated.style) {
+        updates.style = generated.style;
+      }
+      
       // GENERATE SKU after AI categorization using the proper format
       // Format: [CATEGORY]-[STYLE]-[SIZE]-[NUMBER]
       const finalGarmentType = updates.garment_type || product.garment_type;
       const finalEra = updates.era || product.era;
-      const finalSizeLabel = product.size_label;
-      const finalSizeRecommended = product.size_recommended;
+      // Use AI-inferred sizes if product doesn't have them
+      const finalSizeLabel = updates.size_label || product.size_label;
+      const finalSizeRecommended = updates.size_recommended || product.size_recommended;
       
       if (finalGarmentType) {
         const skuResult = await generateSKU(
