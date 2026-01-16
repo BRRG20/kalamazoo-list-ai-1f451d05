@@ -809,6 +809,7 @@ const handleSelectBatch = useCallback((id: string) => {
         productNumber: index + 1,
         images: imagesByProduct[product.id] || [],
         selectedImages: new Set<string>(),
+        isGrouped: product.is_grouped || false,
       }));
     
     setImageGroups(groups);
