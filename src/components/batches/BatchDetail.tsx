@@ -2004,6 +2004,7 @@ export function BatchDetail({
               matchingProgress={matchingProgress}
               onOpenProduct={onEditProduct}
               isConfirmingGrouping={isConfirmingGrouping}
+              onToggleGroupLock={onToggleGroupLock}
             />
           </ErrorBoundary>
         ) : products.length === 0 ? (
