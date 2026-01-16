@@ -1269,10 +1269,17 @@ const handleSelectBatch = useCallback((id: string) => {
           console.log(`[Shopify] Auto-generated title for ${p.sku || p.id}: "${title}"`);
         }
         
-        // Auto-set price if missing
+        // Auto-set price if missing (using rule-based pricing)
         let price = p.price;
         if (!price || price <= 0) {
-          price = getDefaultPrice(p.garment_type);
+          price = getDefaultPrice(p.garment_type, {
+            brand: p.brand,
+            material: p.material,
+            condition: p.condition,
+            collections_tags: p.collections_tags,
+            title: p.title,
+            style: p.style,
+          });
           console.log(`[Shopify] Auto-set price for ${p.sku || p.id}: £${price}`);
         }
         

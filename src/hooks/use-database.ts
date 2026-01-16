@@ -104,18 +104,140 @@ export function generateAutoTitle(product: Product): string {
   return title || 'Vintage Clothing Item';
 }
 
-// Helper: Get default price based on garment type
-export function getDefaultPrice(garmentType: string | null): number {
+// Helper: Get suggested price based on product attributes (in GBP)
+export function getDefaultPrice(
+  garmentType: string | null,
+  options?: {
+    brand?: string | null;
+    material?: string | null;
+    condition?: string | null;
+    collections_tags?: string | null;
+    title?: string | null;
+    style?: string | null;
+  }
+): number {
   const type = (garmentType || '').toLowerCase();
+  const brand = (options?.brand || '').toLowerCase();
+  const material = (options?.material || '').toLowerCase();
+  const condition = (options?.condition || '').toLowerCase();
+  const tags = (options?.collections_tags || '').toLowerCase();
+  const title = (options?.title || '').toLowerCase();
+  const style = (options?.style || '').toLowerCase();
   
-  // Price defaults by garment type (in GBP)
-  if (type.includes('t-shirt') || type.includes('tee') || type.includes('t shirt')) return 22;
-  if (type.includes('hoodie') || type.includes('hooded')) return 28;
-  if (type.includes('sweater') || type.includes('jumper') || type.includes('knit')) return 34;
-  if (type.includes('sweatshirt')) return 28;
+  // Combined text for pattern matching
+  const allText = `${type} ${brand} ${tags} ${title} ${style}`;
+  
+  // Check for Eastern Archive / Eastern Drip collection
+  const isEastern = /eastern\s*(archive|drip)?|chinese|japanese|korean/i.test(allText);
+  
+  // Check for hype/popular indicators
+  const isHype = /iconic|famous|popular|hype|rare|vintage\s*90s|sports\s*team|big\s*graphic/i.test(allText);
+  
+  // Premium brand list
+  const premiumBrands = ['ralph lauren', 'tommy hilfiger', 'polo', 'lacoste', 'burberry', 'fred perry', 'stone island', 'cp company'];
+  const isPremiumBrand = premiumBrands.some(b => brand.includes(b));
+  
+  // Hype hoodie brands
+  const hypeHoodieBrands = ['thrasher', 'supreme', 'stussy', 'bape', 'palace', 'nike', 'adidas', 'champion'];
+  const isHypeHoodieBrand = hypeHoodieBrands.some(b => brand.includes(b));
+  
+  // Known/popular brand check
+  const knownBrands = ['nike', 'adidas', 'champion', 'carhartt', 'north face', 'patagonia', 'columbia', 'levi', 'dickies', 'wrangler'];
+  const isKnownBrand = knownBrands.some(b => brand.includes(b)) || isPremiumBrand;
+  
+  // Material checks
+  const isWool = /wool|laine|wolle/i.test(material);
+  const isPureWool = /100%\s*wool|pure\s*wool/i.test(material);
+  const isThickKnit = /thick|chunky|heavy\s*knit|cable\s*knit/i.test(allText);
+  const isEcuadorian = /ecuador|ecuadorian/i.test(allText);
+  
+  // Condition check (poor condition caps prices)
+  const isPoorCondition = /fair|poor|bad|damaged/i.test(condition);
+  
+  // ==========================================
+  // T-SHIRTS
+  // ==========================================
+  if (type.includes('t-shirt') || type.includes('tee') || type.includes('t shirt')) {
+    if (isEastern) return 26;
+    if (isHype) return 28;
+    return 22;
+  }
+  
+  // ==========================================
+  // SWEATERS / KNITS
+  // ==========================================
+  if (type.includes('sweater') || type.includes('jumper') || type.includes('knit')) {
+    // Ecuadorian or premium rare knit
+    if (isEcuadorian || /premium|rare|handmade|artisan/i.test(allText)) {
+      return isPoorCondition ? 34 : 80;
+    }
+    // Pure wool + thick knit
+    if (isPureWool && isThickKnit) {
+      return isPoorCondition ? 34 : 43;
+    }
+    // Pure wool
+    if (isPureWool || isWool) {
+      return isPoorCondition ? 34 : 38;
+    }
+    // Default sweater
+    return 34;
+  }
+  
+  // ==========================================
+  // HOODIES
+  // ==========================================
+  if (type.includes('hoodie') || type.includes('hooded')) {
+    if (isHypeHoodieBrand) return 34;
+    if (isKnownBrand) return 34;
+    return 28;
+  }
+  
+  // ==========================================
+  // SWEATSHIRTS
+  // ==========================================
+  if (type.includes('sweatshirt')) {
+    if (isHype || isKnownBrand) return 32;
+    return 28;
+  }
+  
+  // ==========================================
+  // CORDUROY TROUSERS
+  // ==========================================
+  if ((type.includes('trouser') || type.includes('pant')) && type.includes('cord')) {
+    if (isKnownBrand && condition.includes('very good')) return 34;
+    return 28;
+  }
+  
+  // ==========================================
+  // CORDUROY SHIRTS
+  // ==========================================
+  if (type.includes('shirt') && type.includes('cord')) {
+    if (isPremiumBrand) return 34;
+    if (isKnownBrand) return 28;
+    return 26;
+  }
+  
+  // ==========================================
+  // SHIRTS (Hawaiian, casual, branded)
+  // ==========================================
+  if (type.includes('shirt') || type.includes('flannel')) {
+    // Hawaiian/vacation shirts
+    if (/hawaiian|vacation|aloha|tropical/i.test(allText)) {
+      return isKnownBrand ? 32 : 28;
+    }
+    // Premium branded shirts
+    if (isPremiumBrand) return 32;
+    // Known brand casual shirts
+    if (isKnownBrand) return 32;
+    // Default casual shirt
+    return 28;
+  }
+  
+  // ==========================================
+  // OTHER GARMENTS (defaults)
+  // ==========================================
   if (type.includes('jacket') || type.includes('coat')) return 45;
   if (type.includes('fleece')) return 32;
-  if (type.includes('shirt') || type.includes('flannel')) return 28;
   if (type.includes('cardigan')) return 34;
   if (type.includes('polo')) return 24;
   if (type.includes('vest') || type.includes('gilet')) return 30;
