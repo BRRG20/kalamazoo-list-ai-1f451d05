@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { toast } from 'sonner';
 import { AlertTriangle, Plus, Check, X, Eye, Trash2, Grid3X3 } from 'lucide-react';
@@ -43,6 +43,13 @@ export function UnassignedImagePool({
   const [selectedImages, setSelectedImages] = useState<Set<string>>(new Set());
   const [targetGroupId, setTargetGroupId] = useState<string>('');
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+
+  // Reset preview index if it becomes invalid (e.g., images were removed)
+  useEffect(() => {
+    if (previewIndex !== null && (images.length === 0 || previewIndex >= images.length)) {
+      setPreviewIndex(null);
+    }
+  }, [images, previewIndex]);
 
   const { setNodeRef, isOver } = useDroppable({
     id: 'unassigned-pool',
