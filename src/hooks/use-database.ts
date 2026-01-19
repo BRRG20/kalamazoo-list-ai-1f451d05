@@ -1443,3 +1443,180 @@ export function useImageUpload() {
 
   return { uploadImage, uploadImages, uploading, progress, uploadStartTime, uploadTotal, uploadCompleted };
 }
+
+// Backfill thumbnails for existing images
+async function generateThumbnailFromUrl(imageUrl: string): Promise<File | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    
+    img.onload = () => {
+      const maxWidth = 1800;
+      const maxHeight = 1800;
+      let width = img.width;
+      let height = img.height;
+      
+      // Calculate new dimensions
+      if (width > maxWidth || height > maxHeight) {
+        const ratio = Math.min(maxWidth / width, maxHeight / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+      
+      // Skip thumbnail if image is already small
+      if (width >= img.width && height >= img.height) {
+        resolve(null);
+        return;
+      }
+      
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      
+      if (!ctx) {
+        resolve(null);
+        return;
+      }
+      
+      ctx.drawImage(img, 0, 0, width, height);
+      
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            resolve(null);
+            return;
+          }
+          const thumbFile = new File([blob], 'thumb.jpg', {
+            type: 'image/jpeg',
+            lastModified: Date.now(),
+          });
+          resolve(thumbFile);
+        },
+        'image/jpeg',
+        0.88
+      );
+    };
+    
+    img.onerror = () => resolve(null);
+    img.src = imageUrl;
+  });
+}
+
+export async function backfillThumbnails(batchId: string | null, onProgress?: (processed: number, total: number) => void): Promise<{ success: number; failed: number; total: number }> {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    throw new Error('User not authenticated');
+  }
+
+  // Query images where thumb_url IS NULL
+  let query = supabase
+    .from('images')
+    .select('id, url, batch_id, user_id')
+    .is('thumb_url', null)
+    .is('deleted_at', null)
+    .limit(20);
+  
+  if (batchId) {
+    query = query.eq('batch_id', batchId);
+  }
+
+  const { data: images, error } = await query;
+
+  if (error) {
+    console.error('Error fetching images for backfill:', error);
+    throw new Error('Failed to fetch images');
+  }
+
+  if (!images || images.length === 0) {
+    return { success: 0, failed: 0, total: 0 };
+  }
+
+  const total = images.length;
+  let success = 0;
+  let failed = 0;
+
+  for (let i = 0; i < images.length; i++) {
+    const image = images[i];
+    
+    try {
+      // Extract file path from URL to determine storage location
+      const urlObj = new URL(image.url);
+      const pathMatch = urlObj.pathname.match(/\/([^\/]+\/[^\/]+\/[^\/]+)$/);
+      if (!pathMatch) {
+        console.warn(`Could not extract path from URL: ${image.url}`);
+        failed++;
+        if (onProgress) onProgress(i + 1, total);
+        continue;
+      }
+
+      const originalPath = pathMatch[1];
+      const pathParts = originalPath.split('/');
+      const fileId = pathParts[pathParts.length - 1].replace(/\.[^/.]+$/, '');
+      const imageUserId = image.user_id || userId;
+      const batchIdForPath = image.batch_id || batchId;
+      
+      if (!batchIdForPath) {
+        console.warn(`Missing batch_id for image ${image.id}`);
+        failed++;
+        if (onProgress) onProgress(i + 1, total);
+        continue;
+      }
+      
+      // Generate thumbnail from URL
+      const thumbFile = await generateThumbnailFromUrl(image.url);
+      if (!thumbFile) {
+        console.warn(`Failed to generate thumbnail for ${image.url}`);
+        failed++;
+        if (onProgress) onProgress(i + 1, total);
+        continue;
+      }
+
+      // Upload thumbnail to storage
+      const thumbFileName = `${imageUserId}/${batchIdForPath}/${fileId}_thumb.jpg`;
+      const { error: uploadError } = await supabase.storage
+        .from('product-images')
+        .upload(thumbFileName, thumbFile, { upsert: true });
+
+      if (uploadError) {
+        console.error(`Failed to upload thumbnail for ${image.id}:`, uploadError);
+        failed++;
+        if (onProgress) onProgress(i + 1, total);
+        continue;
+      }
+
+      // Get public URL for thumbnail
+      const { data: thumbUrlData } = supabase.storage
+        .from('product-images')
+        .getPublicUrl(thumbFileName);
+
+      const thumbUrl = thumbUrlData.publicUrl;
+
+      // Update image row with thumb_url
+      const { error: updateError } = await supabase
+        .from('images')
+        .update({ thumb_url: thumbUrl })
+        .eq('id', image.id);
+
+      if (updateError) {
+        console.error(`Failed to update thumb_url for ${image.id}:`, updateError);
+        failed++;
+      } else {
+        success++;
+      }
+
+      // Throttle: wait 250ms between uploads
+      if (i < images.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 250));
+      }
+
+      if (onProgress) onProgress(i + 1, total);
+    } catch (error) {
+      console.error(`Error processing image ${image.id}:`, error);
+      failed++;
+      if (onProgress) onProgress(i + 1, total);
+    }
+  }
+
+  return { success, failed, total };
+}

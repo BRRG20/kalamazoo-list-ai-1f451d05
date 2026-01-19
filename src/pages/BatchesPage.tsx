@@ -25,6 +25,7 @@ import {
   generateListingBlock,
   validateProductForExport,
   UPLOAD_LIMITS,
+  backfillThumbnails,
 } from '@/hooks/use-database';
 import { useDefaultTags } from '@/hooks/use-default-tags';
 import { useAIGeneration } from '@/hooks/use-ai-generation';
@@ -97,6 +98,8 @@ export default function BatchesPage() {
   const [imageThumbMap, setImageThumbMap] = useState<Map<string, string>>(new Map()); // URL -> thumb_url mapping
   const [showGroupManager, setShowGroupManager] = useState(false);
   const [isMatching, setIsMatching] = useState(false);
+  const [isBackfillingThumbnails, setIsBackfillingThumbnails] = useState(false);
+  const [backfillProgress, setBackfillProgress] = useState({ processed: 0, total: 0 });
   const [matchingProgress, setMatchingProgress] = useState<MatchingProgress>({ current: 0, total: 0, currentBatch: 0, totalBatches: 0 });
   const [isConfirmingGrouping, setIsConfirmingGrouping] = useState(false);
   
@@ -1281,6 +1284,49 @@ const handleSelectBatch = useCallback((id: string) => {
     }
   }, [editingProductId, updateImage, fetchImagesForProduct]);
 
+  const handleBackfillThumbnails = useCallback(async () => {
+    if (!selectedBatchId) {
+      toast.error('Please select a batch first');
+      return;
+    }
+
+    setIsBackfillingThumbnails(true);
+    setBackfillProgress({ processed: 0, total: 0 });
+    
+    toast.info('Starting thumbnail backfill...');
+
+    try {
+      const result = await backfillThumbnails(
+        selectedBatchId,
+        (processed, total) => {
+          setBackfillProgress({ processed, total });
+        }
+      );
+
+      if (result.total === 0) {
+        toast.success('No images need thumbnails');
+      } else {
+        toast.success(`Backfill complete: ${result.success} succeeded, ${result.failed} failed out of ${result.total}`);
+        
+        // Refresh images to load new thumbnails
+        const allBatchImages = await fetchImagesForBatch(selectedBatchId);
+        const thumbMap = new Map<string, string>();
+        for (const img of allBatchImages) {
+          if (img.thumb_url) {
+            thumbMap.set(img.url, img.thumb_url);
+          }
+        }
+        setImageThumbMap(thumbMap);
+      }
+    } catch (error) {
+      console.error('Backfill error:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to backfill thumbnails');
+    } finally {
+      setIsBackfillingThumbnails(false);
+      setBackfillProgress({ processed: 0, total: 0 });
+    }
+  }, [selectedBatchId, fetchImagesForBatch]);
+
   const handleReorderImages = useCallback(async (imageId: string, newPosition: number) => {
     if (!editingProductId) return;
     
@@ -1843,6 +1889,21 @@ const handleSelectBatch = useCallback((id: string) => {
           "flex-1 min-w-0",
           !selectedBatch ? "hidden md:block" : "block"
         )}>
+          {/* Dev-only: Backfill thumbnails button */}
+          {typeof window !== 'undefined' && window.location.hostname === 'localhost' && selectedBatch && (
+            <div className="p-2 border-b bg-yellow-50 dark:bg-yellow-950/20 flex items-center gap-2">
+              <button
+                onClick={handleBackfillThumbnails}
+                disabled={isBackfillingThumbnails}
+                className="px-3 py-1.5 text-xs bg-yellow-500 hover:bg-yellow-600 disabled:bg-yellow-400 disabled:cursor-not-allowed text-white rounded font-medium transition-colors"
+              >
+                {isBackfillingThumbnails 
+                  ? `Backfilling thumbnails (${backfillProgress.processed}/${backfillProgress.total})...`
+                  : 'Backfill thumbnails (dev)'
+                }
+              </button>
+            </div>
+          )}
           {selectedBatch ? (
             <BatchDetail
               batch={selectedBatch}
