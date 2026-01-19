@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { useDroppable } from '@dnd-kit/core';
+import { FixedSizeGrid as Grid } from 'react-window';
 import { toast } from 'sonner';
 import { AlertTriangle, Plus, Check, X, Eye, Trash2, Grid3X3, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -33,6 +34,87 @@ interface UnassignedImagePoolProps {
   onCreateProductFromUrls?: (urls: string[]) => Promise<string | null>;
 }
 
+// Memoized image cell to prevent unnecessary re-renders
+const ImageCell = memo(function ImageCell({
+  url,
+  index,
+  isSelected,
+  onToggle,
+  onPreview,
+  onDelete,
+}: {
+  url: string;
+  index: number;
+  isSelected: boolean;
+  onToggle: (url: string) => void;
+  onPreview: (index: number) => void;
+  onDelete: (url: string) => void;
+}) {
+  const handleClick = useCallback((e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('[data-checkbox]')) {
+      onToggle(url);
+      return;
+    }
+    onPreview(index);
+  }, [url, index, onToggle, onPreview]);
+
+  const handleDelete = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    onDelete(url);
+  }, [url, onDelete]);
+
+  const handleCheckboxChange = useCallback(() => {
+    onToggle(url);
+  }, [url, onToggle]);
+
+  return (
+    <div
+      className={cn(
+        "relative group aspect-square rounded-lg overflow-hidden border-2 cursor-pointer transition-all",
+        isSelected 
+          ? "border-primary ring-2 ring-primary/30" 
+          : "border-border hover:border-primary/50"
+      )}
+      onClick={handleClick}
+    >
+      <img
+        src={url}
+        alt={`Unassigned ${index + 1}`}
+        className="w-full h-full object-cover"
+        loading="lazy"
+      />
+      
+      {/* Quick view overlay */}
+      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+        <Eye className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
+      </div>
+
+      {/* Delete button */}
+      <button
+        data-checkbox
+        onClick={handleDelete}
+        className="absolute top-1 right-1 p-1 bg-destructive/90 hover:bg-destructive rounded opacity-0 group-hover:opacity-100 transition-opacity"
+        title="Delete image"
+      >
+        <Trash2 className="w-3 h-3 text-destructive-foreground" />
+      </button>
+      
+      <div className="absolute top-1 left-1" data-checkbox onClick={(e) => e.stopPropagation()}>
+        <Checkbox
+          checked={isSelected}
+          onCheckedChange={handleCheckboxChange}
+          className="bg-background/80 border-2"
+        />
+      </div>
+    </div>
+  );
+});
+
+// Constants for grid sizing
+const CELL_SIZE = 80; // Base cell size in pixels
+const CELL_GAP = 8;   // Gap between cells
+
 export function UnassignedImagePool({
   images,
   onCreateGroup,
@@ -46,17 +128,49 @@ export function UnassignedImagePool({
   const [targetGroupId, setTargetGroupId] = useState<string>('');
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [containerWidth, setContainerWidth] = useState(800);
 
   const { setNodeRef, isOver } = useDroppable({
     id: 'unassigned-pool',
   });
+
+  // Measure container width for grid columns
+  useEffect(() => {
+    const container = document.getElementById('unassigned-grid-container');
+    if (!container) return;
+    
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) {
+        setContainerWidth(entry.contentRect.width);
+      }
+    });
+    
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
+
+  // Calculate grid dimensions
+  const columnCount = useMemo(() => {
+    return Math.max(4, Math.floor((containerWidth + CELL_GAP) / (CELL_SIZE + CELL_GAP)));
+  }, [containerWidth]);
+
+  const rowCount = useMemo(() => {
+    return Math.ceil(images.length / columnCount);
+  }, [images.length, columnCount]);
+
+  // Calculate grid height - show max 4 rows before scrolling
+  const gridHeight = useMemo(() => {
+    const maxVisibleRows = 4;
+    const actualRows = Math.min(rowCount, maxVisibleRows);
+    return actualRows * (CELL_SIZE + CELL_GAP);
+  }, [rowCount]);
 
   // Clean up stale selections when images array changes
   useEffect(() => {
     setSelectedImages(prev => {
       const imageSet = new Set(images);
       const cleaned = new Set([...prev].filter(url => imageSet.has(url)));
-      // Only update if there's a difference
       if (cleaned.size !== prev.size) {
         return cleaned;
       }
@@ -64,7 +178,7 @@ export function UnassignedImagePool({
     });
   }, [images]);
 
-  const toggleImageSelection = (url: string) => {
+  const toggleImageSelection = useCallback((url: string) => {
     setSelectedImages(prev => {
       const next = new Set(prev);
       if (next.has(url)) {
@@ -74,28 +188,29 @@ export function UnassignedImagePool({
       }
       return next;
     });
-  };
+  }, []);
 
-  const selectAll = () => {
+  const selectAll = useCallback(() => {
     setSelectedImages(new Set(images));
-  };
+  }, [images]);
 
-  const deselectAll = () => {
+  const deselectAll = useCallback(() => {
     setSelectedImages(new Set());
-  };
+  }, []);
+
+  const handlePreview = useCallback((index: number) => {
+    setPreviewIndex(index);
+  }, []);
 
   const handleCreateGroup = async () => {
-    // Filter selected images to only include those still in the pool
     const validSelected = [...selectedImages].filter(url => images.includes(url));
     
-    // If no valid images are selected but there's only one image, use that
     const imagesToUse = validSelected.length > 0 
       ? validSelected 
       : images.length === 1 
         ? [images[0]] 
         : [];
     
-    // GUARD: Never create a product group with 0 images
     if (imagesToUse.length === 0) {
       toast.warning('You must select at least one image to create a product.');
       return;
@@ -103,7 +218,6 @@ export function UnassignedImagePool({
     
     console.log('Creating group with images:', imagesToUse);
     
-    // Use direct DB persistence if available
     if (onCreateProductFromUrls) {
       setIsCreating(true);
       try {
@@ -119,7 +233,6 @@ export function UnassignedImagePool({
         setIsCreating(false);
       }
     } else {
-      // Fallback to local state management (temp group)
       onCreateGroup(imagesToUse);
       setSelectedImages(new Set());
     }
@@ -134,16 +247,34 @@ export function UnassignedImagePool({
     setTargetGroupId('');
   };
 
-  const handleImageClick = (url: string, index: number, e: React.MouseEvent) => {
-    const target = e.target as HTMLElement;
-    // If clicking on checkbox area, toggle selection
-    if (target.closest('[data-checkbox]')) {
-      toggleImageSelection(url);
-      return;
-    }
-    // Otherwise open preview
-    setPreviewIndex(index);
-  };
+  // Virtualized grid cell renderer
+  const Cell = useCallback(({ columnIndex, rowIndex, style }: { 
+    columnIndex: number; 
+    rowIndex: number; 
+    style: React.CSSProperties 
+  }) => {
+    const index = rowIndex * columnCount + columnIndex;
+    if (index >= images.length) return null;
+    
+    const url = images[index];
+    const isSelected = selectedImages.has(url);
+    
+    return (
+      <div style={{ ...style, padding: CELL_GAP / 2 }}>
+        <ImageCell
+          url={url}
+          index={index}
+          isSelected={isSelected}
+          onToggle={toggleImageSelection}
+          onPreview={handlePreview}
+          onDelete={onDeleteImage}
+        />
+      </div>
+    );
+  }, [images, selectedImages, columnCount, toggleImageSelection, handlePreview, onDeleteImage]);
+
+  // Use simple grid for small lists, virtualized for large
+  const useVirtualization = images.length > 50;
 
   return (
     <>
@@ -269,52 +400,35 @@ export function UnassignedImagePool({
           </div>
         </div>
 
-        {/* Images grid */}
-        <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-2 mb-4">
-          {images.map((url, index) => (
-            <div
-              key={index}
-              className={cn(
-                "relative group aspect-square rounded-lg overflow-hidden border-2 cursor-pointer transition-all",
-                selectedImages.has(url) 
-                  ? "border-primary ring-2 ring-primary/30" 
-                  : "border-border hover:border-primary/50"
-              )}
-              onClick={(e) => handleImageClick(url, index, e)}
+        {/* Images grid - virtualized for large lists */}
+        <div id="unassigned-grid-container" className="mb-4">
+          {useVirtualization ? (
+            <Grid
+              columnCount={columnCount}
+              columnWidth={CELL_SIZE + CELL_GAP}
+              height={gridHeight}
+              rowCount={rowCount}
+              rowHeight={CELL_SIZE + CELL_GAP}
+              width={containerWidth}
+              className="scrollbar-thin"
             >
-              <img
-                src={url}
-                alt={`Unassigned ${index + 1}`}
-                className="w-full h-full object-cover"
-              />
-              
-              {/* Quick view overlay */}
-              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                <Eye className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
-              </div>
-
-              {/* Delete button */}
-              <button
-                data-checkbox
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDeleteImage(url);
-                }}
-                className="absolute top-1 right-1 p-1 bg-destructive/90 hover:bg-destructive rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                title="Delete image"
-              >
-                <Trash2 className="w-3 h-3 text-destructive-foreground" />
-              </button>
-              
-              <div className="absolute top-1 left-1" data-checkbox onClick={(e) => e.stopPropagation()}>
-                <Checkbox
-                  checked={selectedImages.has(url)}
-                  onCheckedChange={() => toggleImageSelection(url)}
-                  className="bg-background/80 border-2"
+              {Cell}
+            </Grid>
+          ) : (
+            <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-2">
+              {images.map((url, index) => (
+                <ImageCell
+                  key={url}
+                  url={url}
+                  index={index}
+                  isSelected={selectedImages.has(url)}
+                  onToggle={toggleImageSelection}
+                  onPreview={handlePreview}
+                  onDelete={onDeleteImage}
                 />
-              </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
 
         {/* Actions - Always show create button if there are images */}
