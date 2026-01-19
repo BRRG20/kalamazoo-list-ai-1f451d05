@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { toast } from 'sonner';
 import { AlertTriangle, Plus, Check, X, Eye, Trash2, Grid3X3 } from 'lucide-react';
@@ -43,6 +43,8 @@ export function UnassignedImagePool({
   const [selectedImages, setSelectedImages] = useState<Set<string>>(new Set());
   const [targetGroupId, setTargetGroupId] = useState<string>('');
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+  const [visibleCount, setVisibleCount] = useState(60);
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
   // Reset preview index if it becomes invalid (e.g., images were removed)
   useEffect(() => {
@@ -50,6 +52,31 @@ export function UnassignedImagePool({
       setPreviewIndex(null);
     }
   }, [images, previewIndex]);
+
+  // Reset visible count when images change
+  useEffect(() => {
+    setVisibleCount(60);
+  }, [images.length]);
+
+  // Progressive loading using IntersectionObserver
+  useEffect(() => {
+    if (images.length <= visibleCount) return;
+    
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setVisibleCount(prev => Math.min(prev + 30, images.length));
+        }
+      },
+      { rootMargin: '200px' }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [images.length, visibleCount]);
 
   const { setNodeRef, isOver } = useDroppable({
     id: 'unassigned-pool',
@@ -240,7 +267,7 @@ export function UnassignedImagePool({
 
         {/* Images grid */}
         <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-2 mb-4">
-          {images.map((url, index) => (
+          {images.slice(0, visibleCount).map((url, index) => (
             <div
               key={index}
               className={cn(
@@ -284,6 +311,10 @@ export function UnassignedImagePool({
               </div>
             </div>
           ))}
+          {/* Sentinel element for progressive loading */}
+          {images.length > visibleCount && (
+            <div ref={sentinelRef} className="col-span-full h-4" />
+          )}
         </div>
 
         {/* Actions - Always show create button if there are images */}

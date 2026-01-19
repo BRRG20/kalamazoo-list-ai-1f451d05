@@ -291,7 +291,7 @@ const ProductCard = memo(function ProductCard({
 
       {/* Images grid */}
       <div className="grid grid-cols-3 gap-1 relative z-20">
-        {safeImages.map((image, imgIndex) => {
+        {safeImages.slice(0, 9).map((image, imgIndex) => {
           // Guard against undefined image
           if (!image || !image.id) return null;
           const isSelected = selectedImages.has(image.id);
