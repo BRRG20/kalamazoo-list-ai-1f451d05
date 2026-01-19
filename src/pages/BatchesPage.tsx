@@ -94,6 +94,7 @@ export default function BatchesPage() {
   // Image group management state
   const [imageGroups, setImageGroups] = useState<ImageGroup[]>([]);
   const [unassignedImages, setUnassignedImages] = useState<string[]>([]);
+  const [imageThumbMap, setImageThumbMap] = useState<Map<string, string>>(new Map()); // URL -> thumb_url mapping
   const [showGroupManager, setShowGroupManager] = useState(false);
   const [isMatching, setIsMatching] = useState(false);
   const [matchingProgress, setMatchingProgress] = useState<MatchingProgress>({ current: 0, total: 0, currentBatch: 0, totalBatches: 0 });
@@ -171,6 +172,7 @@ const handleSelectBatch = useCallback((id: string) => {
     // Reset image groups when switching batches
     setImageGroups([]);
     setUnassignedImages([]);
+    setImageThumbMap(new Map());
   }, []);
 
   // Load all images (both assigned and unassigned) when batch is selected
@@ -181,7 +183,9 @@ const handleSelectBatch = useCallback((id: string) => {
     const loadBatchImages = async () => {
       if (!selectedBatchId) {
         setUnassignedImages([]);
+    setImageThumbMap(new Map());
         setImageGroups([]);
+        setImageThumbMap(new Map());
         setInitialImageAssignments(new Map());
         return;
       }
@@ -191,7 +195,9 @@ const handleSelectBatch = useCallback((id: string) => {
       
       if (allBatchImages.length === 0) {
         setUnassignedImages([]);
+    setImageThumbMap(new Map());
         setImageGroups([]);
+        setImageThumbMap(new Map());
         setInitialImageAssignments(new Map());
         return;
       }
@@ -200,10 +206,16 @@ const handleSelectBatch = useCallback((id: string) => {
       const imagesByProduct: Record<string, string[]> = {};
       const unassigned: string[] = [];
       const initialAssignments = new Map<string, string | null>();
+      const thumbMap = new Map<string, string>();
       
       for (const img of allBatchImages) {
         // Track initial assignment: image URL -> product_id (or null if unassigned)
         initialAssignments.set(img.url, img.product_id || null);
+        
+        // Store thumb_url mapping if available
+        if (img.thumb_url) {
+          thumbMap.set(img.url, img.thumb_url);
+        }
         
         if (img.product_id && img.product_id !== '') {
           if (!imagesByProduct[img.product_id]) {
@@ -214,6 +226,8 @@ const handleSelectBatch = useCallback((id: string) => {
           unassigned.push(img.url);
         }
       }
+      
+      setImageThumbMap(thumbMap);
       
       // Create groups from existing products that have images
       const groups: ImageGroup[] = products
@@ -274,23 +288,25 @@ const handleSelectBatch = useCallback((id: string) => {
     
     toast.info(`Uploading ${files.length} image(s)...`);
     
-    const urls = await uploadImages(files, selectedBatchId);
+    const results = await uploadImages(files, selectedBatchId);
     
-    if (urls.length > 0) {
+    if (results.length > 0) {
+      const originalUrls = results.map(r => r.originalUrl);
+      
       // Save images to database immediately (not assigned to any product yet)
-      for (let i = 0; i < urls.length; i++) {
-        await addImageToBatch(selectedBatchId, urls[i], i);
+      for (let i = 0; i < results.length; i++) {
+        await addImageToBatch(selectedBatchId, results[i].originalUrl, i, results[i].thumbUrl);
       }
       
       if (addToUnassigned) {
         // Add directly to unassigned pool
-        setUnassignedImages(prev => [...prev, ...urls]);
+        setUnassignedImages(prev => [...prev, ...originalUrls]);
         setShowGroupManager(true);
-        toast.success(`${urls.length} image(s) added to unassigned pool.`);
+        toast.success(`${results.length} image(s) added to unassigned pool.`);
       } else {
         // Add to pending for auto-grouping
-        setPendingImageUrls(prev => [...prev, ...urls]);
-        toast.success(`${urls.length} image(s) uploaded. Click "Auto-group" to create products.`);
+        setPendingImageUrls(prev => [...prev, ...originalUrls]);
+        toast.success(`${results.length} image(s) uploaded. Click "Auto-group" to create products.`);
       }
     } else {
       toast.error('Failed to upload images');
@@ -307,16 +323,18 @@ const handleSelectBatch = useCallback((id: string) => {
     toast.info(`Processing ${files.length} camera image(s)...`);
     
     // Upload using same pipeline as manual uploads (preserves quality)
-    const urls = await uploadImages(files, selectedBatchId);
+    const results = await uploadImages(files, selectedBatchId);
     
-    if (urls.length > 0) {
+    if (results.length > 0) {
+      const originalUrls = results.map(r => r.originalUrl);
+      
       // Save images to database with notes metadata
-      for (let i = 0; i < urls.length; i++) {
+      for (let i = 0; i < results.length; i++) {
         const file = files[i];
         const noteData = notes.get(file.name);
         
-        // Add image to batch
-        await addImageToBatch(selectedBatchId, urls[i], i);
+        // Add image to batch with thumbnail
+        await addImageToBatch(selectedBatchId, results[i].originalUrl, i, results[i].thumbUrl);
         
         // If there are notes, update the image with metadata
         // Note: Notes are stored as part of the image flow for AI to read
@@ -328,8 +346,8 @@ const handleSelectBatch = useCallback((id: string) => {
       }
       
       // Add to pending for auto-grouping (same as regular uploads)
-      setPendingImageUrls(prev => [...prev, ...urls]);
-      toast.success(`${urls.length} camera image(s) uploaded. Click "Auto-group" to create products.`);
+      setPendingImageUrls(prev => [...prev, ...originalUrls]);
+      toast.success(`${results.length} camera image(s) uploaded. Click "Auto-group" to create products.`);
     } else {
       toast.error('Failed to upload camera images');
     }
@@ -345,20 +363,22 @@ const handleSelectBatch = useCallback((id: string) => {
     toast.info(`Processing ${files.length} quick product shot(s)...`);
     
     // Upload using same pipeline
-    const urls = await uploadImages(files, selectedBatchId);
+    const results = await uploadImages(files, selectedBatchId);
     
-    if (urls.length > 0) {
-      // Save images to database
-      for (let i = 0; i < urls.length; i++) {
-        await addImageToBatch(selectedBatchId, urls[i], i);
+    if (results.length > 0) {
+      const originalUrls = results.map(r => r.originalUrl);
+      
+      // Save images to database with thumbnails
+      for (let i = 0; i < results.length; i++) {
+        await addImageToBatch(selectedBatchId, results[i].originalUrl, i, results[i].thumbUrl);
       }
       
       // For quick product shots, create a product group immediately
-      setPendingImageUrls(prev => [...prev, ...urls]);
+      setPendingImageUrls(prev => [...prev, ...originalUrls]);
       setShowGroupManager(true);
       
       toast.success(
-        `${urls.length} quick shot(s) uploaded. ` +
+        `${results.length} quick shot(s) uploaded. ` +
         `Group them and use "Expand Images" to generate additional listing photos.`
       );
     } else {
@@ -639,6 +659,7 @@ const handleSelectBatch = useCallback((id: string) => {
 
     setImageGroups(newGroups);
     setUnassignedImages([]);
+    setImageThumbMap(new Map());
     setPendingImageUrls([]);
     setShowGroupManager(true);
     toast.success(`Created ${chunks.length} group(s). Review and adjust, then confirm.`);
@@ -681,6 +702,7 @@ const handleSelectBatch = useCallback((id: string) => {
 
     setImageGroups(newGroups);
     setUnassignedImages([]);
+    setImageThumbMap(new Map());
     setPendingImageUrls([]);
     setShowGroupManager(true);
     toast.success(`Re-grouped into ${chunks.length} product(s). Review and adjust, then confirm.`);
@@ -793,6 +815,7 @@ const handleSelectBatch = useCallback((id: string) => {
 
     setImageGroups(newGroups);
     setUnassignedImages([]);
+    setImageThumbMap(new Map());
     // Update initial assignments so new temp groups are correctly tracked as "new"
     setInitialImageAssignments(prev => {
       const updated = new Map(prev);
@@ -837,6 +860,7 @@ const handleSelectBatch = useCallback((id: string) => {
     // Add new groups to existing groups
     setImageGroups(prev => [...prev, ...newGroups]);
     setUnassignedImages([]);
+    setImageThumbMap(new Map());
     toast.success(`Grouped ${unassignedImages.length} images into ${chunks.length} new product(s).`);
   }, [unassignedImages, imageGroups, saveUndoState]);
 
@@ -951,6 +975,7 @@ const handleSelectBatch = useCallback((id: string) => {
 
       setImageGroups(prev => [...prev, ...newGroups]);
       setUnassignedImages([]);
+    setImageThumbMap(new Map());
       
       toast.success(`AI matched ${totalImages} images into ${newGroups.length} product groups (${totalBatches} batches processed).`);
     } catch (error) {
@@ -1391,7 +1416,7 @@ const handleSelectBatch = useCallback((id: string) => {
         // For specific field regeneration, use direct fetch (preserve existing behavior)
         console.log('[GENAI] DetailPanel - direct fetch for regenerateOnly', { regenerateOnly });
         
-        const imageUrls = images.slice(0, 2).map(img => img.url);
+        const imageUrls = images.slice(0, 9).map(img => img.url);
         
         const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-listing`, {
           method: 'POST',
@@ -1883,6 +1908,7 @@ const handleSelectBatch = useCallback((id: string) => {
               onDeleteImageById={handleDeleteImageById}
               imageGroups={imageGroups}
               unassignedImages={unassignedImages}
+              imageThumbMap={imageThumbMap}
               onUpdateImageGroups={setImageGroups}
               onUpdateUnassignedImages={setUnassignedImages}
               onCreateNewGroup={(images) => {
@@ -2046,6 +2072,7 @@ const handleSelectBatch = useCallback((id: string) => {
                   // Clear group management state
                   setImageGroups([]);
                   setUnassignedImages([]);
+    setImageThumbMap(new Map());
                   setPendingImageUrls([]);
                   setShowGroupManager(false);
                   setInitialImageAssignments(new Map());

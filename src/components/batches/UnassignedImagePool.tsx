@@ -30,6 +30,7 @@ interface UnassignedImagePoolProps {
   onDeleteImage: (url: string) => void;
   groups: ImageGroup[];
   onAutoGroupUnassigned?: (imagesPerProduct: number) => void;
+  imageThumbMap?: Map<string, string>; // URL -> thumb_url mapping
 }
 
 export function UnassignedImagePool({
@@ -39,6 +40,7 @@ export function UnassignedImagePool({
   onDeleteImage,
   groups,
   onAutoGroupUnassigned,
+  imageThumbMap,
 }: UnassignedImagePoolProps) {
   const [selectedImages, setSelectedImages] = useState<Set<string>>(new Set());
   const [targetGroupId, setTargetGroupId] = useState<string>('');
@@ -304,7 +306,7 @@ export function UnassignedImagePool({
               onClick={(e) => handleImageClick(url, index, e)}
             >
               <img
-                src={url}
+                src={imageThumbMap?.get(url) || url}
                 alt={`Unassigned ${index + 1}`}
                 className="w-full h-full object-cover"
               />

@@ -100,7 +100,7 @@ const ImageTile = memo(function ImageTile({
       }}
     >
       <img
-        src={image.url}
+        src={image.thumb_url || image.url}
         alt={`Image ${imgIndex + 1}`}
         className={cn(
           "w-full h-full object-cover transition-all duration-300 pointer-events-none",

@@ -111,6 +111,7 @@ function mapImage(row: any): ProductImage {
     id: row.id,
     product_id: row.product_id || '',
     url: row.url,
+    thumb_url: row.thumb_url || null,
     position: row.position,
     include_in_shopify: row.include_in_shopify,
   };
@@ -901,23 +902,29 @@ export function useImages() {
     return newImage;
   };
 
-  const addImageToBatch = async (batchId: string, url: string, position: number) => {
+  const addImageToBatch = async (batchId: string, url: string, position: number, thumbUrl?: string | null) => {
     const userId = await getCurrentUserId();
     if (!userId) {
       console.error('No user ID for image upload');
       return null;
     }
 
+    const insertData: any = { 
+      product_id: null, 
+      batch_id: batchId,
+      url, 
+      position,
+      include_in_shopify: true,
+      user_id: userId,
+    };
+    
+    if (thumbUrl) {
+      insertData.thumb_url = thumbUrl;
+    }
+
     const { data, error } = await supabase
       .from('images')
-      .insert({ 
-        product_id: null, 
-        batch_id: batchId,
-        url, 
-        position,
-        include_in_shopify: true,
-        user_id: userId,
-      })
+      .insert(insertData)
       .select()
       .single();
     
@@ -1274,6 +1281,75 @@ export function useSettings() {
 }
 
 // Image Upload Hook
+// Generate thumbnail using canvas
+async function generateThumbnail(file: File): Promise<File | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const reader = new FileReader();
+    
+    reader.onload = (e) => {
+      if (!e.target?.result) {
+        resolve(null);
+        return;
+      }
+      
+      img.onload = () => {
+        const maxWidth = 1800;
+        const maxHeight = 1800;
+        let width = img.width;
+        let height = img.height;
+        
+        // Calculate new dimensions
+        if (width > maxWidth || height > maxHeight) {
+          const ratio = Math.min(maxWidth / width, maxHeight / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+        
+        // Skip thumbnail if image is already small
+        if (width >= img.width && height >= img.height) {
+          resolve(null);
+          return;
+        }
+        
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        
+        if (!ctx) {
+          resolve(null);
+          return;
+        }
+        
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              resolve(null);
+              return;
+            }
+            const thumbFile = new File([blob], file.name.replace(/\.[^/.]+$/, '.jpg'), {
+              type: 'image/jpeg',
+              lastModified: Date.now(),
+            });
+            resolve(thumbFile);
+          },
+          'image/jpeg',
+          0.88
+        );
+      };
+      
+      img.onerror = () => resolve(null);
+      img.src = e.target.result as string;
+    };
+    
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(file);
+  });
+}
+
 export function useImageUpload() {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -1281,7 +1357,7 @@ export function useImageUpload() {
   const [uploadTotal, setUploadTotal] = useState(0);
   const [uploadCompleted, setUploadCompleted] = useState(0);
 
-  const uploadImage = async (file: File, batchId: string): Promise<string | null> => {
+  const uploadImage = async (file: File, batchId: string): Promise<{ originalUrl: string; thumbUrl: string | null } | null> => {
     const userId = await getCurrentUserId();
     if (!userId) {
       console.error('User not authenticated');
@@ -1289,8 +1365,10 @@ export function useImageUpload() {
     }
     
     const fileExt = file.name.split('.').pop();
-    const fileName = `${userId}/${batchId}/${crypto.randomUUID()}.${fileExt}`;
+    const fileId = crypto.randomUUID();
+    const fileName = `${userId}/${batchId}/${fileId}.${fileExt}`;
 
+    // Upload original image
     const { error } = await supabase.storage
       .from('product-images')
       .upload(fileName, file);
@@ -1304,10 +1382,34 @@ export function useImageUpload() {
       .from('product-images')
       .getPublicUrl(fileName);
 
-    return urlData.publicUrl;
+    const originalUrl = urlData.publicUrl;
+
+    // Generate and upload thumbnail
+    let thumbUrl: string | null = null;
+    try {
+      const thumbFile = await generateThumbnail(file);
+      if (thumbFile) {
+        const thumbFileName = `${userId}/${batchId}/${fileId}_thumb.jpg`;
+        const { error: thumbError } = await supabase.storage
+          .from('product-images')
+          .upload(thumbFileName, thumbFile);
+        
+        if (!thumbError) {
+          const { data: thumbUrlData } = supabase.storage
+            .from('product-images')
+            .getPublicUrl(thumbFileName);
+          thumbUrl = thumbUrlData.publicUrl;
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to generate thumbnail:', error);
+      // Continue without thumbnail
+    }
+
+    return { originalUrl, thumbUrl };
   };
 
-  const uploadImages = async (files: File[], batchId: string): Promise<string[]> => {
+  const uploadImages = async (files: File[], batchId: string): Promise<{ originalUrl: string; thumbUrl: string | null }[]> => {
     setUploading(true);
     setProgress(0);
     setUploadStartTime(Date.now());
@@ -1315,17 +1417,17 @@ export function useImageUpload() {
     setUploadCompleted(0);
 
     const BATCH_SIZE = 10; // Upload 10 images in parallel for bulk uploads
-    const urls: string[] = [];
+    const results: { originalUrl: string; thumbUrl: string | null }[] = [];
     let completed = 0;
     
     for (let i = 0; i < files.length; i += BATCH_SIZE) {
       const batch = files.slice(i, i + BATCH_SIZE);
-      const results = await Promise.all(
+      const batchResults = await Promise.all(
         batch.map(file => uploadImage(file, batchId))
       );
       
-      results.forEach(url => {
-        if (url) urls.push(url);
+      batchResults.forEach(result => {
+        if (result) results.push(result);
       });
       
       completed += batch.length;
@@ -1336,7 +1438,7 @@ export function useImageUpload() {
     setUploading(false);
     setUploadStartTime(null);
     setProgress(0);
-    return urls;
+    return results;
   };
 
   return { uploadImage, uploadImages, uploading, progress, uploadStartTime, uploadTotal, uploadCompleted };

@@ -124,6 +124,7 @@ interface BatchDetailProps {
   // New props for image group management
   imageGroups: ImageGroup[];
   unassignedImages: string[];
+  imageThumbMap?: Map<string, string>; // URL -> thumb_url mapping
   onUpdateImageGroups: (groups: ImageGroup[]) => void;
   onUpdateUnassignedImages: (images: string[]) => void;
   onCreateNewGroup: (images: string[]) => void;
@@ -226,6 +227,7 @@ export function BatchDetail({
   onBack,
   imageGroups,
   unassignedImages,
+  imageThumbMap,
   onUpdateImageGroups,
   onUpdateUnassignedImages,
   onCreateNewGroup,
@@ -2049,6 +2051,7 @@ export function BatchDetail({
               matchingProgress={matchingProgress}
               onOpenProduct={onEditProduct}
               isConfirmingGrouping={isConfirmingGrouping}
+              imageThumbMap={imageThumbMap}
             />
           </ErrorBoundary>
         ) : products.length === 0 ? (

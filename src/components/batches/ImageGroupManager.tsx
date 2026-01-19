@@ -101,6 +101,7 @@ interface ImageGroupManagerProps {
   matchingProgress?: MatchingProgress;
   onOpenProduct?: (productId: string) => void;
   isConfirmingGrouping?: boolean;
+  imageThumbMap?: Map<string, string>; // URL -> thumb_url mapping
 }
 
 export function ImageGroupManager({
@@ -119,6 +120,7 @@ export function ImageGroupManager({
   matchingProgress,
   onOpenProduct,
   isConfirmingGrouping,
+  imageThumbMap,
 }: ImageGroupManagerProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeSource, setActiveSource] = useState<{ type: 'group' | 'unassigned'; groupId?: string } | null>(null);
@@ -625,6 +627,7 @@ export function ImageGroupManager({
               saveToHistory('Before auto-group');
               onRegroupUnassigned(num);
             } : undefined}
+            imageThumbMap={imageThumbMap}
           />
         )}
 
