@@ -45,6 +45,7 @@ export function UnassignedImagePool({
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [visibleCount, setVisibleCount] = useState(60);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const lastClickTimeRef = useRef<Map<string, number>>(new Map()); // Track last click time per action
 
   // Reset preview index if it becomes invalid (e.g., images were removed)
   useEffect(() => {
@@ -83,6 +84,12 @@ export function UnassignedImagePool({
   });
 
   const toggleImageSelection = (url: string) => {
+    const key = `toggle-${url}`;
+    const now = Date.now();
+    const lastTime = lastClickTimeRef.current.get(key) || 0;
+    if (now - lastTime < 250) return;
+    lastClickTimeRef.current.set(key, now);
+    
     setSelectedImages(prev => {
       const next = new Set(prev);
       if (next.has(url)) {
@@ -103,6 +110,12 @@ export function UnassignedImagePool({
   };
 
   const handleCreateGroup = () => {
+    const key = 'create-group';
+    const now = Date.now();
+    const lastTime = lastClickTimeRef.current.get(key) || 0;
+    if (now - lastTime < 250) return;
+    lastClickTimeRef.current.set(key, now);
+    
     // If no images are selected but there's only one image, use that
     const imagesToUse = selectedImages.size > 0 
       ? [...selectedImages] 
@@ -123,6 +136,13 @@ export function UnassignedImagePool({
 
   const handleAddToExistingGroup = () => {
     if (selectedImages.size === 0 || !targetGroupId) return;
+    
+    const key = `add-to-group-${targetGroupId}`;
+    const now = Date.now();
+    const lastTime = lastClickTimeRef.current.get(key) || 0;
+    if (now - lastTime < 250) return;
+    lastClickTimeRef.current.set(key, now);
+    
     [...selectedImages].forEach(url => {
       onAddToGroup(url, targetGroupId);
     });
@@ -138,6 +158,11 @@ export function UnassignedImagePool({
       return;
     }
     // Otherwise open preview
+    const key = `preview-${index}`;
+    const now = Date.now();
+    const lastTime = lastClickTimeRef.current.get(key) || 0;
+    if (now - lastTime < 250) return;
+    lastClickTimeRef.current.set(key, now);
     setPreviewIndex(index);
   };
 

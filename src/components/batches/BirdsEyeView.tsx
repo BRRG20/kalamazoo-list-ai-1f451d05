@@ -364,6 +364,15 @@ export function BirdsEyeView({
   
   const [selectedImages, setSelectedImages] = useState<Map<string, { imageId: string; productId: string }>>(new Map());
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const previewClickTimeRef = useRef<number>(0);
+  
+  // Guarded preview handler to prevent double-clicks
+  const handlePreview = useCallback((url: string) => {
+    const now = Date.now();
+    if (now - previewClickTimeRef.current < 250) return;
+    previewClickTimeRef.current = now;
+    setPreviewImage(url);
+  }, []);
   const [dropTargetProductId, setDropTargetProductId] = useState<string | null>(null);
   const [recentlyMovedImages, setRecentlyMovedImages] = useState<Set<string>>(new Set());
   const [recentlyReceivedProduct, setRecentlyReceivedProduct] = useState<string | null>(null);
@@ -385,6 +394,7 @@ export function BirdsEyeView({
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const resizeTimeoutRef = useRef<number | null>(null);
   const containerSizeRef = useRef({ width: 0, height: 0 }); // Stable ref for size
+  const lastClickTimeRef = useRef<Map<string, number>>(new Map()); // Track last click time per action
 
   // Measure container for virtualized grid - debounced and stable
   useEffect(() => {
@@ -561,6 +571,12 @@ export function BirdsEyeView({
   const handleCreateProductFromImages = useCallback(async (imageIds: string[]) => {
     if (isMutating || !onCreateNewProduct || imageIds.length === 0) return;
     
+    const key = 'create-product';
+    const now = Date.now();
+    const lastTime = lastClickTimeRef.current.get(key) || 0;
+    if (now - lastTime < 250) return;
+    lastClickTimeRef.current.set(key, now);
+    
     const count = imageIds.length;
     setSelectedImages(new Map());
     setIsMutating(true);
@@ -579,6 +595,12 @@ export function BirdsEyeView({
   // Handle merging selected products (with mutation guard)
   const handleMergeProducts = useCallback(async () => {
     if (isMutating) return; // Prevent double operations
+    
+    const key = 'merge-products';
+    const now = Date.now();
+    const lastTime = lastClickTimeRef.current.get(key) || 0;
+    if (now - lastTime < 250) return;
+    lastClickTimeRef.current.set(key, now);
     
     if (safeSelectedProductIds.size < 2) {
       toast.error('Select at least 2 products to merge');
@@ -635,6 +657,12 @@ export function BirdsEyeView({
   }, [isMutating, safeSelectedProductIds, safeProductImages, onCreateNewProduct, onMergeProducts, onDeselectAllProducts]);
 
   const toggleImageSelection = useCallback((imageId: string, productId: string) => {
+    const key = `toggle-${imageId}`;
+    const now = Date.now();
+    const lastTime = lastClickTimeRef.current.get(key) || 0;
+    if (now - lastTime < 250) return;
+    lastClickTimeRef.current.set(key, now);
+    
     setSelectedImages(prev => {
       const next = new Map(prev);
       if (next.has(imageId)) {
@@ -775,6 +803,12 @@ export function BirdsEyeView({
   const handleDeleteSingle = useCallback(async (e: React.MouseEvent, imageId: string) => {
     e.stopPropagation();
     if (!onDeleteImage) return;
+    
+    const key = `delete-${imageId}`;
+    const now = Date.now();
+    const lastTime = lastClickTimeRef.current.get(key) || 0;
+    if (now - lastTime < 250) return;
+    lastClickTimeRef.current.set(key, now);
     
     setDeletingImages(prev => new Set(prev).add(imageId));
     
@@ -999,7 +1033,7 @@ export function BirdsEyeView({
             onToggleImageSelection={toggleImageSelection}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
-            onPreview={setPreviewImage}
+            onPreview={handlePreview}
             onDeleteImage={onDeleteImage}
             onDeleteSingle={handleDeleteSingle}
           />
