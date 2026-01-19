@@ -247,6 +247,7 @@ export type Database = {
           position: number
           product_id: string | null
           source: string | null
+          thumb_url: string | null
           url: string
           user_id: string | null
         }
@@ -259,6 +260,7 @@ export type Database = {
           position?: number
           product_id?: string | null
           source?: string | null
+          thumb_url?: string | null
           url: string
           user_id?: string | null
         }
@@ -271,6 +273,7 @@ export type Database = {
           position?: number
           product_id?: string | null
           source?: string | null
+          thumb_url?: string | null
           url?: string
           user_id?: string | null
         }
