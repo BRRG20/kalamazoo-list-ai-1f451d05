@@ -312,6 +312,8 @@ function mapProduct(row: any): Product {
     is_hidden: row.is_hidden || false,
     // Grouping lock state - persisted in database
     is_grouped: row.is_grouped || false,
+    // Batch number - assigned during autopilot processing
+    batch_number: row.batch_number ?? null,
   };
 }
 
