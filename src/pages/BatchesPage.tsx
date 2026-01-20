@@ -1631,18 +1631,21 @@ const handleSelectBatch = useCallback((id: string) => {
 
     if (error) {
       toast.error('Failed to move image');
-      return;
+      return; // Early return: do not refresh on failure
     }
 
-    // Clear cache and refetch
+    // Only refresh after successful DB mutation
     clearCache();
     await refetchProducts();
+    
+    // Force BatchDetail to reload images (fixes persistence issue) - only after success
+    forceRefreshImages();
     
     // AUTO-CLEANUP: Delete the source product if it became empty
     await deleteEmptyProducts();
     
     toast.success('Image moved successfully');
-  }, [fetchImagesForProduct, clearCache, refetchProducts, deleteEmptyProducts]);
+  }, [fetchImagesForProduct, clearCache, refetchProducts, deleteEmptyProducts, forceRefreshImages]);
 
   // Handler for moving multiple images by ID from detail panel
   const handleMoveImagesById = useCallback(async (imageIds: string[], targetProductId: string) => {
@@ -1666,14 +1669,17 @@ const handleSelectBatch = useCallback((id: string) => {
 
       if (movedCount === 0) {
         toast.error('Failed to move images');
-        return;
+        return; // Early return: do not refresh on failure
       }
 
-      // Refresh images for both products
+      // Only refresh after successful DB mutations
       clearCache();
       const updatedImages = await fetchImagesForProduct(editingProductId);
       setEditingProductImages(updatedImages);
       await refetchProducts();
+      
+      // Force BatchDetail to reload images (fixes persistence issue) - only after success
+      forceRefreshImages();
       
       // AUTO-CLEANUP: Delete the source product if it became empty (background)
       deleteEmptyProducts().catch(err => console.error('Cleanup error:', err));
@@ -1683,7 +1689,7 @@ const handleSelectBatch = useCallback((id: string) => {
       console.error('Error moving images:', error);
       toast.error('Failed to move images');
     }
-  }, [editingProductId, fetchImagesForProduct, clearCache, refetchProducts, deleteEmptyProducts]);
+  }, [editingProductId, fetchImagesForProduct, clearCache, refetchProducts, deleteEmptyProducts, forceRefreshImages]);
 
   // Standalone handler for moving images by ID (used in birds eye view)
   const handleMoveImagesByIdStandalone = useCallback(async (imageIds: string[], targetProductId: string) => {
@@ -1723,12 +1729,15 @@ const handleSelectBatch = useCallback((id: string) => {
 
       if (movedCount === 0) {
         toast.error('Failed to move images');
-        return;
+        return; // Early return: do not refresh on failure
       }
 
-      // Clear cache and refetch
+      // Only refresh after successful DB mutations
       clearCache();
       await refetchProducts();
+      
+      // Force BatchDetail to reload images (fixes persistence issue) - only after success
+      forceRefreshImages();
       
       // AUTO-CLEANUP: Delete any source products that became empty (background)
       deleteEmptyProducts().catch(err => console.error('Cleanup error:', err));
@@ -1738,7 +1747,7 @@ const handleSelectBatch = useCallback((id: string) => {
       console.error('Error moving images:', error);
       toast.error('Failed to move images');
     }
-  }, [fetchImagesForProduct, clearCache, refetchProducts, deleteEmptyProducts]);
+  }, [fetchImagesForProduct, clearCache, refetchProducts, deleteEmptyProducts, forceRefreshImages]);
 
   // Handler for creating a new product from selected image IDs (used in Birds Eye View)
   // This creates a REAL product in the database and moves images to it

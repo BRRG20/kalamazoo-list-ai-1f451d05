@@ -429,9 +429,9 @@ export function BatchDetail({
   // Fetch ALL images for the batch in a SINGLE query, then group by product_id
   // This eliminates N+1 queries and dramatically improves performance
   useEffect(() => {
-    const fetchKey = `${batch.id}:${products.length}`;
+    const fetchKey = `${batch.id}:${products.length}:${imageRefreshKey || 0}`;
     
-    // Skip if we already fetched for this batch with same product count
+    // Skip if we already fetched for this batch with same product count and refresh key
     if (lastFetchedRef.current === fetchKey) {
       return;
     }
@@ -452,10 +452,12 @@ export function BatchDetail({
       
       try {
         // SINGLE query to fetch ALL images for the batch
+        // CRITICAL: Filter out soft-deleted images
         const { data, error } = await supabase
           .from('images')
           .select('*')
           .eq('batch_id', batch.id)
+          .is('deleted_at', null)
           .order('position', { ascending: true });
         
         if (error) {
@@ -496,7 +498,7 @@ export function BatchDetail({
     };
     
     fetchAllImages();
-  }, [batch.id, products]);
+  }, [batch.id, products, imageRefreshKey]);
 
   // Reset lastFetchedRef when batch changes to ensure fresh data
   useEffect(() => {
