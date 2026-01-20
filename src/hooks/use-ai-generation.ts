@@ -48,6 +48,10 @@ export function useAIGeneration({
   const aiGeneratedProductsRef = useRef<Set<string>>(new Set());
   const [aiGeneratedProducts, setAiGeneratedProducts] = useState<Set<string>>(new Set());
   
+  // Cache for AI generation results (key: productId:imageIdsHash:promptVersion)
+  const generationCacheRef = useRef<Map<string, Promise<GenerationResult>>>(new Map());
+  const generationResultsCacheRef = useRef<Map<string, GenerationResult>>(new Map());
+  
   // Configurable batch size
   const [batchSize, setBatchSize] = useState<BatchSizeOption>(DEFAULT_BATCH_SIZE);
   
@@ -74,11 +78,43 @@ export function useAIGeneration({
     return aiGeneratedProductsRef.current.has(productId);
   }, []);
 
+  // Generate cache key from productId + imageIds + promptVersion
+  const getCacheKey = useCallback((productId: string, imageIds: string[], promptVersion: string = 'v1'): string => {
+    const sortedIds = [...imageIds].sort().join(',');
+    return `${productId}:${sortedIds}:${promptVersion}`;
+  }, []);
+
   // Internal function to process a single product without state updates
   const processProduct = useCallback(async (
     product: Product
   ): Promise<GenerationResult> => {
     const productId = product.id;
+    
+    // Get product images for AI context (needed for cache key)
+    const images = await fetchImagesForProduct(productId);
+    
+    if (images.length === 0) {
+      console.warn(`[GENAI] Product ${productId} has no images, skipping`);
+      return { productId, success: false, noImages: true };
+    }
+    
+    const imageUrls = images.slice(0, 9).map(img => img.url);
+    const imageIds = imageUrls.map(url => url.split('/').pop() || url).slice(0, 9);
+    const cacheKey = getCacheKey(productId, imageIds);
+    
+    // Check cache for existing result
+    const cachedResult = generationResultsCacheRef.current.get(cacheKey);
+    if (cachedResult) {
+      console.log(`[AI] Cache hit for ${productId}, returning instantly`);
+      return cachedResult;
+    }
+    
+    // Check if already generating (reuse in-flight promise)
+    const inFlightPromise = generationCacheRef.current.get(cacheKey);
+    if (inFlightPromise) {
+      console.log(`[AI] Reusing in-flight request for ${productId}`);
+      return inFlightPromise;
+    }
     
     // Prevent duplicate requests using ref (no re-render)
     if (generatingProductIdsRef.current.has(productId)) {
@@ -89,77 +125,117 @@ export function useAIGeneration({
     // Mark as generating in ref only (no state update)
     generatingProductIdsRef.current.add(productId);
     
-    try {
-      // Get product images for AI context
-      const images = await fetchImagesForProduct(productId);
-      
-      if (images.length === 0) {
-        console.warn(`[GENAI] Product ${productId} has no images, skipping`);
-        return { productId, success: false, noImages: true };
-      }
-      
-      const imageUrls = images.slice(0, 9).map(img => img.url);
-      
-      const endpoint = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-listing`;
-      const payload = {
-        product: {
-          id: product.id,
-          sku: product.sku,
-          title: product.title,
-          description: product.description,
-          garment_type: product.garment_type,
-          department: product.department,
-          brand: product.brand,
-          colour_main: product.colour_main,
-          colour_secondary: product.colour_secondary,
-          pattern: product.pattern,
-          size_label: product.size_label,
-          size_recommended: product.size_recommended,
-          fit: product.fit,
-          material: product.material,
-          condition: product.condition,
-          flaws: product.flaws,
-          made_in: product.made_in,
-          era: product.era,
-          notes: product.notes,
-          price: product.price,
-          currency: product.currency,
-        },
-        imageUrls,
-      };
-      
-      console.log('[GENAI] request', {
-        endpoint,
-        productId,
-        payloadKeys: Object.keys(payload),
-        imageCount: imageUrls.length
-      });
-      
-      // Call the edge function
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
-        body: JSON.stringify(payload),
-      });
-      
-      console.log('[GENAI] response', {
-        productId,
-        status: response.status,
-        ok: response.ok
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        console.error(`[GENAI] Error for ${productId}:`, errorData);
-        await updateProduct(productId, { status: 'error' });
-        return { productId, success: false, error: errorData.error || 'Generation failed' };
-      }
-      
-      const data = await response.json();
-      const generated = data.generated;
+    // Create promise and cache it
+    const generationPromise = (async (): Promise<GenerationResult> => {
+      try {
+        // STEP 1: Run OCR on all label images (up to 9) to extract label text
+        let ocrExtracted: Record<string, any> = {};
+        try {
+          const ocrResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-images`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            },
+            body: JSON.stringify({ imageUrls: imageUrls.slice(0, 9) }), // Read up to 9 label images
+          });
+          
+          if (ocrResponse.ok) {
+            const ocrData = await ocrResponse.json();
+            ocrExtracted = ocrData.extracted || {};
+            console.log('[AI] OCR extracted:', Object.keys(ocrExtracted));
+          } else {
+            console.warn('[AI] OCR failed, continuing without label data');
+          }
+        } catch (ocrError) {
+          console.warn('[AI] OCR error (non-fatal):', ocrError);
+          // Continue without OCR - don't block generation
+        }
+        
+        // STEP 2: Use OCR results as source of truth for label fields
+        // Only use OCR values if they exist (don't overwrite with null)
+        const productWithOCR = {
+          ...product,
+          brand: ocrExtracted.brand || product.brand,
+          size_label: ocrExtracted.size_label || product.size_label,
+          size_recommended: ocrExtracted.size_recommended || product.size_recommended,
+          material: ocrExtracted.material || product.material,
+          made_in: ocrExtracted.made_in || product.made_in,
+          garment_type: ocrExtracted.garment_type || product.garment_type,
+          department: ocrExtracted.department || product.department,
+          fit: ocrExtracted.fit || product.fit,
+          condition: ocrExtracted.condition || product.condition,
+        };
+        
+        const endpoint = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-listing`;
+        
+        // Reduced payload: only send essential fields (not full product object)
+        // Use OCR-parsed values as source of truth
+        const payload = {
+          product: {
+            id: productWithOCR.id,
+            garment_type: productWithOCR.garment_type,
+            department: productWithOCR.department,
+            brand: productWithOCR.brand,
+            colour_main: productWithOCR.colour_main,
+            colour_secondary: productWithOCR.colour_secondary,
+            pattern: productWithOCR.pattern,
+            size_label: productWithOCR.size_label,
+            size_recommended: productWithOCR.size_recommended,
+            fit: productWithOCR.fit,
+            material: productWithOCR.material,
+            condition: productWithOCR.condition,
+            flaws: productWithOCR.flaws,
+            made_in: productWithOCR.made_in,
+            era: productWithOCR.era,
+            raw_input_text: productWithOCR.notes || null,
+            price: productWithOCR.price || null,
+          },
+          imageUrls: imageUrls.slice(0, 4), // Reduce to max 4 images (edge function limit)
+        };
+        
+        console.log('[GENAI] request', {
+          endpoint,
+          productId,
+          payloadSize: JSON.stringify(payload).length,
+          imageCount: payload.imageUrls.length,
+          ocrFields: Object.keys(ocrExtracted)
+        });
+        
+        // Create AbortController for timeout
+        const abortController = new AbortController();
+        const timeoutId = setTimeout(() => {
+          abortController.abort();
+        }, 30000); // 30 second timeout
+        
+        // Call the edge function with timeout
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify(payload),
+          signal: abortController.signal,
+        });
+        
+        clearTimeout(timeoutId);
+        
+        console.log('[GENAI] response', {
+          productId,
+          status: response.status,
+          ok: response.ok
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+          console.error(`[GENAI] Error for ${productId}:`, errorData);
+          await updateProduct(productId, { status: 'error' });
+          return { productId, success: false, error: errorData.error || 'Generation failed' };
+        }
+        
+        const data = await response.json();
+        const generated = data.generated;
       
       // Get default tags based on garment type, gender, and keywords
       const garmentType = product.garment_type || generated.garment_type || '';
@@ -191,12 +267,50 @@ export function useAIGeneration({
         collections_tags: generated.collections_tags || product.collections_tags,
       };
       
+      // CRITICAL: Use OCR-extracted values as source of truth (prevent hallucinations)
+      // Only use AI-generated values if OCR didn't find them AND product doesn't have them
+      if (ocrExtracted.size_label && !product.size_label) {
+        updates.size_label = ocrExtracted.size_label;
+      } else if (!product.size_label && generated.size_label) {
+        // Fallback to AI only if OCR didn't find it
+        updates.size_label = generated.size_label;
+      }
+      
+      if (ocrExtracted.size_recommended && !product.size_recommended) {
+        updates.size_recommended = ocrExtracted.size_recommended;
+      } else if (!product.size_recommended && generated.size_recommended) {
+        updates.size_recommended = generated.size_recommended;
+      }
+      
+      if (ocrExtracted.brand && !product.brand) {
+        updates.brand = ocrExtracted.brand;
+      } else if (!product.brand && generated.brand) {
+        updates.brand = generated.brand;
+      }
+      
+      if (ocrExtracted.material && !product.material) {
+        updates.material = ocrExtracted.material;
+      } else if (!product.material && generated.material) {
+        updates.material = generated.material;
+      }
+      
+      if (ocrExtracted.made_in && !product.made_in) {
+        updates.made_in = ocrExtracted.made_in;
+      } else if (!product.made_in && generated.made_in) {
+        updates.made_in = generated.made_in;
+      }
+      
       // CRITICAL: Update ALL inferred fields from AI (not just if empty)
       // Only update if AI provided a value AND product doesn't already have one
-      if (!product.garment_type && generated.garment_type) {
+      if (ocrExtracted.garment_type && !product.garment_type) {
+        updates.garment_type = ocrExtracted.garment_type;
+      } else if (!product.garment_type && generated.garment_type) {
         updates.garment_type = generated.garment_type;
       }
-      if (!product.fit && generated.fit) {
+      
+      if (ocrExtracted.fit && !product.fit) {
+        updates.fit = ocrExtracted.fit;
+      } else if (!product.fit && generated.fit) {
         updates.fit = generated.fit;
       }
       if (!product.era && generated.era) {
@@ -209,7 +323,22 @@ export function useAIGeneration({
       
       // CRITICAL: Sanitize condition to match enum values
       // Valid values: Excellent, Very good, Good, Fair
-      if (!product.condition && generated.condition) {
+      // Use OCR condition if available (from label), otherwise use AI-generated
+      if (ocrExtracted.condition && !product.condition) {
+        const conditionStr = String(ocrExtracted.condition);
+        let sanitizedCondition: string | null = null;
+        const conditionMatch = conditionStr.match(/^(Excellent|Very good|Good|Fair)/i);
+        if (conditionMatch) {
+          const baseCondition = conditionMatch[1].toLowerCase();
+          if (baseCondition === 'excellent') sanitizedCondition = 'Excellent';
+          else if (baseCondition === 'very good') sanitizedCondition = 'Very good';
+          else if (baseCondition === 'good') sanitizedCondition = 'Good';
+          else if (baseCondition === 'fair') sanitizedCondition = 'Fair';
+        }
+        if (sanitizedCondition) {
+          updates.condition = sanitizedCondition as any;
+        }
+      } else if (!product.condition && generated.condition) {
         const conditionStr = String(generated.condition);
         let sanitizedCondition: string | null = null;
         let conditionDetails: string | null = null;
@@ -303,28 +432,50 @@ export function useAIGeneration({
         }
       }
       
-      console.log('[AI] Updates to save:', Object.keys(updates));
-      
-      await updateProduct(productId, updates);
-      
-      // Mark as AI generated in ref only (no state update)
-      aiGeneratedProductsRef.current.add(productId);
-      
-      return { productId, success: true };
-      
-    } catch (error) {
-      console.error(`[AI] Exception for ${productId}:`, error);
-      await updateProduct(productId, { status: 'error' });
-      return { 
-        productId, 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
-      };
-    } finally {
-      // Remove from generating ref (no state update)
-      generatingProductIdsRef.current.delete(productId);
-    }
-  }, [fetchImagesForProduct, updateProduct, getMatchingTags]);
+        console.log('[AI] Updates to save:', Object.keys(updates));
+        
+        await updateProduct(productId, updates);
+        
+        // Mark as AI generated in ref only (no state update)
+        aiGeneratedProductsRef.current.add(productId);
+        
+        const result = { productId, success: true };
+        
+        // Cache successful result
+        generationResultsCacheRef.current.set(cacheKey, result);
+        
+        return result;
+        
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          console.error(`[AI] Timeout for ${productId} after 30s`);
+          await updateProduct(productId, { status: 'error' });
+          return { 
+            productId, 
+            success: false, 
+            error: 'Generation timed out after 30 seconds. Please try again.' 
+          };
+        }
+        
+        console.error(`[AI] Exception for ${productId}:`, error);
+        await updateProduct(productId, { status: 'error' });
+        return { 
+          productId, 
+          success: false, 
+          error: error instanceof Error ? error.message : 'Unknown error' 
+        };
+      } finally {
+        // Remove from generating ref and cache
+        generatingProductIdsRef.current.delete(productId);
+        generationCacheRef.current.delete(cacheKey);
+      }
+    })();
+    
+    // Cache the promise for reuse
+    generationCacheRef.current.set(cacheKey, generationPromise);
+    
+    return generationPromise;
+  }, [fetchImagesForProduct, updateProduct, getMatchingTags, getCacheKey]);
 
   // Generate AI for a single product (with state updates for UI)
   const generateSingleProduct = useCallback(async (

@@ -140,8 +140,8 @@ serve(async (req) => {
       { type: "text", text: "Analyze these vintage clothing images and extract product details. Be conservative with era - only assign 80s/90s/Y2K if clearly evident." }
     ];
 
-    // Add up to 4 images for analysis
-    const imagesToAnalyze = imageUrls.slice(0, 4);
+    // Add up to 9 images for analysis (to read all label images)
+    const imagesToAnalyze = imageUrls.slice(0, 9);
     for (const url of imagesToAnalyze) {
       content.push({
         type: "image_url",
