@@ -23,11 +23,26 @@ async function processBackgroundRemoval(
     ? `After removing background, add a ${addShadow === 'light' ? 'subtle, soft' : addShadow === 'medium' ? 'moderate, natural' : 'strong, dramatic'} drop shadow at the bottom of the garment to give it depth and ground the product. The shadow should appear as if light is coming from above.`
     : '';
 
+  // Critical orientation preservation instruction
+  const orientationLock = `CRITICAL CONSTRAINTS - DO NOT VIOLATE:
+- DO NOT rotate, flip, mirror, or change the orientation of the image in any way
+- DO NOT crop, resize, or change the aspect ratio or dimensions
+- Preserve the EXACT original orientation (if portrait/vertical, output must be portrait/vertical; if landscape/horizontal, output must be landscape/horizontal)
+- The subject position must remain exactly where it is in the frame
+- Preserve full sharpness and detail: no blur, no pixelation, no smoothing
+- ONLY remove the background pixels, replacing them with transparency`;
+
   // Use slightly different prompts on retry to avoid repeated refusals
   const prompts = [
-    `Edit this image: Remove all background pixels completely, leaving only the clothing item visible against a transparent background. Output the edited image as PNG with transparency. ${shadowInstruction}`,
-    `Process this clothing photo: Make the background fully transparent (alpha=0). Keep only the garment and any hanger. Return the edited PNG image. ${shadowInstruction}`,
-    `Background removal task: Replace all non-clothing pixels with transparency. The garment must remain intact. Export as transparent PNG. ${shadowInstruction}`
+    `${orientationLock}
+
+Remove the background from this image. Replace all background pixels with full transparency (alpha=0). Keep only the clothing/garment and any hanger. Output as transparent PNG. ${shadowInstruction}`,
+    `${orientationLock}
+
+Make the background fully transparent. Keep only the clothing item visible. Do not transform the image in any way. Return the edited PNG image with transparency. ${shadowInstruction}`,
+    `${orientationLock}
+
+Background removal only: Replace non-clothing pixels with transparency. The garment must remain exactly as positioned. Export as transparent PNG. ${shadowInstruction}`
   ];
 
   const promptText = prompts[Math.min(attempt - 1, prompts.length - 1)];
@@ -126,11 +141,17 @@ async function cleanupPass(imageUrl: string, apiKey: string): Promise<string> {
           content: [
             {
               type: 'text',
-              text: `This is a product image that has already had background removal applied. Please clean it up:
+              text: `Clean up this product image that has had background removal applied.
+
+CRITICAL - DO NOT VIOLATE:
+- DO NOT rotate, flip, mirror, or change the orientation
+- DO NOT crop, resize, or change aspect ratio or dimensions
+- Preserve EXACT original orientation and subject position
+- Preserve full sharpness: no blur, no pixelation, no smoothing
 
 CLEANUP REQUIREMENTS:
 1. Find and remove ANY remaining background artifacts, stray pixels, or gray/white patches
-2. The area inside the hanger opening (triangular/rectangular gap) should be 100% transparent - if there's any gray or white remaining there, make it transparent
+2. The area inside the hanger opening should be 100% transparent
 3. Clean up any rough or jagged edges on the clothing and hanger
 4. Remove any halos, fringes, or semi-transparent areas around the edges
 5. Ensure ALL areas that should be transparent are fully transparent (alpha = 0)
