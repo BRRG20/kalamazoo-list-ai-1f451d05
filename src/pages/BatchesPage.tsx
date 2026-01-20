@@ -1534,8 +1534,8 @@ const handleSelectBatch = useCallback((id: string) => {
         return;
       }
       
-      // CRITICAL: Use up to 4 images to capture garment, labels, and measurement signs
-      const imageUrls = images.slice(0, 4).map(img => img.url);
+      // CRITICAL: Use up to 9 images to capture garment, labels, and measurement signs (matches bulk flow)
+      const imageUrls = images.slice(0, 9).map(img => img.url).filter(url => url && /^https?:\/\/.+/i.test(url));
       
       console.log(`[AI Detail] Generating for product ${editingProductId} (regenerateOnly: ${regenerateOnly})`);
       
@@ -1569,73 +1569,124 @@ const handleSelectBatch = useCallback((id: string) => {
       const data = await response.json();
       const generated = data.generated;
       
-      // Update product with generated content (ONLY for this specific product)
+      // Update product with generated content - match the bulk flow logic
+      // CRITICAL: Always overwrite fields when AI provides non-null values (regenerate mode)
       const updates: Partial<Product> = { status: 'generated' };
       
+      // Helper: update field if AI provided a non-null value (matches use-ai-generation.ts)
+      const updateField = <K extends keyof Product>(
+        key: K, 
+        aiValue: Product[K] | null | undefined,
+        validator?: (val: unknown) => Product[K] | null
+      ) => {
+        if (aiValue !== null && aiValue !== undefined && aiValue !== '' && aiValue !== 'null') {
+          if (validator) {
+            const validated = validator(aiValue);
+            if (validated !== null) {
+              updates[key] = validated;
+            }
+          } else {
+            updates[key] = aiValue;
+          }
+        }
+      };
+      
       if (!regenerateOnly || regenerateOnly === 'all' || regenerateOnly === 'title') {
-        if (generated.title) updates.title = generated.title;
+        updateField('title', generated.title);
       }
       if (!regenerateOnly || regenerateOnly === 'all' || regenerateOnly === 'style_a') {
-        if (generated.description_style_a) updates.description_style_a = generated.description_style_a;
+        updateField('description_style_a', generated.description_style_a);
       }
       if (!regenerateOnly || regenerateOnly === 'all' || regenerateOnly === 'style_b') {
-        if (generated.description_style_b) updates.description_style_b = generated.description_style_b;
+        updateField('description_style_b', generated.description_style_b);
       }
       if (!regenerateOnly || regenerateOnly === 'all') {
-        if (generated.shopify_tags) updates.shopify_tags = generated.shopify_tags;
-        if (generated.etsy_tags) updates.etsy_tags = generated.etsy_tags;
-        if (generated.collections_tags) updates.collections_tags = generated.collections_tags;
+        // CRITICAL: Map description_style_a to description field (matches bulk flow)
+        if (generated.description_style_a) {
+          updates.description = generated.description_style_a;
+        }
         
-        // CRITICAL: Also update AI-inferred fields (only if not already set on product)
-        if (!product.garment_type && generated.garment_type) {
+        // Tags - always overwrite with AI values
+        updateField('shopify_tags', generated.shopify_tags);
+        updateField('etsy_tags', generated.etsy_tags);
+        updateField('collections_tags', generated.collections_tags);
+        
+        // Garment type - always update if AI provided
+        if (generated.garment_type && generated.garment_type !== 'null') {
           updates.garment_type = generated.garment_type;
         }
-        if (!product.fit && generated.fit) {
+        
+        // Fit - always update if AI provided
+        if (generated.fit && generated.fit !== 'null') {
           updates.fit = generated.fit;
         }
-        if (!product.era && generated.era) {
-          updates.era = generated.era;
+        
+        // Era - validate before updating
+        updateField('era', generated.era, (val) => {
+          const validEras = ['80s', '90s', 'Y2K', 'Modern'];
+          return validEras.includes(String(val)) ? (String(val) as any) : null;
+        });
+        
+        // Condition - sanitize and validate (matches bulk flow logic)
+        if (generated.condition) {
+          const conditionStr = String(generated.condition);
+          let sanitizedCondition: string | null = null;
+          let conditionDetails: string | null = null;
+          
+          const conditionMatch = conditionStr.match(/^(Excellent|Very good|Good|Fair)/i);
+          if (conditionMatch) {
+            const baseCondition = conditionMatch[1].toLowerCase();
+            if (baseCondition === 'excellent') sanitizedCondition = 'Excellent';
+            else if (baseCondition === 'very good') sanitizedCondition = 'Very good';
+            else if (baseCondition === 'good') sanitizedCondition = 'Good';
+            else if (baseCondition === 'fair') sanitizedCondition = 'Fair';
+            
+            const detailsMatch = conditionStr.match(/\(([^)]+)\)/);
+            if (detailsMatch) {
+              conditionDetails = detailsMatch[1].trim();
+            }
+          } else {
+            const lowerCondition = conditionStr.toLowerCase();
+            if (lowerCondition.includes('excellent')) sanitizedCondition = 'Excellent';
+            else if (lowerCondition.includes('very good')) sanitizedCondition = 'Very good';
+            else if (lowerCondition.includes('good')) sanitizedCondition = 'Good';
+            else if (lowerCondition.includes('fair') || lowerCondition.includes('poor')) sanitizedCondition = 'Fair';
+          }
+          
+          if (sanitizedCondition) {
+            updates.condition = sanitizedCondition as any;
+            if (conditionDetails) {
+              updates.flaws = conditionDetails;
+            }
+          }
         }
-        if (!product.condition && generated.condition) {
-          updates.condition = generated.condition;
-        }
-        if (!product.department && generated.department) {
-          updates.department = generated.department;
-        }
-        if (!product.flaws && generated.flaws) {
-          updates.flaws = generated.flaws;
-        }
-        if (!product.made_in && generated.made_in) {
-          updates.made_in = generated.made_in;
-        }
-        if (!product.pattern && generated.pattern) {
-          updates.pattern = generated.pattern;
-        }
-        // CRITICAL: Include OCR/vision extracted fields (brand, material, sizes, measurements, colours)
-        if (!product.brand && generated.brand) {
-          updates.brand = generated.brand;
-        }
-        if (!product.material && generated.material) {
-          updates.material = generated.material;
-        }
-        if (!product.size_label && generated.size_label) {
-          updates.size_label = generated.size_label;
-        }
-        if (!product.size_recommended && generated.size_recommended) {
-          updates.size_recommended = generated.size_recommended;
-        }
-        if (!product.pit_to_pit && generated.pit_to_pit) {
-          updates.pit_to_pit = generated.pit_to_pit;
-        }
-        if (!product.colour_main && generated.colour_main) {
-          updates.colour_main = generated.colour_main;
-        }
-        if (!product.colour_secondary && generated.colour_secondary) {
-          updates.colour_secondary = generated.colour_secondary;
-        }
-        if (!product.style && generated.style) {
-          updates.style = generated.style;
-        }
+        
+        // Department - validate and normalize
+        updateField('department', generated.department, (val) => {
+          const validDepartments = ['Women', 'Men', 'Unisex', 'Kids'];
+          const dept = String(val);
+          const normalizedDept = dept.charAt(0).toUpperCase() + dept.slice(1).toLowerCase();
+          if (validDepartments.includes(normalizedDept)) return normalizedDept as any;
+          if (dept.toLowerCase().includes('men') && !dept.toLowerCase().includes('women')) return 'Men' as any;
+          if (dept.toLowerCase().includes('women')) return 'Women' as any;
+          if (dept.toLowerCase().includes('unisex')) return 'Unisex' as any;
+          return null;
+        });
+        
+        // Other inferred fields - always update if AI provided
+        updateField('flaws', generated.flaws);
+        updateField('made_in', generated.made_in);
+        updateField('pattern', generated.pattern);
+        updateField('style', generated.style);
+        
+        // OCR fields - CRITICAL: always update if AI extracted from labels/signs
+        updateField('brand', generated.brand);
+        updateField('material', generated.material);
+        updateField('size_label', generated.size_label);
+        updateField('size_recommended', generated.size_recommended);
+        updateField('pit_to_pit', generated.pit_to_pit);
+        updateField('colour_main', generated.colour_main);
+        updateField('colour_secondary', generated.colour_secondary);
       }
       
       console.log('[AI Detail] Updates to apply:', Object.keys(updates));
