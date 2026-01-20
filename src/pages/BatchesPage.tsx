@@ -1773,8 +1773,11 @@ const handleSelectBatch = useCallback((id: string) => {
     // AUTO-CLEANUP: Delete the source product if it became empty
     await deleteEmptyProducts();
     
+    // Force BatchDetail to refresh images from DB
+    forceRefreshImages();
+    
     toast.success('Image moved successfully');
-  }, [fetchImagesForProduct, clearCache, refetchProducts, deleteEmptyProducts]);
+  }, [fetchImagesForProduct, clearCache, refetchProducts, deleteEmptyProducts, forceRefreshImages]);
 
   // Handler for moving multiple images by ID from detail panel
   const handleMoveImagesById = useCallback(async (imageIds: string[], targetProductId: string) => {
@@ -1810,12 +1813,15 @@ const handleSelectBatch = useCallback((id: string) => {
       // AUTO-CLEANUP: Delete the source product if it became empty (background)
       deleteEmptyProducts().catch(err => console.error('Cleanup error:', err));
       
+      // Force BatchDetail to refresh images from DB
+      forceRefreshImages();
+      
       toast.success(`${movedCount} image(s) moved`);
     } catch (error) {
       console.error('Error moving images:', error);
       toast.error('Failed to move images');
     }
-  }, [editingProductId, fetchImagesForProduct, clearCache, refetchProducts, deleteEmptyProducts]);
+  }, [editingProductId, fetchImagesForProduct, clearCache, refetchProducts, deleteEmptyProducts, forceRefreshImages]);
 
   // Standalone handler for moving images by ID (used in birds eye view)
   const handleMoveImagesByIdStandalone = useCallback(async (imageIds: string[], targetProductId: string) => {
@@ -1868,12 +1874,15 @@ const handleSelectBatch = useCallback((id: string) => {
       // AUTO-CLEANUP: Delete any source products that became empty (background)
       deleteEmptyProducts().catch(err => console.error('Cleanup error:', err));
       
+      // Force BatchDetail to refresh images from DB
+      forceRefreshImages();
+      
       toast.success(`${movedCount} image(s) moved`);
     } catch (error) {
       console.error('Error moving images:', error);
       toast.error('Failed to move images');
     }
-  }, [fetchImagesForProduct, clearCache, refetchProducts, deleteEmptyProducts, majorActionUndo]);
+  }, [fetchImagesForProduct, clearCache, refetchProducts, deleteEmptyProducts, majorActionUndo, forceRefreshImages]);
 
   // Handler for creating a new product from selected image IDs (used in Birds Eye View)
   // This creates a REAL product in the database and moves images to it
