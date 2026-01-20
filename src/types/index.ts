@@ -75,6 +75,8 @@ export interface Product {
   is_hidden?: boolean;
   // Grouping lock - prevents auto-group from reshuffling this product
   is_grouped?: boolean;
+  // Batch number - assigned during autopilot processing
+  batch_number?: number | null;
 }
 
 export interface ProductImage {
