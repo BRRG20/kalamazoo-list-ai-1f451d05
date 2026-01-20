@@ -852,6 +852,18 @@ IMPORTANT: Respond with ONLY valid JSON.`;
     }));
 
     
+    // CRITICAL: Sanitize descriptions to remove "null" placeholders
+    // Helper: convert null-like values to empty string for safe text rendering
+    const safeText = (val: unknown): string => {
+      if (val === null || val === undefined) return '';
+      const str = String(val).trim();
+      const lower = str.toLowerCase();
+      if (lower === 'null' || lower === 'undefined' || lower === 'n/a' || lower === 'not available' || lower === 'not specified') {
+        return '';
+      }
+      return str;
+    };
+
     // Normalize size helper
     const normalizeSize = (s: string | null | undefined): string | null => {
       if (!s || s === 'null' || s === 'undefined') return null;
@@ -1065,18 +1077,6 @@ IMPORTANT: Respond with ONLY valid JSON.`;
       generated.title = buildOptimizedTitle(generated, sanitizedProduct);
       console.log(`[AI] Built title from scratch: "${generated.title}"`);
     }
-    
-    // CRITICAL: Sanitize descriptions to remove "null" placeholders
-    // Helper: convert null-like values to empty string for safe text rendering
-    const safeText = (val: unknown): string => {
-      if (val === null || val === undefined) return '';
-      const str = String(val).trim();
-      const lower = str.toLowerCase();
-      if (lower === 'null' || lower === 'undefined' || lower === 'n/a' || lower === 'not available' || lower === 'not specified') {
-        return '';
-      }
-      return str;
-    };
     
     const sanitizeDescription = (desc: string | null): string | null => {
       if (!desc) return null;
