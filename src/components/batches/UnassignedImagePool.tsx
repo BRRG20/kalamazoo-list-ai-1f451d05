@@ -433,11 +433,11 @@ export function UnassignedImagePool({
 
         {/* Actions - Always show create button if there are images */}
         <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-border">
-          {/* Create New Product button - always visible if there are images */}
+          {/* Create as One Product button - combines all selected images into ONE product */}
           <Button 
             size="sm" 
             onClick={handleCreateGroup}
-            disabled={images.length === 0 || isCreating}
+            disabled={selectedImages.size === 0 || isCreating}
           >
             {isCreating ? (
               <Loader2 className="w-4 h-4 mr-1 animate-spin" />
@@ -446,11 +446,7 @@ export function UnassignedImagePool({
             )}
             {isCreating 
               ? 'Creating...'
-              : selectedImages.size > 0 
-                ? `Create New Product (${selectedImages.size} images)` 
-                : images.length === 1 
-                  ? 'Create New Product (1 image)'
-                  : 'Create New Product (select images first)'
+              : `Create as One Product (${selectedImages.size} image${selectedImages.size !== 1 ? 's' : ''})`
             }
           </Button>
 
