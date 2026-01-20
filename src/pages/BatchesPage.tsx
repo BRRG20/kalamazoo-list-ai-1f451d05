@@ -1546,12 +1546,13 @@ const handleSelectBatch = useCallback((id: string) => {
         return;
       }
       
-      // Call the edge function with user's access token
+      // Call the edge function with user's access token and apikey
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-listing`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`,
+          'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
         },
         body: JSON.stringify({ 
           product, 
