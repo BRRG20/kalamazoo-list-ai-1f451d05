@@ -502,6 +502,7 @@ export function BatchDetail({
               id: row.id,
               product_id: row.product_id,
               url: row.url,
+              thumb_url: row.thumb_url,
               position: row.position,
               include_in_shopify: row.include_in_shopify,
               source: row.source as ProductImage['source'],
@@ -558,6 +559,7 @@ export function BatchDetail({
                 id: row.id,
                 product_id: row.product_id,
                 url: row.url,
+                thumb_url: row.thumb_url,
                 position: row.position,
                 include_in_shopify: row.include_in_shopify,
                 source: row.source as ProductImage['source'],
@@ -614,6 +616,7 @@ export function BatchDetail({
             id: row.id,
             product_id: row.product_id,
             url: row.url,
+            thumb_url: row.thumb_url,
             position: row.position,
             include_in_shopify: row.include_in_shopify,
             source: row.source as ProductImage['source'],
@@ -2186,17 +2189,26 @@ export function BatchDetail({
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {imagesLoading && (
-                <div className="col-span-full flex items-center justify-center py-4 text-muted-foreground">
-                  <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                  Loading images...
-                </div>
+              {/* Show skeleton placeholders while loading for instant UI feedback */}
+              {imagesLoading && displayedProducts.length === 0 && (
+                <>
+                  {Array.from({ length: Math.min(8, PRODUCTS_PER_PAGE) }).map((_, i) => (
+                    <div key={`skeleton-${i}`} className="bg-card border border-border rounded-lg overflow-hidden animate-pulse">
+                      <div className="aspect-square bg-muted" />
+                      <div className="p-3 space-y-2">
+                        <div className="h-4 bg-muted rounded w-3/4" />
+                        <div className="h-3 bg-muted rounded w-1/2" />
+                        <div className="h-8 bg-muted rounded w-full" />
+                      </div>
+                    </div>
+                  ))}
+                </>
               )}
               {displayedProducts.map((product) => (
                 <ProductCard
                   key={product.id}
                   product={product}
-                  images={(productImages[product.id] || []).slice().sort((a, b) => (a.position || 0) - (b.position || 0))}
+                  images={productImages[product.id] || []}
                   isSelected={selectedProductIds.has(product.id)}
                   onToggleSelect={() => onToggleProductSelection(product.id)}
                   onEdit={() => onEditProduct(product.id)}
