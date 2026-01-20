@@ -263,7 +263,7 @@ const ProductCard = memo(function ProductCard({
             />
           )}
           <span className="text-xs font-medium text-muted-foreground truncate">
-            #{productIndex + 1}
+            #{product.batch_number ?? productIndex + 1}
           </span>
         </div>
         <span className={cn(

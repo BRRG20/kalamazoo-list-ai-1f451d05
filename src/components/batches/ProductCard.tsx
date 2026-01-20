@@ -196,12 +196,18 @@ export function ProductCard({
           )}
           
           {/* Selection checkbox */}
-          <div className="absolute top-2 left-2">
+          <div className="absolute top-2 left-2 flex items-center gap-1.5">
             <Checkbox
               checked={isSelected}
               onCheckedChange={onToggleSelect}
               className="bg-card border-2"
             />
+            {/* Batch number badge */}
+            {product.batch_number != null && (
+              <span className="bg-foreground/80 text-background text-xs px-1.5 py-0.5 rounded font-medium">
+                #{product.batch_number}
+              </span>
+            )}
           </div>
 
           {/* Expand button */}
