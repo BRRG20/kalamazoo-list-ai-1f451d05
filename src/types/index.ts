@@ -81,6 +81,7 @@ export interface ProductImage {
   id: string;
   product_id: string;
   url: string;
+  thumb_url?: string | null;
   position: number;
   include_in_shopify: boolean;
   source?: 'upload' | 'model_tryon' | 'background_removal' | 'ghost_mannequin' | 'ai_expansion';

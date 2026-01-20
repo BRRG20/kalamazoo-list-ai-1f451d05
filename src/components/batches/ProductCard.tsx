@@ -66,7 +66,9 @@ export function ProductCard({
   const [internalDragIndex, setInternalDragIndex] = useState<number | null>(null);
   const [internalDragOverIndex, setInternalDragOverIndex] = useState<number | null>(null);
 
-  const thumbnail = images[0]?.url;
+  // Use thumb_url if available for faster loading, fallback to full url
+  const firstImage = images[0];
+  const thumbnail = firstImage?.thumb_url || firstImage?.url;
   const imageUrls = images.map(img => img.url);
 
   const handleImageClick = (e: React.MouseEvent, index: number = 0) => {
