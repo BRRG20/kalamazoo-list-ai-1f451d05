@@ -11,7 +11,7 @@ interface RequestBody {
   shadow?: 'none' | 'light' | 'medium' | 'harsh';
 }
 
-const MAX_RETRIES = 2;
+const MAX_RETRIES = 3;
 
 async function processBackgroundRemoval(
   imageUrl: string, 
@@ -22,6 +22,15 @@ async function processBackgroundRemoval(
   const shadowInstruction = addShadow !== 'none' 
     ? `After removing background, add a ${addShadow === 'light' ? 'subtle, soft' : addShadow === 'medium' ? 'moderate, natural' : 'strong, dramatic'} drop shadow at the bottom of the garment to give it depth and ground the product. The shadow should appear as if light is coming from above.`
     : '';
+
+  // Use slightly different prompts on retry to avoid repeated refusals
+  const prompts = [
+    `Edit this image: Remove all background pixels completely, leaving only the clothing item visible against a transparent background. Output the edited image as PNG with transparency. ${shadowInstruction}`,
+    `Process this clothing photo: Make the background fully transparent (alpha=0). Keep only the garment and any hanger. Return the edited PNG image. ${shadowInstruction}`,
+    `Background removal task: Replace all non-clothing pixels with transparency. The garment must remain intact. Export as transparent PNG. ${shadowInstruction}`
+  ];
+
+  const promptText = prompts[Math.min(attempt - 1, prompts.length - 1)];
 
   const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
     method: 'POST',
@@ -37,20 +46,7 @@ async function processBackgroundRemoval(
           content: [
             {
               type: 'text',
-              text: `Remove the background from this clothing product photo for e-commerce use.
-
-CRITICAL REQUIREMENTS:
-1. Keep ONLY the garment/clothing and the hanger (including the metal hook)
-2. Make the background 100% transparent (PNG with alpha channel)
-3. VERY IMPORTANT: The triangular or rectangular OPENING in the middle of the hanger where you can see through to the background - this visible area through the hanger opening MUST also be completely transparent, NOT gray or white
-4. Remove ALL background visible through any gaps, holes, or openings - including the space inside the hanger frame
-5. Ensure clean, crisp edges with NO stray pixels, artifacts, halos, or incomplete removal
-6. No remnant shadows or fringes around any edges
-7. Every single pixel that is not part of the actual clothing fabric or hanger material must be fully transparent
-
-${shadowInstruction}
-
-Output a clean product cutout with ONLY the garment and hanger visible, against a 100% transparent background.`
+              text: promptText
             },
             {
               type: 'image_url',
@@ -103,7 +99,7 @@ Output a clean product cutout with ONLY the garment and hanger visible, against 
     // Retry if we haven't exhausted attempts
     if (attempt < MAX_RETRIES) {
       console.log(`Retrying background removal (attempt ${attempt + 1})...`);
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
+      await new Promise(resolve => setTimeout(resolve, 1500)); // Wait 1.5 seconds before retry
       return processBackgroundRemoval(imageUrl, apiKey, addShadow, attempt + 1);
     }
     
