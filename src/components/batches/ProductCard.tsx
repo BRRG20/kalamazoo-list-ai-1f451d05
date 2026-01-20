@@ -34,6 +34,8 @@ interface ProductCardProps {
   onHide?: () => void;
   // Unhide functionality (for hidden products shown inline)
   onUnhide?: () => void;
+  // Display index fallback for card numbering
+  displayIndex?: number;
 }
 
 export function ProductCard({
@@ -58,6 +60,7 @@ export function ProductCard({
   onMarkAsPending,
   onHide,
   onUnhide,
+  displayIndex,
 }: ProductCardProps) {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewIndex, setPreviewIndex] = useState(0);
@@ -202,10 +205,10 @@ export function ProductCard({
               onCheckedChange={onToggleSelect}
               className="bg-card border-2"
             />
-            {/* Batch number badge */}
-            {product.batch_number != null && (
+            {/* Batch number badge - show batch_number or fallback to displayIndex */}
+            {(product.batch_number != null || displayIndex != null) && (
               <span className="bg-foreground/80 text-background text-xs px-1.5 py-0.5 rounded font-medium">
-                #{product.batch_number}
+                #{product.batch_number ?? displayIndex}
               </span>
             )}
           </div>

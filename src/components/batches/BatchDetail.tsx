@@ -2204,7 +2204,7 @@ export function BatchDetail({
                   ))}
                 </>
               )}
-              {displayedProducts.map((product) => (
+              {displayedProducts.map((product, index) => (
                 <ProductCard
                   key={product.id}
                   product={product}
@@ -2244,6 +2244,7 @@ export function BatchDetail({
                   onMarkAsPending={() => onMarkAsPending?.(product.id)}
                   onHide={() => onHideProduct?.(product.id)}
                   onUnhide={showHiddenInline && product.is_hidden ? () => onUnhideProduct?.(product.id) : undefined}
+                  displayIndex={index + 1}
                 />
               ))}
               {!imagesLoading && products.length > 0 && Object.keys(productImages).length === 0 && (
