@@ -100,8 +100,9 @@ const ImageTile = memo(function ImageTile({
       }}
     >
       <img
-        src={image.url}
+        src={image.thumb_url || image.url}
         alt={`Image ${imgIndex + 1}`}
+        loading="lazy"
         className={cn(
           "w-full h-full object-cover transition-all duration-300 pointer-events-none",
           justMoved && "brightness-110"
@@ -380,6 +381,11 @@ export function BirdsEyeView({
   const [isMutating, setIsMutating] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   
+  // Pagination state for "Load more" chunking
+  const ITEMS_PER_PAGE = 30;
+  const [displayLimit, setDisplayLimit] = useState(ITEMS_PER_PAGE);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  
   const containerRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<Grid>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
@@ -459,7 +465,7 @@ export function BirdsEyeView({
   }, [safeProducts, safeProductImages]);
 
   // Filter products based on search query AND filter mode
-  const filteredProducts = useMemo(() => {
+  const allFilteredProducts = useMemo(() => {
     try {
       let result = safeProducts.filter(p => p && p.id);
       
@@ -496,6 +502,30 @@ export function BirdsEyeView({
       return [];
     }
   }, [safeProducts, safeProductImages, searchQuery, filterMode]);
+
+  // Reset pagination when filters/search change
+  useEffect(() => {
+    setDisplayLimit(ITEMS_PER_PAGE);
+  }, [searchQuery, filterMode]);
+
+  // Paginated products for display (chunk loading)
+  const filteredProducts = useMemo(() => {
+    return allFilteredProducts.slice(0, displayLimit);
+  }, [allFilteredProducts, displayLimit]);
+
+  // Check if there are more products to load
+  const hasMoreProducts = allFilteredProducts.length > displayLimit;
+  const remainingCount = allFilteredProducts.length - displayLimit;
+
+  // Handle load more
+  const handleLoadMore = useCallback(() => {
+    setIsLoadingMore(true);
+    // Small delay to show loading state
+    setTimeout(() => {
+      setDisplayLimit(prev => prev + ITEMS_PER_PAGE);
+      setIsLoadingMore(false);
+    }, 100);
+  }, []);
 
   // Count total images (for filtered products)
   const totalImages = useMemo(() => {
@@ -1117,9 +1147,9 @@ export function BirdsEyeView({
                 {[5, 10, 20, 50, 75, 100].map(count => (
                   <DropdownMenuItem
                     key={count}
-                    disabled={filteredProducts.length === 0}
+                    disabled={allFilteredProducts.length === 0}
                     onClick={() => {
-                      const idsToSelect = filteredProducts.slice(0, count).map(p => p.id);
+                      const idsToSelect = allFilteredProducts.slice(0, count).map(p => p.id);
                       onBulkSelectProducts(idsToSelect);
                     }}
                   >
@@ -1128,10 +1158,10 @@ export function BirdsEyeView({
                 ))}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  disabled={filteredProducts.length === 0}
-                  onClick={() => onBulkSelectProducts(filteredProducts.map(p => p.id))}
+                  disabled={allFilteredProducts.length === 0}
+                  onClick={() => onBulkSelectProducts(allFilteredProducts.map(p => p.id))}
                 >
-                  Select all ({filteredProducts.length})
+                  Select all ({allFilteredProducts.length})
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -1139,6 +1169,12 @@ export function BirdsEyeView({
           
           {/* Stats badges */}
           <div className="flex items-center gap-2 text-xs">
+            {/* Show loading count when paginated */}
+            {hasMoreProducts && (
+              <span className="px-2 py-1 rounded-full bg-muted text-muted-foreground">
+                Showing {filteredProducts.length} of {allFilteredProducts.length}
+              </span>
+            )}
             <span className="px-2 py-1 rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
               {productStats.withImages} with images
             </span>
@@ -1308,25 +1344,50 @@ export function BirdsEyeView({
             )}
           </div>
         ) : containerSize.width > 0 && containerSize.height > 0 && gridConfig.columnCount > 0 && gridConfig.rowCount >= 0 ? (
-          <>
-            <Grid
-              ref={gridRef}
-              columnCount={Math.max(1, gridConfig.columnCount)}
-              columnWidth={Math.max(50, gridConfig.columnWidth + gridConfig.gap)}
-              height={Math.max(100, containerSize.height - 32)}
-              rowCount={Math.max(0, gridConfig.rowCount)}
-              rowHeight={Math.max(50, gridConfig.rowHeight + gridConfig.gap)}
-              width={Math.max(100, containerSize.width)}
-              className="scrollbar-visible"
-              style={{ scrollBehavior: 'smooth' }}
-              overscanRowCount={2}
-              overscanColumnCount={1}
-              onScroll={({ scrollTop }) => {
-                setShowScrollTop(scrollTop > 300);
-              }}
-            >
-              {Cell}
-            </Grid>
+          <div className="flex flex-col h-full">
+            <div className="flex-1 min-h-0">
+              <Grid
+                ref={gridRef}
+                columnCount={Math.max(1, gridConfig.columnCount)}
+                columnWidth={Math.max(50, gridConfig.columnWidth + gridConfig.gap)}
+                height={Math.max(100, containerSize.height - (hasMoreProducts ? 80 : 32))}
+                rowCount={Math.max(0, gridConfig.rowCount)}
+                rowHeight={Math.max(50, gridConfig.rowHeight + gridConfig.gap)}
+                width={Math.max(100, containerSize.width)}
+                className="scrollbar-visible"
+                style={{ scrollBehavior: 'smooth' }}
+                overscanRowCount={2}
+                overscanColumnCount={1}
+                onScroll={({ scrollTop }) => {
+                  setShowScrollTop(scrollTop > 300);
+                }}
+              >
+                {Cell}
+              </Grid>
+            </div>
+            
+            {/* Load more button */}
+            {hasMoreProducts && (
+              <div className="flex justify-center py-3 border-t border-border bg-background/80 backdrop-blur-sm">
+                <Button
+                  variant="outline"
+                  onClick={handleLoadMore}
+                  disabled={isLoadingMore}
+                  className="gap-2"
+                >
+                  {isLoadingMore ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Loading...
+                    </>
+                  ) : (
+                    <>
+                      Load more ({Math.min(ITEMS_PER_PAGE, remainingCount)} of {remainingCount} remaining)
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
             
             {/* Scroll to top button */}
             {showScrollTop && (
@@ -1341,7 +1402,7 @@ export function BirdsEyeView({
                 <ArrowUp className="h-5 w-5" />
               </Button>
             )}
-          </>
+          </div>
         ) : (
           <div className="flex items-center justify-center h-32">
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
