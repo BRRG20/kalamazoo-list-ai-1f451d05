@@ -1114,6 +1114,12 @@ const handleSelectBatch = useCallback((id: string) => {
     await aiGeneration.undoBulkGeneration();
   }, [aiGeneration]);
 
+  // Retry failed AI generation
+  const handleRetryFailed = useCallback(async () => {
+    if (!selectedBatchId || products.length === 0) return;
+    await aiGeneration.retryFailed(products);
+  }, [selectedBatchId, products, aiGeneration]);
+
   const handleExcludeLast2All = useCallback(async () => {
     if (!selectedBatchId) return;
     
@@ -2181,6 +2187,9 @@ const handleSelectBatch = useCallback((id: string) => {
               lastBulkCount={aiGeneration.lastBulkCount}
               batchSize={aiGeneration.batchSize}
               onBatchSizeChange={aiGeneration.setBatchSize}
+              failedProducts={aiGeneration.failedProducts}
+              hasFailedProducts={aiGeneration.hasFailedProducts}
+              onRetryFailed={handleRetryFailed}
               onExcludeLast2All={handleExcludeLast2All}
               onCreateInShopify={handleShopifyUploadCheck}
               onClearFailedStatus={async (productIds) => {
