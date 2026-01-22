@@ -645,8 +645,28 @@ IMPORTANT: Respond with ONLY valid JSON.`;
       throw new Error("Listing generation failed");
     }
 
-    const data = await response.json();
+    // Safely parse response - handle empty or malformed responses
+    let data;
+    const responseText = await response.text();
+    
+    if (!responseText || responseText.trim() === '') {
+      console.error("[generate-listing] AI API returned empty response");
+      throw new Error("AI returned empty response. Please try again.");
+    }
+    
+    try {
+      data = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error("[generate-listing] Failed to parse AI API response:", responseText.substring(0, 500));
+      throw new Error("AI returned invalid response format. Please try again.");
+    }
+    
     const rawContent = data.choices?.[0]?.message?.content || "";
+    
+    if (!rawContent || rawContent.trim() === '') {
+      console.error("[generate-listing] AI returned empty content in choices");
+      throw new Error("AI returned empty content. Please try again.");
+    }
     
     // Debug: Log raw response (truncated for brevity)
     console.log("[generate-listing] Raw AI response (first 800 chars):", rawContent.substring(0, 800));
