@@ -91,12 +91,8 @@ export function useAIGeneration({
     const productId = product.id;
     const sku = product.sku || 'no-sku';
     
-    // === INVESTIGATION LOG: Per-product processing ===
-    console.log(`[AI-INVESTIGATE] processProduct START: ${sku} (${productId.substring(0, 8)})`);
-    
     // Prevent duplicate requests using ref (no re-render)
     if (generatingProductIdsRef.current.has(productId)) {
-      console.warn(`[AI-INVESTIGATE] SKIPPED (duplicate): ${sku}`);
       return { productId, success: false, skipped: true, error: 'Already generating' };
     }
 
@@ -106,10 +102,8 @@ export function useAIGeneration({
     try {
       // Get product images for AI context
       const images = await fetchImagesForProduct(productId);
-      console.log(`[AI-INVESTIGATE] ${sku}: fetched ${images.length} images`);
       
       if (images.length === 0) {
-        console.warn(`[AI-INVESTIGATE] FAILED (no images): ${sku}`);
         return { productId, success: false, noImages: true };
       }
       
@@ -170,11 +164,9 @@ export function useAIGeneration({
         }),
       });
       
-      console.log(`[AI-INVESTIGATE] ${sku}: API response status=${response.status}`);
-      
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        console.error(`[AI-INVESTIGATE] FAILED (API error): ${sku}`, errorData);
+        console.error(`[AI] Generation failed for ${sku}:`, errorData);
         await updateProduct(productId, { status: 'error' });
         return { productId, success: false, error: errorData.error || 'Generation failed' };
       }
@@ -183,9 +175,8 @@ export function useAIGeneration({
       const generated = data.generated;
       
       // Check if AI returned valid data
-      console.log(`[AI-INVESTIGATE] ${sku}: AI returned keys:`, generated ? Object.keys(generated) : 'NULL/UNDEFINED');
       if (!generated) {
-        console.error(`[AI-INVESTIGATE] FAILED (no generated data): ${sku}`);
+        console.error(`[AI] No generated data for ${sku}`);
         return { productId, success: false, error: 'AI returned no data' };
       }
       
@@ -367,20 +358,16 @@ export function useAIGeneration({
         console.log(`[AI] Auto-set price: £${suggestedPrice}`);
       }
       
-      console.log(`[AI-INVESTIGATE] ${sku}: Updates to save:`, Object.keys(updates));
-      console.log(`[AI-INVESTIGATE] ${sku}: title=${updates.title ? 'YES' : 'NO'}, desc_a=${updates.description_style_a ? 'YES' : 'NO'}`);
       
       const saveResult = await updateProduct(productId, updates);
-      console.log(`[AI-INVESTIGATE] ${sku}: DB save result=${saveResult}`);
       
       // Mark as AI generated in ref only (no state update)
       aiGeneratedProductsRef.current.add(productId);
       
-      console.log(`[AI-INVESTIGATE] SUCCESS: ${sku}`);
       return { productId, success: true };
       
     } catch (error) {
-      console.error(`[AI-INVESTIGATE] EXCEPTION: ${sku}`, error);
+      console.error(`[AI] Exception processing ${sku}:`, error);
       await updateProduct(productId, { status: 'error' });
       return { 
         productId, 
@@ -438,15 +425,10 @@ export function useAIGeneration({
 
     const effectiveBatchSize = customBatchSize ?? batchSize;
     
-    // === INVESTIGATION LOG: Step 1 - UI Input ===
-    console.log('[AI-INVESTIGATE] === BULK GENERATION START ===');
-    console.log('[AI-INVESTIGATE] Step 1 - UI Input:');
-    console.log('  - allProducts received:', allProducts.length);
-    console.log('  - selectedProductIds:', selectedProductIds ? selectedProductIds.size : 'undefined (none selected)');
-    console.log('  - effectiveBatchSize:', effectiveBatchSize);
-    if (selectedProductIds && selectedProductIds.size > 0) {
-      console.log('  - selectedIds sample:', Array.from(selectedProductIds).slice(0, 3));
-    }
+    // === LOG: Bulk generation start ===
+    console.log('[AI-FIX] === BULK GENERATION START ===');
+    console.log('[AI-FIX] Selected count:', selectedProductIds ? selectedProductIds.size : 0);
+    console.log('[AI-FIX] All products count:', allProducts.length);
 
     // Determine which products to process
     let productsToProcess: Product[];
@@ -454,31 +436,18 @@ export function useAIGeneration({
     if (selectedProductIds && selectedProductIds.size > 0) {
       // When user explicitly selects products, use those (will filter by images later)
       productsToProcess = allProducts.filter(p => selectedProductIds.has(p.id));
-      console.log('[AI-INVESTIGATE] Step 2a - Selection filter: matched', productsToProcess.length, 'products from selection');
+      console.log('[AI-FIX] Selection matched:', productsToProcess.length, 'products');
     } else {
       // Bulk mode: only process 'new' products not yet generated
-      const beforeFilter = allProducts.length;
-      const alreadyGenerated = allProducts.filter(p => aiGeneratedProductsRef.current.has(p.id)).length;
-      const notNew = allProducts.filter(p => p.status !== 'new').length;
-      const alreadyGenerating = allProducts.filter(p => generatingProductIdsRef.current.has(p.id)).length;
-      
       productsToProcess = allProducts.filter(p => 
         !aiGeneratedProductsRef.current.has(p.id) && 
         p.status === 'new' &&
         !generatingProductIdsRef.current.has(p.id)
       );
-      
-      console.log('[AI-INVESTIGATE] Step 2b - Bulk filter breakdown:');
-      console.log('  - Total products in batch:', beforeFilter);
-      console.log('  - Already AI generated (skipped):', alreadyGenerated);
-      console.log('  - Status not "new" (skipped):', notNew);
-      console.log('  - Currently generating (skipped):', alreadyGenerating);
-      console.log('  - Passed filter:', productsToProcess.length);
+      console.log('[AI-FIX] Bulk mode: filtered to', productsToProcess.length, 'eligible products');
     }
     
     // Pre-filter products that have no images (before hitting the API)
-    // This prevents "No images" errors from cluttering the output
-    console.log('[AI-INVESTIGATE] Step 3 - Image check for', productsToProcess.length, 'products...');
     const productsWithImages = await Promise.all(
       productsToProcess.map(async (product) => {
         const images = await fetchImagesForProduct(product.id);
@@ -489,23 +458,25 @@ export function useAIGeneration({
       .filter(({ hasImages }) => hasImages)
       .map(({ product }) => product);
     
-    const skippedCount = productsWithImages.filter(({ hasImages }) => !hasImages).length;
-    console.log('[AI-INVESTIGATE] Step 3 result:');
-    console.log('  - Products with images:', productsToProcess.length);
-    console.log('  - Products without images (skipped):', skippedCount);
-    if (skippedCount > 0) {
-      const noImageIds = productsWithImages.filter(({ hasImages }) => !hasImages).map(({ product }) => product.id);
-      console.log('  - No-image product IDs:', noImageIds.slice(0, 5), noImageIds.length > 5 ? `... and ${noImageIds.length - 5} more` : '');
+    const skippedNoImages = productsWithImages.filter(({ hasImages }) => !hasImages).length;
+    if (skippedNoImages > 0) {
+      console.log('[AI-FIX] Skipped (no images):', skippedNoImages);
     }
 
-    // Limit to configured batch size
-    const batch = productsToProcess.slice(0, effectiveBatchSize);
-    console.log('[AI-INVESTIGATE] Step 4 - Batch slicing:');
-    console.log('  - Batch size limit:', effectiveBatchSize);
-    console.log('  - Final batch size:', batch.length);
-    console.log('  - Products left for next run:', productsToProcess.length - batch.length);
+
+    // Determine if we're in "selected mode" (explicit selection) or "bulk mode" (auto-filter new items)
+    const isSelectedMode = selectedProductIds && selectedProductIds.size > 0;
     
-    if (batch.length === 0) {
+    // For selected mode: process ALL selected products (loop through batches)
+    // For bulk mode: use batch size limit and require another click for remaining
+    const totalToProcess = productsToProcess.length;
+    
+    console.log('[AI-FIX] Step 4 - Processing mode:');
+    console.log('  - Mode:', isSelectedMode ? 'SELECTED (will process ALL)' : 'BULK (batch limited)');
+    console.log('  - Total to process:', totalToProcess);
+    console.log('  - Batch size:', effectiveBatchSize);
+    
+    if (totalToProcess === 0) {
       const alreadyGenerated = allProducts.filter(p => aiGeneratedProductsRef.current.has(p.id) || p.status !== 'new').length;
       if (alreadyGenerated > 0) {
         toast.info(`All ${alreadyGenerated} products already generated. Select specific products to re-generate.`);
@@ -515,19 +486,15 @@ export function useAIGeneration({
       return { successCount: 0, errorCount: 0, processedIds: [] };
     }
 
-    const remainingCount = productsToProcess.length - batch.length;
-    
-    console.log(`[AI] Processing batch of ${batch.length} products`);
-    
-    // Save bulk state for undo
-    saveBulkState(batch);
+    // Save bulk state for undo (all products we're about to process)
+    saveBulkState(productsToProcess);
     
     setIsGenerating(true);
-    setGenerationProgress({ current: 0, total: batch.length });
+    setGenerationProgress({ current: 0, total: totalToProcess });
     
-    // Update UI to show all products as generating (single state update)
-    const batchIds = new Set(batch.map(p => p.id));
-    setGeneratingProductIds(batchIds);
+    // Update UI to show all products as generating
+    const allProcessingIds = new Set(productsToProcess.map(p => p.id));
+    setGeneratingProductIds(allProcessingIds);
     
     let successCount = 0;
     let errorCount = 0;
@@ -538,71 +505,94 @@ export function useAIGeneration({
     // Clear previous failed products for this run
     failedProductsRef.current.clear();
 
-    // Process in chunks of CONCURRENT_REQUESTS with breathing room
-    for (let i = 0; i < batch.length; i += CONCURRENT_REQUESTS) {
-      const chunk = batch.slice(i, i + CONCURRENT_REQUESTS);
+    // Calculate number of batches needed
+    const numBatches = Math.ceil(totalToProcess / effectiveBatchSize);
+    console.log('[AI-FIX] Processing', totalToProcess, 'products in', numBatches, 'batches');
+    
+    // Process ALL products in batches (auto-loop for selected mode, or single batch for bulk mode)
+    const batchesToRun = isSelectedMode ? numBatches : 1;
+    
+    for (let batchIndex = 0; batchIndex < batchesToRun; batchIndex++) {
+      const batchStart = batchIndex * effectiveBatchSize;
+      const batchEnd = Math.min(batchStart + effectiveBatchSize, totalToProcess);
+      const batch = productsToProcess.slice(batchStart, batchEnd);
       
-      // Process chunk in parallel
-      const results = await Promise.allSettled(
-        chunk.map(product => processProduct(product))
-      );
+      console.log(`[AI-FIX] Processing chunk ${batchIndex + 1}/${batchesToRun}: items ${batchStart + 1}-${batchEnd}`);
       
-      // Collect results without triggering state updates
-      for (let j = 0; j < results.length; j++) {
-        const result = results[j];
-        const product = chunk[j];
+      // Update batch progress
+      setBatchProgress({ current: batchIndex + 1, total: batchesToRun });
+
+      // Process in chunks of CONCURRENT_REQUESTS with breathing room
+      for (let i = 0; i < batch.length; i += CONCURRENT_REQUESTS) {
+        const chunk = batch.slice(i, i + CONCURRENT_REQUESTS);
         
-        if (result.status === 'fulfilled') {
-          const value = result.value;
-          processedIds.push(value.productId);
+        // Process chunk in parallel
+        const results = await Promise.allSettled(
+          chunk.map(product => processProduct(product))
+        );
+        
+        // Collect results without triggering state updates
+        for (let j = 0; j < results.length; j++) {
+          const result = results[j];
+          const product = chunk[j];
           
-          if (value.skipped) {
-            continue;
-          } else if (value.noImages) {
-            errorCount++;
-            const failed: FailedProduct = { 
-              productId: value.productId, 
-              sku: product?.sku || 'Unknown', 
-              error: 'No images' 
-            };
-            newFailedProducts.push(failed);
-            failedProductsRef.current.set(value.productId, failed);
-          } else if (value.success) {
-            successCount++;
-            successfulIds.push(value.productId);
-            // Remove from failed list if it was previously failed and now succeeded
-            failedProductsRef.current.delete(value.productId);
+          if (result.status === 'fulfilled') {
+            const value = result.value;
+            processedIds.push(value.productId);
+            
+            if (value.skipped) {
+              continue;
+            } else if (value.noImages) {
+              errorCount++;
+              const failed: FailedProduct = { 
+                productId: value.productId, 
+                sku: product?.sku || 'Unknown', 
+                error: 'No images' 
+              };
+              newFailedProducts.push(failed);
+              failedProductsRef.current.set(value.productId, failed);
+            } else if (value.success) {
+              successCount++;
+              successfulIds.push(value.productId);
+              // Remove from failed list if it was previously failed and now succeeded
+              failedProductsRef.current.delete(value.productId);
+            } else {
+              errorCount++;
+              const failed: FailedProduct = { 
+                productId: value.productId, 
+                sku: product?.sku || 'Unknown', 
+                error: value.error || 'Unknown error' 
+              };
+              newFailedProducts.push(failed);
+              failedProductsRef.current.set(value.productId, failed);
+            }
           } else {
             errorCount++;
             const failed: FailedProduct = { 
-              productId: value.productId, 
+              productId: product?.id || 'Unknown', 
               sku: product?.sku || 'Unknown', 
-              error: value.error || 'Unknown error' 
+              error: result.reason?.message || 'Promise rejected' 
             };
             newFailedProducts.push(failed);
-            failedProductsRef.current.set(value.productId, failed);
+            if (product?.id) {
+              failedProductsRef.current.set(product.id, failed);
+            }
           }
-        } else {
-          errorCount++;
-          const failed: FailedProduct = { 
-            productId: product?.id || 'Unknown', 
-            sku: product?.sku || 'Unknown', 
-            error: result.reason?.message || 'Promise rejected' 
-          };
-          newFailedProducts.push(failed);
-          if (product?.id) {
-            failedProductsRef.current.set(product.id, failed);
-          }
+        }
+        
+        // Update progress (single state update per chunk)
+        const currentProgress = batchStart + Math.min(i + CONCURRENT_REQUESTS, batch.length);
+        setGenerationProgress({ current: currentProgress, total: totalToProcess });
+        
+        // Allow event loop to breathe between chunks
+        if (i + CONCURRENT_REQUESTS < batch.length) {
+          await new Promise(resolve => setTimeout(resolve, 50));
         }
       }
       
-      // Update progress (single state update per chunk)
-      const currentProgress = Math.min(i + CONCURRENT_REQUESTS, batch.length);
-      setGenerationProgress({ current: currentProgress, total: batch.length });
-      
-      // Allow event loop to breathe between chunks
-      if (i + CONCURRENT_REQUESTS < batch.length) {
-        await new Promise(resolve => setTimeout(resolve, 50));
+      // Brief pause between batches to prevent overwhelming
+      if (batchIndex + 1 < batchesToRun) {
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
     }
 
@@ -611,13 +601,14 @@ export function useAIGeneration({
     setGeneratingProductIds(new Set());
     setIsGenerating(false);
     setGenerationProgress({ current: 0, total: 0 });
+    setBatchProgress({ current: 0, total: 0 });
     
     // Update failed products list for retry functionality
     setFailedProductsList(Array.from(failedProductsRef.current.values()));
 
-    // === INVESTIGATION LOG: Final Summary ===
-    console.log('[AI-INVESTIGATE] === BULK GENERATION COMPLETE ===');
-    console.log('[AI-INVESTIGATE] Final Summary:');
+    // === LOG: Final Summary ===
+    console.log('[AI-FIX] === BULK GENERATION COMPLETE ===');
+    console.log('[AI-FIX] Final Summary:');
     console.log('  - Success count:', successCount);
     console.log('  - Error count:', errorCount);
     console.log('  - Total attempted:', successCount + errorCount);
@@ -639,8 +630,12 @@ export function useAIGeneration({
       toast.success(`Complete: ${successCount}/${totalAttempted} generated successfully`);
     }
 
-    if (remainingCount > 0) {
-      toast.info(`${remainingCount} more products remaining. Click "Generate AI" again to continue.`, { duration: 5000 });
+    // For bulk mode, show remaining count if any
+    if (!isSelectedMode) {
+      const remainingCount = totalToProcess - effectiveBatchSize;
+      if (remainingCount > 0) {
+        toast.info(`Processing first ${effectiveBatchSize} items. Remaining ${remainingCount} will need another run.`, { duration: 5000 });
+      }
     }
 
     return { successCount, errorCount, processedIds };
@@ -882,6 +877,7 @@ export function useAIGeneration({
     // State
     isGenerating,
     generationProgress,
+    batchProgress,
     isProductGenerating,
     isProductAIGenerated,
     hasBulkUndoState,
