@@ -42,7 +42,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
-import { BATCH_SIZE_OPTIONS, BatchSizeOption } from '@/hooks/use-ai-generation';
+import { BATCH_SIZE_OPTIONS, BatchSizeOption, FailedProduct } from '@/hooks/use-ai-generation';
 import { ProductCard } from './ProductCard';
 import { ImageGroupManager, ImageGroup, MatchingProgress } from './ImageGroupManager';
 import { BirdsEyeView } from './BirdsEyeView';
@@ -99,6 +99,10 @@ interface BatchDetailProps {
   // Batch size controls
   batchSize: BatchSizeOption;
   onBatchSizeChange: (size: BatchSizeOption) => void;
+  // Retry failed products
+  failedProducts?: FailedProduct[];
+  hasFailedProducts?: boolean;
+  onRetryFailed?: () => void;
   onExcludeLast2All: () => void;
   onCreateInShopify: (productIds: string[]) => void;
   onClearFailedStatus?: (productIds: string[]) => void;
@@ -209,6 +213,9 @@ export function BatchDetail({
   onUndoBulkGeneration,
   batchSize,
   onBatchSizeChange,
+  failedProducts = [],
+  hasFailedProducts = false,
+  onRetryFailed,
   isProductGenerating,
   hasProductUndoState,
   unprocessedCount,
@@ -1549,7 +1556,31 @@ export function BatchDetail({
               </Tooltip>
             )}
 
-            {/* Legacy Generate All button for selected products */}
+            {/* Retry Failed AI generation */}
+            {hasFailedProducts && onRetryFailed && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onRetryFailed}
+                    disabled={isGenerating}
+                    className="text-xs md:text-sm text-red-600 hover:text-red-700 border-red-300 hover:border-red-400 hover:bg-red-50 dark:hover:bg-red-950"
+                  >
+                    {isGenerating ? (
+                      <Loader2 className="w-4 h-4 mr-1 md:mr-2 animate-spin" />
+                    ) : (
+                      <RefreshCw className="w-4 h-4 mr-1 md:mr-2" />
+                    )}
+                    Retry Failed ({failedProducts.length})
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Retry AI generation for {failedProducts.length} failed product(s)</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+
             {selectedProductIds.size > 0 && (
               <Tooltip>
                 <TooltipTrigger asChild>

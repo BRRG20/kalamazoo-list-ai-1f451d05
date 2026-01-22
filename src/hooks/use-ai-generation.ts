@@ -19,6 +19,12 @@ interface GenerationResult {
   skipped?: boolean;
 }
 
+export interface FailedProduct {
+  productId: string;
+  sku: string;
+  error: string;
+}
+
 interface UseAIGenerationOptions {
   fetchImagesForProduct: (productId: string) => Promise<{ url: string }[]>;
   updateProduct: (id: string, updates: Partial<Product>) => Promise<boolean>;
@@ -52,6 +58,10 @@ export function useAIGeneration({
   const [batchSize, setBatchSize] = useState<BatchSizeOption>(DEFAULT_BATCH_SIZE);
   
   const abortControllerRef = useRef<AbortController | null>(null);
+  
+  // Track failed products for retry functionality
+  const [failedProductsList, setFailedProductsList] = useState<FailedProduct[]>([]);
+  const failedProductsRef = useRef<Map<string, FailedProduct>>(new Map());
   
   const {
     saveProductState,
@@ -476,7 +486,10 @@ export function useAIGeneration({
     let errorCount = 0;
     const processedIds: string[] = [];
     const successfulIds: string[] = [];
-    const failedProducts: { sku: string; error: string }[] = [];
+    const newFailedProducts: FailedProduct[] = [];
+
+    // Clear previous failed products for this run
+    failedProductsRef.current.clear();
 
     // Process in chunks of CONCURRENT_REQUESTS with breathing room
     for (let i = 0; i < batch.length; i += CONCURRENT_REQUESTS) {
@@ -490,6 +503,8 @@ export function useAIGeneration({
       // Collect results without triggering state updates
       for (let j = 0; j < results.length; j++) {
         const result = results[j];
+        const product = chunk[j];
+        
         if (result.status === 'fulfilled') {
           const value = result.value;
           processedIds.push(value.productId);
@@ -498,16 +513,39 @@ export function useAIGeneration({
             continue;
           } else if (value.noImages) {
             errorCount++;
-            failedProducts.push({ sku: chunk[j]?.sku || 'Unknown', error: 'No images' });
+            const failed: FailedProduct = { 
+              productId: value.productId, 
+              sku: product?.sku || 'Unknown', 
+              error: 'No images' 
+            };
+            newFailedProducts.push(failed);
+            failedProductsRef.current.set(value.productId, failed);
           } else if (value.success) {
             successCount++;
             successfulIds.push(value.productId);
+            // Remove from failed list if it was previously failed and now succeeded
+            failedProductsRef.current.delete(value.productId);
           } else {
             errorCount++;
-            failedProducts.push({ sku: chunk[j]?.sku || 'Unknown', error: value.error || 'Unknown error' });
+            const failed: FailedProduct = { 
+              productId: value.productId, 
+              sku: product?.sku || 'Unknown', 
+              error: value.error || 'Unknown error' 
+            };
+            newFailedProducts.push(failed);
+            failedProductsRef.current.set(value.productId, failed);
           }
         } else {
           errorCount++;
+          const failed: FailedProduct = { 
+            productId: product?.id || 'Unknown', 
+            sku: product?.sku || 'Unknown', 
+            error: result.reason?.message || 'Promise rejected' 
+          };
+          newFailedProducts.push(failed);
+          if (product?.id) {
+            failedProductsRef.current.set(product.id, failed);
+          }
         }
       }
       
@@ -526,16 +564,20 @@ export function useAIGeneration({
     setGeneratingProductIds(new Set());
     setIsGenerating(false);
     setGenerationProgress({ current: 0, total: 0 });
+    
+    // Update failed products list for retry functionality
+    setFailedProductsList(Array.from(failedProductsRef.current.values()));
 
-    // Show results
+    // Show results with clear messaging
+    const totalAttempted = successCount + errorCount;
     if (errorCount > 0) {
-      console.log('[AI] Failed products:', failedProducts);
-      toast.warning(
-        `Generated ${successCount} product(s). ${errorCount} failed.`,
-        { duration: 5000 }
+      console.log('[AI] Failed products:', newFailedProducts);
+      toast.error(
+        `Generated ${successCount}/${totalAttempted}. Missing: ${errorCount}. Use "Retry Failed" to retry.`,
+        { duration: 8000 }
       );
     } else {
-      toast.success(`AI generated details for ${successCount} product(s)`);
+      toast.success(`Complete: ${successCount}/${totalAttempted} generated successfully`);
     }
 
     if (remainingCount > 0) {
@@ -647,6 +689,10 @@ export function useAIGeneration({
     generatingProductIdsRef.current.clear();
     setGeneratingProductIds(new Set());
     
+    // Clear failed products from previous batch
+    failedProductsRef.current.clear();
+    setFailedProductsList([]);
+    
     // Build fresh set from current batch's products only
     const generated = new Set<string>();
     products.forEach(p => {
@@ -659,6 +705,120 @@ export function useAIGeneration({
     setAiGeneratedProducts(generated);
   }, []);
 
+  // Retry only failed products
+  const retryFailed = useCallback(async (
+    allProducts: Product[]
+  ): Promise<{ successCount: number; errorCount: number; processedIds: string[] }> => {
+    if (isGenerating) {
+      toast.warning('AI generation already in progress');
+      return { successCount: 0, errorCount: 0, processedIds: [] };
+    }
+
+    const failedIds = Array.from(failedProductsRef.current.keys());
+    
+    if (failedIds.length === 0) {
+      toast.info('No failed products to retry');
+      return { successCount: 0, errorCount: 0, processedIds: [] };
+    }
+
+    console.log(`[AI] Retrying ${failedIds.length} failed products`);
+    
+    // Filter to get the actual product objects
+    const productsToRetry = allProducts.filter(p => failedIds.includes(p.id));
+    
+    if (productsToRetry.length === 0) {
+      toast.error('Could not find failed products in current batch');
+      return { successCount: 0, errorCount: 0, processedIds: [] };
+    }
+
+    setIsGenerating(true);
+    setGenerationProgress({ current: 0, total: productsToRetry.length });
+    
+    const batchIds = new Set(productsToRetry.map(p => p.id));
+    setGeneratingProductIds(batchIds);
+    
+    let successCount = 0;
+    let errorCount = 0;
+    const processedIds: string[] = [];
+    const newFailedProducts: FailedProduct[] = [];
+
+    // Process in chunks
+    for (let i = 0; i < productsToRetry.length; i += CONCURRENT_REQUESTS) {
+      const chunk = productsToRetry.slice(i, i + CONCURRENT_REQUESTS);
+      
+      const results = await Promise.allSettled(
+        chunk.map(product => processProduct(product))
+      );
+      
+      for (let j = 0; j < results.length; j++) {
+        const result = results[j];
+        const product = chunk[j];
+        
+        if (result.status === 'fulfilled') {
+          const value = result.value;
+          processedIds.push(value.productId);
+          
+          if (value.success) {
+            successCount++;
+            // Remove from failed list on success
+            failedProductsRef.current.delete(value.productId);
+          } else if (!value.skipped) {
+            errorCount++;
+            const failed: FailedProduct = { 
+              productId: value.productId, 
+              sku: product?.sku || 'Unknown', 
+              error: value.error || value.noImages ? 'No images' : 'Unknown error' 
+            };
+            newFailedProducts.push(failed);
+            failedProductsRef.current.set(value.productId, failed);
+          }
+        } else {
+          errorCount++;
+          const failed: FailedProduct = { 
+            productId: product?.id || 'Unknown', 
+            sku: product?.sku || 'Unknown', 
+            error: result.reason?.message || 'Promise rejected' 
+          };
+          newFailedProducts.push(failed);
+          if (product?.id) {
+            failedProductsRef.current.set(product.id, failed);
+          }
+        }
+      }
+      
+      const currentProgress = Math.min(i + CONCURRENT_REQUESTS, productsToRetry.length);
+      setGenerationProgress({ current: currentProgress, total: productsToRetry.length });
+      
+      if (i + CONCURRENT_REQUESTS < productsToRetry.length) {
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+    }
+
+    setAiGeneratedProducts(new Set(aiGeneratedProductsRef.current));
+    setGeneratingProductIds(new Set());
+    setIsGenerating(false);
+    setGenerationProgress({ current: 0, total: 0 });
+    setFailedProductsList(Array.from(failedProductsRef.current.values()));
+
+    const totalAttempted = successCount + errorCount;
+    if (errorCount > 0) {
+      toast.error(
+        `Retry: ${successCount}/${totalAttempted} succeeded. Still failing: ${errorCount}.`,
+        { duration: 8000 }
+      );
+    } else {
+      toast.success(`Retry complete: All ${successCount} products generated successfully`);
+    }
+
+    return { successCount, errorCount, processedIds };
+  }, [isGenerating, processProduct]);
+
+  // Clear failed products list
+  const clearFailedProducts = useCallback(() => {
+    failedProductsRef.current.clear();
+    setFailedProductsList([]);
+  }, []);
+
   return {
     // State
     isGenerating,
@@ -668,6 +828,8 @@ export function useAIGeneration({
     hasBulkUndoState,
     lastBulkCount,
     batchSize,
+    failedProducts: failedProductsList,
+    hasFailedProducts: failedProductsList.length > 0,
     
     // Actions
     generateSingleProduct,
@@ -678,5 +840,7 @@ export function useAIGeneration({
     initializeAIGeneratedStatus,
     hasUndoState,
     setBatchSize,
+    retryFailed,
+    clearFailedProducts,
   };
 }
