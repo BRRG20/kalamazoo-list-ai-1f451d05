@@ -1195,13 +1195,22 @@ const handleSelectBatch = useCallback((id: string) => {
     try {
       // Prepare products and images for the edge function
       const uniqueProductIds = Array.from(new Set(productIds));
+      console.log(`[SHOPIFY-DEBUG] Selected ${uniqueProductIds.length} unique product IDs for upload`);
+      
       const allProducts = uniqueProductIds
         .map(id => products.find(p => p.id === id))
         .filter(Boolean) as Product[];
       
+      console.log(`[SHOPIFY-DEBUG] Found ${allProducts.length} products in current list`);
+      
       // IDEMPOTENCY CHECK: Filter out products that already have a Shopify ID
       const alreadyUploaded = allProducts.filter(p => !!p.shopify_product_id || p.status === 'created_in_shopify');
       const productsToCreate = allProducts.filter(p => !p.shopify_product_id && p.status !== 'created_in_shopify');
+      
+      console.log(`[SHOPIFY-DEBUG] Already uploaded: ${alreadyUploaded.length}, To create: ${productsToCreate.length}`);
+      if (alreadyUploaded.length > 0) {
+        console.log(`[SHOPIFY-DEBUG] Skipped SKUs: ${alreadyUploaded.map(p => p.sku || p.id).join(', ')}`);
+      }
       
       if (alreadyUploaded.length > 0) {
         toast.info(`Skipping ${alreadyUploaded.length} product(s) already uploaded to Shopify`);
@@ -1238,6 +1247,11 @@ const handleSelectBatch = useCallback((id: string) => {
       
       const invalidProducts = validationResults.filter(r => !r.validation.isValid);
       const productsWithWarnings = validationResults.filter(r => r.validation.warnings.length > 0);
+      
+      console.log(`[SHOPIFY-DEBUG] Validation: ${invalidProducts.length} invalid, ${productsWithWarnings.length} with warnings`);
+      if (invalidProducts.length > 0) {
+        console.log(`[SHOPIFY-DEBUG] Invalid products (no images): ${invalidProducts.map(r => r.product.sku || r.product.id).join(', ')}`);
+      }
       
       // Block export if any products are missing required fields
       if (invalidProducts.length > 0) {
@@ -1330,9 +1344,15 @@ const handleSelectBatch = useCallback((id: string) => {
       
       const data = await response.json();
       
+      console.log(`[SHOPIFY-DEBUG] Edge function response: ${data.successCount} success, ${data.errorCount} errors, ${data.partialCount || 0} partial`);
+      
       // Update products with results
+      const successIds: string[] = [];
+      const failedIds: string[] = [];
+      
       for (const result of data.results) {
         if (result.success) {
+          successIds.push(result.productId);
           await updateProduct(result.productId, {
             status: 'created_in_shopify',
             shopify_product_id: result.shopifyProductId,
@@ -1346,13 +1366,16 @@ const handleSelectBatch = useCallback((id: string) => {
             console.warn(`Product ${result.productId}: ${result.error}`);
           }
         } else {
+          failedIds.push(result.productId);
           await updateProduct(result.productId, { 
             status: 'error',
             upload_error: result.error || 'Unknown error',
           });
-          console.error(`Product ${result.productId} failed: ${result.error}`);
+          console.error(`[SHOPIFY-DEBUG] Product ${result.productId} failed: ${result.error}`);
         }
       }
+      
+      console.log(`[SHOPIFY-DEBUG] Final: uploaded=${successIds.length}, failed=${failedIds.length}`);
       
       setSelectedProductIds(new Set());
       
