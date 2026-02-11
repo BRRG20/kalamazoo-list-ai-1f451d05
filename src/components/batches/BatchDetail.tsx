@@ -186,7 +186,7 @@ interface BatchDetailProps {
   onCameraCapture?: (files: File[], notes: Map<string, { note?: string; hasStain?: boolean; type?: string }>) => void;
   onQuickProductCapture?: (files: File[], notes: Map<string, { note?: string; hasStain?: boolean; type?: string }>) => void;
   // AI Image Expansion - now requires mode selection
-  onExpandProductImages?: (productIds: string | string[], mode: 'product_photos' | 'ai_model') => void;
+  onExpandProductImages?: (productIds: string | string[], mode: 'product_photos' | 'ai_model', shotCount?: number) => void;
   isExpandingImages?: boolean;
   onCancelExpand?: () => void;
   // Check if products have model images for AI Model expansion mode
@@ -2069,10 +2069,11 @@ export function BatchDetail({
                         <ExpandModeDialog
                           open={showExpandModeDialog}
                           onOpenChange={setShowExpandModeDialog}
-                          onSelectMode={(mode: ExpandMode) => {
+                          onSelectMode={(mode, quality) => {
+                            const shotCountMap = { fast: 1, standard: 2, high: 3 };
                             const productIds = Array.from(selectedProductIds);
                             if (productIds.length > 0) {
-                              onExpandProductImages(productIds, mode);
+                              onExpandProductImages(productIds, mode, shotCountMap[quality]);
                             }
                           }}
                           hasExistingModelImages={

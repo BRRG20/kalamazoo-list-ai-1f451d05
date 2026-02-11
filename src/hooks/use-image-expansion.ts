@@ -90,6 +90,7 @@ export function useImageExpansion() {
     mode: 'product_photos' | 'ai_model',
     currentImageCount: number,
     signal: AbortSignal,
+    shotCount?: number,
   ): Promise<{ success: boolean; generatedImages: ExpandedImage[]; error?: string }> => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -99,6 +100,17 @@ export function useImageExpansion() {
     signal.addEventListener('abort', onParentAbort, { once: true });
 
     try {
+      const bodyPayload: Record<string, unknown> = {
+        productId,
+        sourceImageUrl,
+        mode,
+        currentImageCount,
+        maxImages: 9,
+      };
+      if (shotCount != null) {
+        bodyPayload.shotCount = shotCount;
+      }
+
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/expand-product-photos`,
         {
@@ -107,13 +119,7 @@ export function useImageExpansion() {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
           },
-          body: JSON.stringify({
-            productId,
-            sourceImageUrl,
-            mode,
-            currentImageCount,
-            maxImages: 9,
-          }),
+          body: JSON.stringify(bodyPayload),
           signal: controller.signal,
         }
       );
@@ -153,6 +159,7 @@ export function useImageExpansion() {
       sourceImageUrl: string;
       mode: 'product_photos' | 'ai_model';
       currentImageCount: number;
+      shotCount?: number;
     }>,
     onItemDone: (productId: string, result: { success: boolean; generatedImages: ExpandedImage[]; error?: string }) => Promise<void>,
   ) => {
@@ -190,6 +197,7 @@ export function useImageExpansion() {
           job.mode,
           job.currentImageCount,
           ac.signal,
+          job.shotCount,
         );
 
         if (ac.signal.aborted) {
@@ -204,7 +212,7 @@ export function useImageExpansion() {
           // Wait briefly then retry
           await new Promise(r => setTimeout(r, 2000));
           if (!ac.signal.aborted) {
-            finalResult = await expandOneProduct(job.productId, job.sourceImageUrl, job.mode, job.currentImageCount, ac.signal);
+            finalResult = await expandOneProduct(job.productId, job.sourceImageUrl, job.mode, job.currentImageCount, ac.signal, job.shotCount);
           }
         }
 

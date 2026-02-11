@@ -449,7 +449,7 @@ const handleSelectBatch = useCallback((id: string) => {
   }, [selectedBatchId, uploadImages, addImageToBatch]);
 
   // AI Image Expansion handler - queue-based batch expand up to 50 items
-  const handleExpandProductImages = useCallback(async (productIds: string | string[], mode: 'product_photos' | 'ai_model') => {
+  const handleExpandProductImages = useCallback(async (productIds: string | string[], mode: 'product_photos' | 'ai_model', shotCount?: number) => {
     const idsToProcess = Array.isArray(productIds) ? productIds : [productIds];
     
     if (idsToProcess.length === 0) {
@@ -472,6 +472,7 @@ const handleSelectBatch = useCallback((id: string) => {
       sourceImageUrl: string;
       mode: 'product_photos' | 'ai_model';
       currentImageCount: number;
+      shotCount?: number;
     }> = [];
     
     for (const productId of idsToProcess) {
@@ -493,7 +494,7 @@ const handleSelectBatch = useCallback((id: string) => {
       }
       
       if (sourceImageUrl) {
-        jobs.push({ productId, sourceImageUrl, mode, currentImageCount: images.length });
+        jobs.push({ productId, sourceImageUrl, mode, currentImageCount: images.length, shotCount });
       }
     }
     
