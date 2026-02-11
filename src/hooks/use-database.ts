@@ -753,15 +753,12 @@ export function useProducts(batchId: string | null, includeHidden: boolean = fal
     if (!acquireLock()) return 0;
     
     try {
-      // Find all products in this batch with minimal data (likely automation-created)
-      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-      
+      // Find ALL products in this batch (no time or data restrictions)
       const { data: batchProducts, error: fetchError } = await supabase
         .from('products')
-        .select('id, title, brand, description, created_at')
+        .select('id')
         .eq('batch_id', batchId)
-        .is('deleted_at', null)
-        .gte('created_at', oneHourAgo); // Only recently created products
+        .is('deleted_at', null);
       
       if (fetchError || !batchProducts || !Array.isArray(batchProducts)) {
         console.error('Error fetching products for cleanup:', fetchError);
@@ -769,48 +766,36 @@ export function useProducts(batchId: string | null, includeHidden: boolean = fal
       }
       
       let deletedCount = 0;
-      const productsToCheck: string[] = [];
+      const deletedIds: string[] = [];
       
-      // Pre-filter: only check products with no user-entered data
+      // Check image count for every product
       for (const product of batchProducts) {
         if (!product || !product.id) continue;
         
-        // Skip if product has user-entered data
-        if (product.title && product.title.trim() !== '') continue;
-        if (product.brand && product.brand.trim() !== '') continue;
-        if (product.description && product.description.trim() !== '') continue;
-        
-        productsToCheck.push(product.id);
-      }
-      
-      // Check image count only for candidates
-      for (const productId of productsToCheck) {
         const { count, error: countError } = await supabase
           .from('images')
           .select('id', { count: 'exact', head: true })
-          .eq('product_id', productId);
+          .eq('product_id', product.id)
+          .is('deleted_at', null);
         
         if (!countError && count === 0) {
-          // This product has 0 images AND no user data - safe to delete
           const { error: deleteError } = await supabase
             .from('products')
             .delete()
-            .eq('id', productId);
+            .eq('id', product.id);
           
           if (!deleteError) {
             deletedCount++;
-            console.log(`Auto-deleted empty product: ${productId}`);
+            deletedIds.push(product.id);
+            console.log(`[EMPTY-CLEANUP] Deleted empty product: ${product.id}`);
           } else {
-            console.error('Error deleting empty product:', productId, deleteError);
+            console.error('Error deleting empty product:', product.id, deleteError);
           }
         }
       }
       
       if (deletedCount > 0) {
-        // Update local state only - don't trigger full refetch
-        setProducts(prev => prev.filter(p => !productsToCheck.includes(p.id) || 
-          (p.title && p.title.trim() !== '') || 
-          (p.brand && p.brand.trim() !== '')));
+        setProducts(prev => prev.filter(p => !deletedIds.includes(p.id)));
       }
       
       return deletedCount;
