@@ -2373,6 +2373,7 @@ const handleSelectBatch = useCallback((id: string) => {
               onQuickProductCapture={handleQuickProductCapture}
               onExpandProductImages={handleExpandProductImages}
               isExpandingImages={isExpandingImages}
+              onCancelExpand={cancelExpandBatch}
               imageRefreshKey={imageRefreshKey}
               onToggleGroupLock={async (productId: string) => {
                 const group = imageGroups.find(g => g.productId === productId);
