@@ -60,10 +60,22 @@ export function useImageExpansion() {
     setBatchState(prev => ({ ...prev, completed: prev.completed + 1 }));
   }, []);
 
-  // Cancel the running batch
+  // STOP: abort all in-flight, mark queued/processing as failed, reset to idle
   const cancelBatch = useCallback(() => {
     abortRef.current?.abort();
-    setBatchState(prev => ({ ...prev, cancelled: true }));
+    abortRef.current = null;
+    runningRef.current = false;
+    setBatchState(prev => ({
+      ...prev,
+      running: false,
+      cancelled: true,
+      completed: prev.total,
+      items: prev.items.map(it =>
+        it.status === 'queued' || it.status === 'processing'
+          ? { ...it, status: 'failed' as const, error: 'Stopped by user' }
+          : it
+      ),
+    }));
   }, []);
 
   // Reset / dismiss progress panel

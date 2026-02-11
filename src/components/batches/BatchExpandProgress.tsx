@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { X, RotateCcw, CheckCircle2, XCircle, Loader2, Clock } from 'lucide-react';
+import { X, RotateCcw, CheckCircle2, XCircle, Loader2, Clock, Square } from 'lucide-react';
 import type { BatchExpandState, ExpandItemState } from '@/hooks/use-image-expansion';
 
 interface BatchExpandProgressProps {
@@ -39,8 +39,9 @@ export function BatchExpandProgress({ state, onCancel, onDismiss, onRetryFailed 
         </span>
         <div className="flex gap-1">
           {state.running && (
-            <Button variant="ghost" size="sm" onClick={onCancel} className="h-7 px-2 text-xs">
-              Cancel
+            <Button variant="destructive" size="sm" onClick={onCancel} className="h-7 px-3 text-xs font-semibold">
+              <Square className="w-3 h-3 mr-1 fill-current" />
+              STOP
             </Button>
           )}
           {isFinished && failedCount > 0 && (
