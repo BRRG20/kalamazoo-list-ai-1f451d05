@@ -35,7 +35,8 @@ import {
   Eraser,
   Shirt,
   User,
-  Wand2
+  Wand2,
+  Square
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -187,6 +188,7 @@ interface BatchDetailProps {
   // AI Image Expansion - now requires mode selection
   onExpandProductImages?: (productIds: string | string[], mode: 'product_photos' | 'ai_model') => void;
   isExpandingImages?: boolean;
+  onCancelExpand?: () => void;
   // Check if products have model images for AI Model expansion mode
   getProductHasModelImage?: (productId: string) => boolean;
   // Force refresh images - increment to force refetch
@@ -291,6 +293,7 @@ export function BatchDetail({
   onQuickProductCapture,
   onExpandProductImages,
   isExpandingImages,
+  onCancelExpand,
   getProductHasModelImage,
   imageRefreshKey,
   onToggleGroupLock,
@@ -2051,6 +2054,18 @@ export function BatchDetail({
                             </>
                           )}
                         </Button>
+                        {isExpandingImages && onCancelExpand && (
+                          <Button 
+                            variant="destructive" 
+                            size="sm" 
+                            onClick={onCancelExpand}
+                            type="button"
+                            className="h-8 px-3 text-xs font-semibold"
+                          >
+                            <Square className="w-3 h-3 mr-1 fill-current" />
+                            STOP
+                          </Button>
+                        )}
                         <ExpandModeDialog
                           open={showExpandModeDialog}
                           onOpenChange={setShowExpandModeDialog}
