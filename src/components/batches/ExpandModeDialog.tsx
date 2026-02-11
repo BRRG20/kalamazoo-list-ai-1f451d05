@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -6,17 +7,30 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Package, User, AlertCircle, Info } from 'lucide-react';
+import { Package, User, Info, Zap, Settings2, Sparkles } from 'lucide-react';
 
 export type ExpandMode = 'product_photos' | 'ai_model';
+export type ExpandQuality = 'fast' | 'standard' | 'high';
+
+export const QUALITY_SHOT_COUNT: Record<ExpandQuality, number> = {
+  fast: 1,
+  standard: 2,
+  high: 3,
+};
 
 interface ExpandModeDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSelectMode: (mode: ExpandMode) => void;
+  onSelectMode: (mode: ExpandMode, quality: ExpandQuality) => void;
   hasExistingModelImages: boolean;
   productCount: number;
 }
+
+const QUALITY_OPTIONS: { value: ExpandQuality; label: string; icon: React.ReactNode; desc: string }[] = [
+  { value: 'fast', label: 'Fast', icon: <Zap className="w-4 h-4" />, desc: '1 shot — quickest' },
+  { value: 'standard', label: 'Standard', icon: <Settings2 className="w-4 h-4" />, desc: '2 shots — balanced' },
+  { value: 'high', label: 'High', icon: <Sparkles className="w-4 h-4" />, desc: '3 shots — most detail' },
+];
 
 export function ExpandModeDialog({
   open,
@@ -25,6 +39,8 @@ export function ExpandModeDialog({
   hasExistingModelImages,
   productCount,
 }: ExpandModeDialogProps) {
+  const [quality, setQuality] = useState<ExpandQuality>('standard');
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px] max-w-[95vw] max-h-[85vh] overflow-y-auto">
@@ -34,6 +50,28 @@ export function ExpandModeDialog({
             Select how you want to expand images for {productCount} product{productCount > 1 ? 's' : ''}.
           </DialogDescription>
         </DialogHeader>
+
+        {/* Quality selector */}
+        <div className="flex items-center gap-1.5 py-1">
+          <span className="text-xs font-medium text-muted-foreground mr-1">Quality:</span>
+          {QUALITY_OPTIONS.map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => setQuality(opt.value)}
+              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${
+                quality === opt.value
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-border bg-background text-muted-foreground hover:bg-muted'
+              }`}
+            >
+              {opt.icon}
+              {opt.label}
+            </button>
+          ))}
+        </div>
+        <p className="text-[11px] text-muted-foreground -mt-1">
+          {QUALITY_OPTIONS.find(o => o.value === quality)?.desc}
+        </p>
         
         <div className="grid gap-4 py-4">
           {/* Mode 1: Product Photo Expand */}
@@ -41,7 +79,7 @@ export function ExpandModeDialog({
             variant="outline"
             className="h-auto p-4 flex flex-col items-start gap-2 text-left hover:border-primary w-full whitespace-normal"
             onClick={() => {
-              onSelectMode('product_photos');
+              onSelectMode('product_photos', quality);
               onOpenChange(false);
             }}
           >
@@ -60,7 +98,7 @@ export function ExpandModeDialog({
             variant="outline"
             className="h-auto p-4 flex flex-col items-start gap-2 text-left hover:border-cyan-600 w-full whitespace-normal"
             onClick={() => {
-              onSelectMode('ai_model');
+              onSelectMode('ai_model', quality);
               onOpenChange(false);
             }}
           >

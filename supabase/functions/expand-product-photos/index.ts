@@ -8,10 +8,11 @@ const corsHeaders = {
 
 interface RequestBody {
   productId: string;
-  sourceImageUrl: string; // The source image for expansion
-  mode: 'product_photos' | 'ai_model'; // Which expansion mode
-  currentImageCount?: number; // How many images the product currently has
-  maxImages?: number; // Maximum total images allowed (default 9)
+  sourceImageUrl: string;
+  mode: 'product_photos' | 'ai_model';
+  currentImageCount?: number;
+  maxImages?: number;
+  shotCount?: number; // 1=fast, 2=standard, 3=high (default 3 for backwards compat)
 }
 
 const MAX_RETRIES = 2;
@@ -274,7 +275,7 @@ serve(async (req) => {
     }
 
     const body: RequestBody = await req.json();
-    const { productId, sourceImageUrl, mode, currentImageCount = 0, maxImages = 9 } = body;
+    const { productId, sourceImageUrl, mode, currentImageCount = 0, maxImages = 9, shotCount } = body;
 
     if (!productId || !sourceImageUrl || !mode) {
       return new Response(
@@ -300,9 +301,10 @@ serve(async (req) => {
       );
     }
 
-    // Select shot types based on mode, limited by remaining slots
+    // Select shot types based on mode, limited by remaining slots AND shotCount
     const allShotTypes = mode === 'product_photos' ? PRODUCT_PHOTO_SHOTS : AI_MODEL_SHOTS;
-    const shotTypes = allShotTypes.slice(0, remainingSlots);
+    const maxShots = shotCount != null ? Math.min(shotCount, remainingSlots) : remainingSlots;
+    const shotTypes = allShotTypes.slice(0, maxShots);
     const modeLabel = mode === 'product_photos' ? 'PRODUCT PHOTO' : 'AI MODEL';
     
     console.log(`Starting ${modeLabel} expansion for product ${productId}`);
