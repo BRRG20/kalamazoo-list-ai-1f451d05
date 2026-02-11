@@ -551,23 +551,41 @@ const handleSelectBatch = useCallback((id: string) => {
           }
           
           // Call the expand-product-photos edge function with mode
-          const response = await fetch(
-            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/expand-product-photos`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-              },
-              body: JSON.stringify({
-                productId,
-                sourceImageUrl,
-                mode,
-                currentImageCount,
-                maxImages: 9,
-              }),
+          // Add 120s timeout to prevent UI freezing
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 120000);
+          
+          let response: Response;
+          try {
+            response = await fetch(
+              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/expand-product-photos`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+                },
+                body: JSON.stringify({
+                  productId,
+                  sourceImageUrl,
+                  mode,
+                  currentImageCount,
+                  maxImages: 9,
+                }),
+                signal: controller.signal,
+              }
+            );
+          } catch (abortErr: any) {
+            clearTimeout(timeoutId);
+            if (abortErr.name === 'AbortError') {
+              console.error(`Expansion timed out for ${productId}`);
+              failedProducts.push(productId);
+              failedCount++;
+              continue;
             }
-          );
+            throw abortErr;
+          }
+          clearTimeout(timeoutId);
           
           if (!response.ok) {
             const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));

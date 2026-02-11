@@ -22,85 +22,54 @@ const PRODUCT_PHOTO_SHOTS = [
   {
     id: 'detail_crop',
     name: 'Detail Close-up (Graphic/Print/Label)',
-    prompt: `🎯 TASK: Create a CROPPED CLOSE-UP from this exact product photo.
+    prompt: `You are an image cropping tool. You MUST output a region cropped directly from the provided source image. 
 
-⚠️ CRITICAL RULES - YOU MUST FOLLOW EXACTLY:
-1. You are ONLY cropping/reframing the provided image
-2. DO NOT generate new content
-3. DO NOT add any elements not in the source
-4. DO NOT change colors, textures, or graphics
-5. DO NOT "beautify" or "enhance" the image
-6. This is a CROP operation, not a generation operation
+ABSOLUTE RULES:
+- Output pixels MUST come from the source image. Do NOT invent, generate, or hallucinate any pixels.
+- Do NOT change any colours, textures, lighting, or details.
+- Do NOT add, remove, or modify anything.
+- The output must look like a screenshot/crop of the original, not a new generation.
 
-🔍 TARGET: Find and crop to the most distinctive feature:
-- If graphic/print exists → center it in frame (fill 60-80%)
-- If logo/text → make it prominent and readable
-- If pattern → show representative texture area
-- If plain → focus on best construction detail (stitching, collar, buttons)
+CROP TARGET: Zoom into the most visually distinctive area of the garment:
+- Graphic, print, logo, or text if present (fill 60-80% of frame)
+- Otherwise: collar, buttons, stitching, or texture detail
+- Output should be a tight, focused crop of that area
 
-📐 COMPOSITION:
-- E-commerce quality close-up crop
-- Sharp focus on the detail
-- No excessive negative space
-- Square or landscape orientation preferred
-
-OUTPUT: A crisp, EXACT crop from the source showing the sellable detail.`
+Output a single cropped image, nothing else.`
   },
   {
     id: 'upper_crop',
     name: 'Upper Garment Crop (Neckline/Shoulder)',
-    prompt: `🎯 TASK: Create an UPPER BODY CROP from this exact product photo.
+    prompt: `You are an image cropping tool. You MUST output a region cropped directly from the provided source image.
 
-⚠️ CRITICAL RULES - YOU MUST FOLLOW EXACTLY:
-1. You are ONLY cropping/reframing the provided image
-2. DO NOT generate new content
-3. DO NOT add any elements not in the source
-4. DO NOT change colors, textures, or graphics
-5. DO NOT "beautify" or "enhance" the image
-6. This is a CROP operation, not a generation operation
+ABSOLUTE RULES:
+- Output pixels MUST come from the source image. Do NOT invent, generate, or hallucinate any pixels.
+- Do NOT change any colours, textures, lighting, or details.
+- Do NOT add, remove, or modify anything.
+- The output must look like a screenshot/crop of the original, not a new generation.
 
-🔍 TARGET: Upper portion of the garment:
-- Neckline and collar construction
-- Shoulder seams and fit
-- Upper chest area
-- Any closures (buttons, zippers, hoods)
+CROP TARGET: The upper 30-40% of the garment showing:
+- Neckline, collar, and shoulder area
+- Any closures (buttons, zippers) at the top
 
-📐 COMPOSITION:
-- Frame the top 30-40% of the garment
-- Show collar/neckline detail clearly
-- Landscape or square crop preferred
-- E-commerce product photography style
-
-OUTPUT: A crisp EXACT crop showing neckline and shoulder area.`
+Output a single cropped image, nothing else.`
   },
   {
     id: 'lower_crop',
     name: 'Lower Garment Crop (Hem/Cuff/Pocket)',
-    prompt: `🎯 TASK: Create a LOWER/EDGE CROP from this exact product photo.
+    prompt: `You are an image cropping tool. You MUST output a region cropped directly from the provided source image.
 
-⚠️ CRITICAL RULES - YOU MUST FOLLOW EXACTLY:
-1. You are ONLY cropping/reframing the provided image
-2. DO NOT generate new content
-3. DO NOT add any elements not in the source
-4. DO NOT change colors, textures, or graphics
-5. DO NOT "beautify" or "enhance" the image
-6. This is a CROP operation, not a generation operation
+ABSOLUTE RULES:
+- Output pixels MUST come from the source image. Do NOT invent, generate, or hallucinate any pixels.
+- Do NOT change any colours, textures, lighting, or details.
+- Do NOT add, remove, or modify anything.
+- The output must look like a screenshot/crop of the original, not a new generation.
 
-🔍 TARGET: Choose the most interesting visible detail:
-- Hem/bottom edge with stitching
-- Cuff/sleeve end
-- Pocket construction
-- Side seam details
-- Waistband (if visible)
+CROP TARGET: The lower portion or edge details of the garment:
+- Hem, cuff, pocket, side seam, or waistband
 - Any hardware (zippers, buttons, rivets)
 
-📐 COMPOSITION:
-- Focus on construction quality
-- Show fabric texture clearly
-- Square or landscape crop preferred
-- E-commerce product photography style
-
-OUTPUT: A crisp EXACT crop showing hem, cuff, or edge detail.`
+Output a single cropped image, nothing else.`
   },
 ];
 
@@ -110,78 +79,52 @@ const AI_MODEL_SHOTS = [
   {
     id: 'model_detail',
     name: 'Model Detail Close-up',
-    prompt: `🎯 TASK: Create a DETAIL CLOSE-UP from this AI model photo.
+    prompt: `You are an image cropping tool. You MUST output a region cropped directly from the provided source image.
 
-🔒 IDENTITY LOCK - NON-NEGOTIABLE:
-- The person MUST be the EXACT SAME person from the source
-- SAME face, SAME skin tone, SAME body type
-- NEVER swap to a different person or gender
-- This is the same photoshoot, just a different crop
+ABSOLUTE RULES:
+- Output pixels MUST come from the source image. Do NOT invent, generate, or hallucinate any pixels.
+- Do NOT change any colours, textures, lighting, skin tone, or details.
+- Do NOT swap, alter, or replace the person. The SAME person must appear.
+- The output must look like a screenshot/crop of the original, not a new generation.
 
-🔒 CLOTHING LOCK - NON-NEGOTIABLE:
-- The garment MUST remain IDENTICAL to source
-- EXACT colour (no shifting)
-- EXACT texture (no gloss/shine added)
-- EXACT graphics/prints (character-for-character)
-- NO hallucinated elements
+CROP TARGET: Zoom into the most visually distinctive garment detail on the model:
+- Graphic, print, logo area on the chest/torso
+- Or collar/neckline area showing fit on the model
 
-⚠️ DO NOT ZOOM INTO FACE - This is PRODUCT-focused.
-
-🎯 TARGET: Find the most sellable garment detail:
-- If graphic/print → center it prominently
-- If logo → make it readable
-- If pattern → show texture clearly
-- Show from mid-chest area
-
-📐 OUTPUT: A close-up crop from the same photoshoot showing garment detail on model.`
+Output a single cropped image, nothing else.`
   },
   {
     id: 'model_upper',
     name: 'Model Upper Body',
-    prompt: `🎯 TASK: Create an UPPER BODY crop from this AI model photo.
+    prompt: `You are an image cropping tool. You MUST output a region cropped directly from the provided source image.
 
-🔒 IDENTITY LOCK - NON-NEGOTIABLE:
-- The person MUST be the EXACT SAME person from the source
-- SAME face, SAME skin tone, SAME body type
-- NEVER swap to a different person or gender
-- This is the same photoshoot, just a different frame
+ABSOLUTE RULES:
+- Output pixels MUST come from the source image. Do NOT invent, generate, or hallucinate any pixels.
+- Do NOT change any colours, textures, lighting, skin tone, or details.
+- Do NOT swap, alter, or replace the person. The SAME person must appear.
+- The output must look like a screenshot/crop of the original, not a new generation.
 
-🔒 CLOTHING LOCK - NON-NEGOTIABLE:
-- The garment MUST remain IDENTICAL to source
-- EXACT colour, texture, graphics, wear
-- NO "improving" or "beautifying" the fabric
+CROP TARGET: Upper body from shoulders to mid-chest:
+- Neckline and collar fit on the model
+- Shoulder seam area
 
-🎯 TARGET: Shoulders to mid-chest:
-- Show collar/neckline fit on the model
-- Include shoulder seams
-- Can show partial chin but DO NOT focus on face
-- This shows HOW THE GARMENT FITS
-
-📐 OUTPUT: Upper body crop from the same photoshoot showing fit at neckline.`
+Output a single cropped image, nothing else.`
   },
   {
     id: 'model_lower',
     name: 'Model Lower/Edge Detail',
-    prompt: `🎯 TASK: Create a LOWER DETAIL crop from this AI model photo.
+    prompt: `You are an image cropping tool. You MUST output a region cropped directly from the provided source image.
 
-🔒 IDENTITY LOCK - NON-NEGOTIABLE:
-- The person MUST be the EXACT SAME person from the source
-- SAME body, SAME skin tone
-- NEVER swap to a different person
-- Hands must have realistic anatomy (5 fingers, natural joints)
+ABSOLUTE RULES:
+- Output pixels MUST come from the source image. Do NOT invent, generate, or hallucinate any pixels.
+- Do NOT change any colours, textures, lighting, skin tone, or details.
+- Do NOT swap, alter, or replace the person. The SAME person must appear.
+- The output must look like a screenshot/crop of the original, not a new generation.
 
-🔒 CLOTHING LOCK - NON-NEGOTIABLE:
-- The garment MUST remain IDENTICAL to source
-- EXACT colour, texture, graphics, wear
-- NO hallucinated elements
+CROP TARGET: Lower portion of the garment on the model:
+- Hem, cuff, pocket, or side seam area
 
-🎯 TARGET: Choose the best visible lower detail:
-- Hem/bottom edge of garment
-- Cuff/sleeve ending
-- Pocket if visible
-- Side seam construction
-
-📐 OUTPUT: Lower body/edge crop from the same photoshoot showing garment construction.`
+Output a single cropped image, nothing else.`
   },
 ];
 
@@ -201,7 +144,7 @@ async function generateCropImage(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash-image-preview',
+        model: 'google/gemini-3-pro-image-preview',
         messages: [
           {
             role: 'user',
