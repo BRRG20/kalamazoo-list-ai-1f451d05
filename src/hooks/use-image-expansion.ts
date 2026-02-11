@@ -1,5 +1,4 @@
 import { useState, useCallback, useRef } from 'react';
-import { toast } from 'sonner';
 
 export interface ExpandedImage {
   type: string;
@@ -12,31 +11,84 @@ export interface ImageExpansionResult {
   totalImages: number;
 }
 
-export function useImageExpansion() {
-  const [isExpanding, setIsExpanding] = useState(false);
-  const [progress, setProgress] = useState({ current: 0, total: 0 });
-  
-  // Track if we're in a batch operation to prevent premature state reset
-  const batchOperationRef = useRef(false);
+export type ExpandItemStatus = 'queued' | 'processing' | 'done' | 'failed';
 
-  const expandProductImages = useCallback(async (
+export interface ExpandItemState {
+  productId: string;
+  status: ExpandItemStatus;
+  error?: string;
+  generatedCount: number;
+}
+
+export interface BatchExpandState {
+  running: boolean;
+  items: ExpandItemState[];
+  completed: number;
+  total: number;
+  cancelled: boolean;
+}
+
+const CONCURRENCY = 2;
+const INTER_ITEM_DELAY_MS = 500;
+const FETCH_TIMEOUT_MS = 120000;
+
+export function useImageExpansion() {
+  const [batchState, setBatchState] = useState<BatchExpandState>({
+    running: false,
+    items: [],
+    completed: 0,
+    total: 0,
+    cancelled: false,
+  });
+
+  // Legacy compat
+  const isExpanding = batchState.running;
+  const progress = { current: batchState.completed, total: batchState.total };
+
+  const abortRef = useRef<AbortController | null>(null);
+  const runningRef = useRef(false);
+
+  // Helper: update a single item in batchState.items by productId
+  const updateItem = useCallback((productId: string, patch: Partial<ExpandItemState>) => {
+    setBatchState(prev => ({
+      ...prev,
+      items: prev.items.map(it => it.productId === productId ? { ...it, ...patch } : it),
+    }));
+  }, []);
+
+  const incrementCompleted = useCallback(() => {
+    setBatchState(prev => ({ ...prev, completed: prev.completed + 1 }));
+  }, []);
+
+  // Cancel the running batch
+  const cancelBatch = useCallback(() => {
+    abortRef.current?.abort();
+    setBatchState(prev => ({ ...prev, cancelled: true }));
+  }, []);
+
+  // Reset / dismiss progress panel
+  const dismissBatch = useCallback(() => {
+    setBatchState({ running: false, items: [], completed: 0, total: 0, cancelled: false });
+  }, []);
+
+  // Core: process a single product expansion
+  const expandOneProduct = useCallback(async (
     productId: string,
-    frontImageUrl: string,
-    backImageUrl?: string,
-    labelImageUrl?: string,
-    detailImageUrl?: string,
-    currentImageCount: number = 0,
-    targetCount: number = 9
-  ): Promise<ImageExpansionResult | null> => {
-    // Only set expanding if not already in a batch operation
-    if (!batchOperationRef.current) {
-      setIsExpanding(true);
-      setProgress({ current: 0, total: targetCount - currentImageCount });
-    }
+    sourceImageUrl: string,
+    mode: 'product_photos' | 'ai_model',
+    currentImageCount: number,
+    signal: AbortSignal,
+  ): Promise<{ success: boolean; generatedImages: ExpandedImage[]; error?: string }> => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+    // Link parent signal to per-request controller
+    const onParentAbort = () => controller.abort();
+    signal.addEventListener('abort', onParentAbort, { once: true });
 
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/expand-product-images`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/expand-product-photos`,
         {
           method: 'POST',
           headers: {
@@ -45,121 +97,153 @@ export function useImageExpansion() {
           },
           body: JSON.stringify({
             productId,
-            frontImageUrl,
-            backImageUrl,
-            labelImageUrl,
-            detailImageUrl,
+            sourceImageUrl,
+            mode,
             currentImageCount,
-            targetCount,
+            maxImages: 9,
           }),
+          signal: controller.signal,
         }
       );
 
+      clearTimeout(timeoutId);
+      signal.removeEventListener('abort', onParentAbort);
+
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        
-        if (response.status === 429) {
-          toast.error('Rate limit exceeded. Please wait and try again.');
-        } else if (response.status === 402) {
-          toast.error('AI credits exhausted. Please add credits.');
-        } else {
-          toast.error(errorData.error || 'Image expansion failed');
-        }
-        return null;
+        const errBody = await response.json().catch(() => ({ error: 'Unknown error' }));
+        const errMsg = response.status === 429
+          ? 'Rate limit exceeded'
+          : response.status === 402
+            ? 'AI credits exhausted'
+            : errBody.error || `HTTP ${response.status}`;
+        return { success: false, generatedImages: [], error: errMsg };
       }
 
       const data = await response.json();
-      
-      if (data.success) {
-        return data;
+      if (data.success && data.generatedImages?.length > 0) {
+        return { success: true, generatedImages: data.generatedImages };
       }
-      
-      return null;
-    } catch (error) {
-      console.error('Image expansion error:', error);
-      toast.error('Failed to expand product images');
-      return null;
-    } finally {
-      // Only reset if not in a batch operation
-      if (!batchOperationRef.current) {
-        setIsExpanding(false);
-        setProgress({ current: 0, total: 0 });
+      return { success: false, generatedImages: [], error: 'No images generated' };
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      signal.removeEventListener('abort', onParentAbort);
+      if (err.name === 'AbortError') {
+        return { success: false, generatedImages: [], error: 'Cancelled or timed out' };
       }
+      return { success: false, generatedImages: [], error: err.message || 'Network error' };
     }
   }, []);
 
-  // Start a batch operation - prevents individual calls from resetting state
-  const startBatchExpansion = useCallback((totalProducts: number) => {
-    batchOperationRef.current = true;
-    setIsExpanding(true);
-    setProgress({ current: 0, total: totalProducts });
-  }, []);
-
-  // Update progress during batch
-  const updateBatchProgress = useCallback((current: number, total: number) => {
-    setProgress({ current, total });
-  }, []);
-
-  // End batch operation and reset state
-  const endBatchExpansion = useCallback(() => {
-    batchOperationRef.current = false;
-    setIsExpanding(false);
-    setProgress({ current: 0, total: 0 });
-  }, []);
-
-  // Batch expand for multiple products
-  const expandBatch = useCallback(async (
-    products: Array<{
+  // Run the queue with concurrency control
+  const runQueue = useCallback(async (
+    jobs: Array<{
       productId: string;
-      frontImageUrl: string;
-      backImageUrl?: string;
-      labelImageUrl?: string;
-      detailImageUrl?: string;
-      currentImageCount?: number;
+      sourceImageUrl: string;
+      mode: 'product_photos' | 'ai_model';
+      currentImageCount: number;
     }>,
-    targetCount: number = 9,
-    onProgress?: (current: number, total: number) => void
-  ): Promise<Map<string, ImageExpansionResult>> => {
-    startBatchExpansion(products.length);
-    const results = new Map<string, ImageExpansionResult>();
-    
-    try {
-      for (let i = 0; i < products.length; i++) {
-        const product = products[i];
-        onProgress?.(i + 1, products.length);
-        updateBatchProgress(i + 1, products.length);
-        
-        const result = await expandProductImages(
-          product.productId,
-          product.frontImageUrl,
-          product.backImageUrl,
-          product.labelImageUrl,
-          product.detailImageUrl,
-          product.currentImageCount || 0,
-          targetCount
+    onItemDone: (productId: string, result: { success: boolean; generatedImages: ExpandedImage[]; error?: string }) => Promise<void>,
+  ) => {
+    const ac = new AbortController();
+    abortRef.current = ac;
+    runningRef.current = true;
+
+    const items: ExpandItemState[] = jobs.map(j => ({
+      productId: j.productId,
+      status: 'queued' as ExpandItemStatus,
+      generatedCount: 0,
+    }));
+
+    setBatchState({
+      running: true,
+      items,
+      completed: 0,
+      total: jobs.length,
+      cancelled: false,
+    });
+
+    let nextIndex = 0;
+
+    const processNext = async (): Promise<void> => {
+      while (nextIndex < jobs.length) {
+        if (ac.signal.aborted) return;
+        const idx = nextIndex++;
+        const job = jobs[idx];
+
+        updateItem(job.productId, { status: 'processing' });
+
+        const result = await expandOneProduct(
+          job.productId,
+          job.sourceImageUrl,
+          job.mode,
+          job.currentImageCount,
+          ac.signal,
         );
-        
-        if (result) {
-          results.set(product.productId, result);
+
+        if (ac.signal.aborted) {
+          updateItem(job.productId, { status: 'failed', error: 'Cancelled' });
+          incrementCompleted();
+          return;
         }
-        
-        // Delay between products to avoid rate limits
-        if (i < products.length - 1) {
-          await new Promise(r => setTimeout(r, 1000));
+
+        // Auto-retry once on transient errors
+        let finalResult = result;
+        if (!result.success && result.error !== 'Rate limit exceeded' && result.error !== 'AI credits exhausted' && result.error !== 'Cancelled') {
+          // Wait briefly then retry
+          await new Promise(r => setTimeout(r, 2000));
+          if (!ac.signal.aborted) {
+            finalResult = await expandOneProduct(job.productId, job.sourceImageUrl, job.mode, job.currentImageCount, ac.signal);
+          }
         }
+
+        if (finalResult.success) {
+          updateItem(job.productId, { status: 'done', generatedCount: finalResult.generatedImages.length });
+        } else {
+          updateItem(job.productId, { status: 'failed', error: finalResult.error });
+        }
+
+        // Let callback handle DB inserts etc
+        await onItemDone(job.productId, finalResult);
+        incrementCompleted();
+
+        // Stop queue on critical errors
+        if (finalResult.error === 'Rate limit exceeded' || finalResult.error === 'AI credits exhausted') {
+          ac.abort();
+          // Mark remaining as failed
+          for (let r = nextIndex; r < jobs.length; r++) {
+            updateItem(jobs[r].productId, { status: 'failed', error: finalResult.error });
+          }
+          setBatchState(prev => ({ ...prev, completed: prev.total, cancelled: true }));
+          return;
+        }
+
+        // Yield to main thread between items
+        await new Promise(r => setTimeout(r, INTER_ITEM_DELAY_MS));
       }
-    } finally {
-      endBatchExpansion();
-    }
-    
-    return results;
-  }, [expandProductImages, startBatchExpansion, updateBatchProgress, endBatchExpansion]);
+    };
+
+    // Launch concurrent workers
+    const workers = Array.from({ length: Math.min(CONCURRENCY, jobs.length) }, () => processNext());
+    await Promise.all(workers);
+
+    runningRef.current = false;
+    setBatchState(prev => ({ ...prev, running: false }));
+  }, [expandOneProduct, updateItem, incrementCompleted]);
+
+  // Legacy compat stubs
+  const startBatchExpansion = useCallback((_total: number) => {}, []);
+  const updateBatchProgress = useCallback((_c: number, _t: number) => {}, []);
+  const endBatchExpansion = useCallback(() => {}, []);
+  const expandProductImages = useCallback(async () => null, []);
 
   return {
     isExpanding,
     progress,
+    batchState,
     expandProductImages,
-    expandBatch,
+    runQueue,
+    cancelBatch,
+    dismissBatch,
     startBatchExpansion,
     updateBatchProgress,
     endBatchExpansion,

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
@@ -12,6 +12,7 @@ import { DeletedProductsPanel } from '@/components/batches/DeletedProductsPanel'
 import { DeletedImagesPanel } from '@/components/batches/DeletedImagesPanel';
 import { HiddenProductsPanel } from '@/components/batches/HiddenProductsPanel';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { BatchExpandProgress } from '@/components/batches/BatchExpandProgress';
 import { ImageGroup, MatchingProgress } from '@/components/batches/ImageGroupManager';
 import {
   AlertDialog,
@@ -73,7 +74,7 @@ export default function BatchesPage() {
   });
   
   // AI Image Expansion hook
-  const { expandProductImages, isExpanding: isExpandingImages, progress: expansionProgress, startBatchExpansion, updateBatchProgress, endBatchExpansion } = useImageExpansion();
+  const { isExpanding: isExpandingImages, batchState: expandBatchState, runQueue: runExpandQueue, cancelBatch: cancelExpandBatch, dismissBatch: dismissExpandBatch, startBatchExpansion, updateBatchProgress, endBatchExpansion } = useImageExpansion();
   
   // Model Try-On hook for generating model images before expansion
   const modelTryOn = useModelTryOn();
@@ -102,6 +103,7 @@ export default function BatchesPage() {
   const [pendingImageUrls, setPendingImageUrls] = useState<string[]>([]);
   const [productCounts, setProductCounts] = useState<Record<string, number>>({});
   const [shopifySuccessData, setShopifySuccessData] = useState<{ successCount: number; errorCount: number } | null>(null);
+  const lastExpandModeRef = useRef<'product_photos' | 'ai_model'>('product_photos');
   
   // Shopify upload warning dialog state
   const [shopifyWarningData, setShopifyWarningData] = useState<{
@@ -446,10 +448,7 @@ const handleSelectBatch = useCallback((id: string) => {
     }
   }, [selectedBatchId, uploadImages, addImageToBatch]);
 
-  // AI Image Expansion handler - generates additional listing images from the AI model image
-  // Uses existing model_tryon image, or generates one first if none exists
-  // Accepts single productId or array of productIds for bulk expansion
-  // Optional modelId parameter allows user to specify which AI model to use
+  // AI Image Expansion handler - queue-based batch expand up to 50 items
   const handleExpandProductImages = useCallback(async (productIds: string | string[], mode: 'product_photos' | 'ai_model') => {
     const idsToProcess = Array.isArray(productIds) ? productIds : [productIds];
     
@@ -458,6 +457,8 @@ const handleSelectBatch = useCallback((id: string) => {
       return;
     }
     
+    lastExpandModeRef.current = mode;
+    
     // Get current user for RLS
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -465,235 +466,87 @@ const handleSelectBatch = useCallback((id: string) => {
       return;
     }
     
-    const modeLabel = mode === 'product_photos' ? 'product photo' : 'AI model';
-    const totalToProcess = idsToProcess.length;
+    // Build jobs: resolve source images upfront so queue workers stay lightweight
+    const jobs: Array<{
+      productId: string;
+      sourceImageUrl: string;
+      mode: 'product_photos' | 'ai_model';
+      currentImageCount: number;
+    }> = [];
     
-    // Start batch operation
-    startBatchExpansion(totalToProcess);
+    for (const productId of idsToProcess) {
+      const product = products.find(p => p.id === productId);
+      if (!product) continue;
+      
+      const images = await fetchImagesForProduct(productId);
+      if (images.length === 0 || images.length >= 9) continue;
+      
+      const sortedImages = [...images].sort((a, b) => a.position - b.position);
+      let sourceImageUrl: string | null = null;
+      
+      if (mode === 'product_photos') {
+        const original = sortedImages.find(img => !img.source || img.source === 'upload');
+        if (original) sourceImageUrl = original.url;
+      } else {
+        const modelImg = sortedImages.find(img => img.source === 'model_tryon');
+        if (modelImg) sourceImageUrl = modelImg.url;
+      }
+      
+      if (sourceImageUrl) {
+        jobs.push({ productId, sourceImageUrl, mode, currentImageCount: images.length });
+      }
+    }
     
-    // Show initial toast with progress ID for updates
-    const toastId = toast.loading(`Expanding ${modeLabel} images: 0/${totalToProcess} products...`);
+    if (jobs.length === 0) {
+      toast.warning('No eligible products to expand (missing source images or already at 9)');
+      return;
+    }
     
     let totalGenerated = 0;
-    let processedCount = 0;
-    let failedCount = 0;
-    const failedProducts: string[] = [];
-    let rateLimitHit = false;
-    let creditsExhausted = false;
     
-    console.log(`🚀 Starting BULK expand for ${totalToProcess} products in ${mode} mode`);
-    
-    try {
-      // Process ALL products - never stop early except for rate limit/credits
-      for (const productId of idsToProcess) {
-        // Check if we hit rate limit or credits exhausted
-        if (rateLimitHit || creditsExhausted) {
-          failedProducts.push(productId);
-          failedCount++;
-          continue;
-        }
+    await runExpandQueue(jobs, async (productId, result) => {
+      if (result.success && result.generatedImages.length > 0) {
+        // Fetch current images to get next position
+        const currentImages = await fetchImagesForProduct(productId);
+        const nextPosition = currentImages.length;
         
-        const product = products.find(p => p.id === productId);
-        if (!product) {
-          console.warn(`Product ${productId} not found, skipping`);
-          failedProducts.push(productId);
-          failedCount++;
-          continue;
-        }
-        
-        // Update progress toast
-        toast.loading(`Expanding ${modeLabel} images: ${processedCount + 1}/${totalToProcess} products...`, { id: toastId });
-        updateBatchProgress(processedCount + 1, totalToProcess);
-        
-        try {
-          const images = await fetchImagesForProduct(productId);
-          const currentImageCount = images.length;
-          
-          // Skip if product already has 9+ images
-          if (currentImageCount >= 9) {
-            console.log(`Product ${productId} already has ${currentImageCount} images (max 9), skipping`);
-            processedCount++;
-            continue;
-          }
-          
-          if (currentImageCount === 0) {
-            console.warn(`No images for product ${productId}, skipping`);
-            failedProducts.push(productId);
-            failedCount++;
-            continue;
-          }
-          
-          const sortedImages = [...images].sort((a, b) => a.position - b.position);
-          let sourceImageUrl: string | null = null;
-          
-          if (mode === 'product_photos') {
-            // Use original product photo (NOT model image)
-            const originalImage = sortedImages.find(img => !img.source || img.source === 'upload');
-            if (!originalImage) {
-              console.warn(`No original product image for ${productId}, skipping`);
-              failedProducts.push(productId);
-              failedCount++;
-              continue;
-            }
-            sourceImageUrl = originalImage.url;
-            console.log(`[${processedCount + 1}/${totalToProcess}] Using original product photo for: ${product.title || productId}`);
-          } else {
-            // Use existing AI model image - NEVER generate new models
-            const modelImage = sortedImages.find(img => img.source === 'model_tryon');
-            if (!modelImage) {
-              console.warn(`No AI model image for ${productId}, skipping - user must generate model first`);
-              failedProducts.push(productId);
-              failedCount++;
-              continue;
-            }
-            sourceImageUrl = modelImage.url;
-            console.log(`[${processedCount + 1}/${totalToProcess}] Using AI model image for: ${product.title || productId}`);
-          }
-          
-          // Call the expand-product-photos edge function with mode
-          // Add 120s timeout to prevent UI freezing
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 120000);
-          
-          let response: Response;
-          try {
-            response = await fetch(
-              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/expand-product-photos`,
-              {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-                },
-                body: JSON.stringify({
-                  productId,
-                  sourceImageUrl,
-                  mode,
-                  currentImageCount,
-                  maxImages: 9,
-                }),
-                signal: controller.signal,
-              }
-            );
-          } catch (abortErr: any) {
-            clearTimeout(timeoutId);
-            if (abortErr.name === 'AbortError') {
-              console.error(`Expansion timed out for ${productId}`);
-              failedProducts.push(productId);
-              failedCount++;
-              continue;
-            }
-            throw abortErr;
-          }
-          clearTimeout(timeoutId);
-          
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-            console.error(`Expansion failed for ${productId}:`, errorData);
-            
-            if (response.status === 429) {
-              rateLimitHit = true;
-              toast.error('Rate limit exceeded. Remaining products will be skipped.');
-              failedProducts.push(productId);
-              failedCount++;
-              continue; // Continue to mark remaining as failed
-            } else if (response.status === 402) {
-              creditsExhausted = true;
-              toast.error('AI credits exhausted. Remaining products will be skipped.');
-              failedProducts.push(productId);
-              failedCount++;
-              continue; // Continue to mark remaining as failed
-            }
-            
-            // Other errors - skip this product but continue with others
-            failedProducts.push(productId);
-            failedCount++;
-            continue;
-          }
-          
-          const result = await response.json();
-          
-          if (result.success && result.generatedImages?.length > 0) {
-            const currentImages = await fetchImagesForProduct(productId);
-            const nextPosition = currentImages.length;
-            
-            // Insert all generated images for this product
-            for (let i = 0; i < result.generatedImages.length; i++) {
-              const genImg = result.generatedImages[i];
-              const { error } = await supabase
-                .from('images')
-                .insert({
-                  url: genImg.url,
-                  product_id: productId,
-                  batch_id: selectedBatchId,
-                  position: nextPosition + i,
-                  include_in_shopify: true,
-                  user_id: user.id,
-                  source: mode === 'product_photos' ? 'product_expansion' : 'model_expansion'
-                });
-              
-              if (!error) {
-                totalGenerated++;
-              }
-            }
-            console.log(`✓ Generated ${result.generatedImages.length} images for product ${processedCount + 1}/${totalToProcess}`);
-          } else {
-            failedProducts.push(productId);
-            failedCount++;
-          }
-          
-        } catch (productError) {
-          console.error(`Error processing product ${productId}:`, productError);
-          failedProducts.push(productId);
-          failedCount++;
-          // Continue with next product - don't break the batch
-        }
-        
-        processedCount++;
-        
-        // Add delay between products to avoid rate limits (but still process ALL)
-        if (processedCount < totalToProcess) {
-          await new Promise(r => setTimeout(r, 800));
-        }
-      }
-      
-      // Clear cache and refresh
-      clearCache();
-      await refetchProducts();
-      
-      // Force BatchDetail to re-fetch images immediately
-      forceRefreshImages();
-      
-      // Dismiss loading toast
-      toast.dismiss(toastId);
-      
-      // Show final summary
-      const successCount = totalToProcess - failedCount;
-      
-      if (totalGenerated > 0) {
-        toast.success(
-          `✓ Expanded ${successCount}/${totalToProcess} products (${totalGenerated} images added)` +
-          (failedCount > 0 ? ` | ${failedCount} failed` : ''),
-          { duration: 5000 }
+        // Insert generated images in parallel
+        const inserts = result.generatedImages.map((genImg, i) =>
+          supabase.from('images').insert({
+            url: genImg.url,
+            product_id: productId,
+            batch_id: selectedBatchId,
+            position: nextPosition + i,
+            include_in_shopify: true,
+            user_id: user.id,
+            source: mode === 'product_photos' ? 'product_expansion' : 'model_expansion',
+          })
         );
-      } else if (failedCount === totalToProcess) {
-        toast.error(`All ${totalToProcess} products failed to expand. Check that products have the required source images.`);
-      } else {
-        toast.warning(`Partial success: ${successCount}/${totalToProcess} products expanded`);
+        const results = await Promise.all(inserts);
+        totalGenerated += results.filter(r => !r.error).length;
       }
-      
-      // Log failures for debugging
-      if (failedProducts.length > 0) {
-        console.warn(`Failed products (${failedProducts.length}):`, failedProducts);
-      }
-      
-      console.log(`🏁 BULK expand complete: ${successCount}/${totalToProcess} succeeded, ${totalGenerated} images generated`);
-      
-    } finally {
-      // Always end batch operation to reset loading state
-      endBatchExpansion();
+    });
+    
+    // Refresh after all done
+    clearCache();
+    await refetchProducts();
+    forceRefreshImages();
+    
+    if (totalGenerated > 0) {
+      toast.success(`Expanded — ${totalGenerated} images added across ${jobs.length} products`);
     }
-  }, [products, fetchImagesForProduct, selectedBatchId, clearCache, refetchProducts, startBatchExpansion, updateBatchProgress, endBatchExpansion, forceRefreshImages]);
+  }, [products, fetchImagesForProduct, selectedBatchId, clearCache, refetchProducts, runExpandQueue, forceRefreshImages]);
+
+  // Retry only failed items from last batch expand
+  const handleRetryFailedExpand = useCallback(async () => {
+    const failedIds = expandBatchState.items
+      .filter(i => i.status === 'failed')
+      .map(i => i.productId);
+    if (failedIds.length === 0) return;
+    // Re-trigger expand with the failed IDs using the same mode
+    // We need to figure out the mode — store it or default to product_photos
+    handleExpandProductImages(failedIds, lastExpandModeRef.current);
+  }, [expandBatchState.items, handleExpandProductImages]);
 
   const handleAutoGroup = useCallback(async (imagesPerProduct: number) => {
     if (!selectedBatchId) return;
@@ -2208,6 +2061,15 @@ const handleSelectBatch = useCallback((id: string) => {
           "flex-1 min-w-0",
           !selectedBatch ? "hidden md:block" : "block"
         )}>
+          {/* Batch Expand Progress Panel */}
+          {expandBatchState.total > 0 && (
+            <BatchExpandProgress
+              state={expandBatchState}
+              onCancel={cancelExpandBatch}
+              onDismiss={dismissExpandBatch}
+              onRetryFailed={handleRetryFailedExpand}
+            />
+          )}
           {selectedBatch ? (
             <BatchDetail
               batch={selectedBatch}
