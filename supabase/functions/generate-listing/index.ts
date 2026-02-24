@@ -1148,6 +1148,58 @@ IMPORTANT: Respond with ONLY valid JSON.`;
       generated.description_style_b = sanitizeDescription(generated.description_style_b);
     }
     
+    // ==========================================
+    // POST-PROCESS: Ensure attribute block is always present in descriptions
+    // ==========================================
+    const buildAttributeBlock = (gen: Record<string, unknown>, prod: Record<string, unknown>): string => {
+      const lines: string[] = [];
+      const brand = safeText(gen.brand) || safeText(prod.brand);
+      const sizeLabel = safeText(gen.size_label) || safeText(prod.size_label);
+      const pitToPit = safeText(gen.pit_to_pit) || safeText(prod.pit_to_pit);
+      const material = safeText(gen.material) || safeText(prod.material);
+      const era = safeText(gen.era) || safeText(prod.era);
+      const condition = safeText(gen.condition) || safeText(prod.condition);
+      const flaws = safeText(gen.flaws) || safeText(prod.flaws);
+      const colourMain = safeText(gen.colour_main) || safeText(prod.colour_main);
+      const colourSecondary = safeText(gen.colour_secondary) || safeText(prod.colour_secondary);
+      
+      if (brand) lines.push(`Brand: ${brand}`);
+      if (sizeLabel) lines.push(`Label Size: ${sizeLabel}`);
+      if (pitToPit) lines.push(`Pit to Pit: ${pitToPit}`);
+      if (material) lines.push(`Material: ${material}`);
+      if (era && ['80s', '90s', 'y2k'].includes(era.toLowerCase())) lines.push(`Era: ${era}`);
+      if (condition) {
+        const condLine = flaws ? `${condition} (${flaws})` : condition;
+        lines.push(`Condition: ${condLine}`);
+      }
+      if (colourMain) {
+        const colourLine = colourSecondary && colourSecondary.toLowerCase() !== colourMain.toLowerCase()
+          ? `${colourMain}, ${colourSecondary}` : colourMain;
+        lines.push(`Colour: ${colourLine}`);
+      }
+      return lines.join('\n');
+    };
+    
+    const ensureAttributeBlock = (desc: string | null, gen: Record<string, unknown>, prod: Record<string, unknown>): string | null => {
+      if (!desc) return null;
+      // Check if description already has an attribute block (look for "Brand:" or "Label Size:" lines)
+      const hasAttributeBlock = /^(Brand|Label Size|Pit to Pit|Material|Era|Condition|Colour):/m.test(desc);
+      if (hasAttributeBlock) return desc;
+      
+      const attrBlock = buildAttributeBlock(gen, prod);
+      if (!attrBlock) return desc;
+      return desc.trimEnd() + '\n\n' + attrBlock;
+    };
+    
+    generated.description_style_a = ensureAttributeBlock(generated.description_style_a, generated, sanitizedProduct);
+    generated.description_style_b = ensureAttributeBlock(generated.description_style_b, generated, sanitizedProduct);
+    
+    // CRITICAL: If description_style_b is null, derive from style_a
+    if (!generated.description_style_b && generated.description_style_a) {
+      generated.description_style_b = generated.description_style_a;
+      console.log("[generate-listing] description_style_b was null, copied from style_a");
+    }
+    
     // CRITICAL: Sanitize title to remove any "null" strings
     if (generated.title) {
       // Remove "null", "undefined", "N/A" from title
