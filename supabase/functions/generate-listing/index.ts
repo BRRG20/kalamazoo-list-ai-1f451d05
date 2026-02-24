@@ -111,7 +111,7 @@ Then analyze garment visually for:
 - department: Men, Women, or Unisex based on cut/silhouette
 - fit: Oversized, Slim, Regular, Boxy, Relaxed
 - era: 80s, 90s, Y2K ONLY if style clearly indicates — otherwise null
-- condition: Excellent, Very good, Good, Fair
+- condition: Excellent, Very good, Good, Fair — ONLY set based on visible wear/damage in images, do NOT default to any value
 - flaws: Describe visible damage/wear or null
 - colour_main, colour_secondary, pattern, style
 
