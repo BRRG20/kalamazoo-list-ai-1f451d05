@@ -816,8 +816,50 @@ serve(async (req) => {
     
     console.log('Model try-on processing complete', { styleOutfit, outfitStyle });
 
+    // Upload base64 image to Supabase storage so Shopify can access it via public URL
+    let finalImageUrl = processedImage;
+    if (processedImage && processedImage.startsWith('data:')) {
+      try {
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+        const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+        const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+        // Extract mime type and base64 data
+        const matches = processedImage.match(/^data:([^;]+);base64,(.+)$/);
+        if (matches) {
+          const mimeType = matches[1];
+          const base64Data = matches[2];
+          const ext = mimeType === 'image/png' ? 'png' : 'jpg';
+          const fileName = `model-tryon/${crypto.randomUUID()}.${ext}`;
+
+          // Decode base64 to Uint8Array
+          const binaryString = atob(base64Data);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+
+          const { error: uploadError } = await supabaseAdmin.storage
+            .from('product-images')
+            .upload(fileName, bytes, { contentType: mimeType, upsert: false });
+
+          if (uploadError) {
+            console.error('Storage upload error:', uploadError);
+          } else {
+            const { data: publicUrlData } = supabaseAdmin.storage
+              .from('product-images')
+              .getPublicUrl(fileName);
+            finalImageUrl = publicUrlData.publicUrl;
+            console.log('Uploaded model image to storage:', finalImageUrl);
+          }
+        }
+      } catch (uploadErr) {
+        console.error('Failed to upload model image to storage, returning base64:', uploadErr);
+      }
+    }
+
     return new Response(JSON.stringify({ 
-      processedImageUrl: processedImage,
+      processedImageUrl: finalImageUrl,
       success: true,
       styled: styleOutfit
     }), {
