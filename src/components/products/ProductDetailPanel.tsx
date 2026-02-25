@@ -266,6 +266,8 @@ export function ProductDetailPanel({
       const updatedProduct = { ...product, ...formData };
       const listingBlock = generateListingBlock(updatedProduct as Product);
       onSave({ ...formData, listing_block: listingBlock });
+      initialFormDataRef.current = formData;
+      setHasUnsavedChanges(false);
       toast.success('Product saved');
     } finally {
       setIsSaving(false);
@@ -434,9 +436,38 @@ export function ProductDetailPanel({
     setIsListening(false);
   };
 
-  // Cleanup on unmount
+  // Keep a ref to latest formData so flush-on-unmount always uses current values
+  const formDataRef = useRef(formData);
+  formDataRef.current = formData;
+  const hasUnsavedRef = useRef(hasUnsavedChanges);
+  hasUnsavedRef.current = hasUnsavedChanges;
+  const productRef = useRef(product);
+  productRef.current = product;
+  const onSaveRef = useRef(onSave);
+  onSaveRef.current = onSave;
+
+  // Flush unsaved changes immediately (used on close & unmount)
+  const flushSave = useRef(() => {
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+    if (hasUnsavedRef.current) {
+      try {
+        const updatedProduct = { ...productRef.current, ...formDataRef.current };
+        const listingBlock = generateListingBlock(updatedProduct as Product);
+        onSaveRef.current({ ...formDataRef.current, listing_block: listingBlock });
+        hasUnsavedRef.current = false;
+      } catch (e) {
+        console.error('[FlushSave] Failed:', e);
+      }
+    }
+  });
+
+  // Cleanup on unmount – flush pending saves & stop recognition
   useEffect(() => {
     return () => {
+      flushSave.current();
       if (recognitionRef.current) {
         try {
           recognitionRef.current.stop();
@@ -873,7 +904,7 @@ export function ProductDetailPanel({
                 {product.status === 'created_in_shopify' ? 'Done' : 'Shopify'}
               </span>
             </Button>
-            <Button variant="ghost" size="icon" onClick={onClose} className="h-10 w-10" type="button">
+            <Button variant="ghost" size="icon" onClick={() => { flushSave.current(); onClose(); }} className="h-10 w-10" type="button">
               <X className="w-5 h-5" />
             </Button>
           </div>
