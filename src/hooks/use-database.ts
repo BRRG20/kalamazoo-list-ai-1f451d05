@@ -655,7 +655,7 @@ export function useProducts(batchId: string | null, includeHidden: boolean = fal
     if (updates.currency !== undefined) dbUpdates.currency = updates.currency;
     if (updates.era !== undefined) dbUpdates.era = updates.era || null;
     if (updates.garment_type !== undefined) dbUpdates.garment_type = updates.garment_type;
-    if (updates.department !== undefined) dbUpdates.department = updates.department;
+    if (updates.department !== undefined) dbUpdates.department = updates.department || null;
     if (updates.brand !== undefined) dbUpdates.brand = updates.brand;
     if (updates.colour_main !== undefined) dbUpdates.colour_main = updates.colour_main;
     if (updates.colour_secondary !== undefined) dbUpdates.colour_secondary = updates.colour_secondary;
