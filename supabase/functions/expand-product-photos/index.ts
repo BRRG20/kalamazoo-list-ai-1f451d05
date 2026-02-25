@@ -19,60 +19,172 @@ const MAX_RETRIES = 2;
 
 // PRODUCT PHOTO EXPANSION - Strictly crops/reframes from original photos
 // NO AI generation, NO beautification, NO hallucination
-const PRODUCT_PHOTO_SHOTS = [
+// Large pool of varied angles — randomly selected each run for variety
+const PRODUCT_PHOTO_SHOT_POOL = [
   {
-    id: 'detail_crop',
+    id: 'detail_graphic',
     name: 'Detail Close-up (Graphic/Print/Label)',
-    prompt: `You are an image cropping tool. You MUST output a region cropped directly from the provided source image. 
-
-ABSOLUTE RULES:
-- Output pixels MUST come from the source image. Do NOT invent, generate, or hallucinate any pixels.
-- Do NOT change any colours, textures, lighting, or details.
-- Do NOT add, remove, or modify anything.
-- The output must look like a screenshot/crop of the original, not a new generation.
-
-CROP TARGET: Zoom into the most visually distinctive area of the garment:
-- Graphic, print, logo, or text if present (fill 60-80% of frame)
-- Otherwise: collar, buttons, stitching, or texture detail
-- Output should be a tight, focused crop of that area
-
-Output a single cropped image, nothing else.`
-  },
-  {
-    id: 'upper_crop',
-    name: 'Upper Garment Crop (Neckline/Shoulder)',
     prompt: `You are an image cropping tool. You MUST output a region cropped directly from the provided source image.
 
 ABSOLUTE RULES:
 - Output pixels MUST come from the source image. Do NOT invent, generate, or hallucinate any pixels.
 - Do NOT change any colours, textures, lighting, or details.
-- Do NOT add, remove, or modify anything.
 - The output must look like a screenshot/crop of the original, not a new generation.
 
-CROP TARGET: The upper 30-40% of the garment showing:
-- Neckline, collar, and shoulder area
-- Any closures (buttons, zippers) at the top
+CROP TARGET: Zoom tightly into the most visually distinctive area — graphic, print, logo, label, or embroidery. Fill 60-80% of the frame with this detail.
 
 Output a single cropped image, nothing else.`
   },
   {
-    id: 'lower_crop',
-    name: 'Lower Garment Crop (Hem/Cuff/Pocket)',
+    id: 'front_full',
+    name: 'Front View (Full Garment)',
     prompt: `You are an image cropping tool. You MUST output a region cropped directly from the provided source image.
 
 ABSOLUTE RULES:
 - Output pixels MUST come from the source image. Do NOT invent, generate, or hallucinate any pixels.
 - Do NOT change any colours, textures, lighting, or details.
-- Do NOT add, remove, or modify anything.
-- The output must look like a screenshot/crop of the original, not a new generation.
 
-CROP TARGET: The lower portion or edge details of the garment:
-- Hem, cuff, pocket, side seam, or waistband
-- Any hardware (zippers, buttons, rivets)
+CROP TARGET: Crop to show the full front of the garment, centred, with minimal background. Remove excess space above and below the garment.
+
+Output a single cropped image, nothing else.`
+  },
+  {
+    id: 'chest_zoom',
+    name: 'Chest Zoom (Upper Torso)',
+    prompt: `You are an image cropping tool. You MUST output a region cropped directly from the provided source image.
+
+ABSOLUTE RULES:
+- Output pixels MUST come from the source image. Do NOT invent, generate, or hallucinate any pixels.
+- Do NOT change any colours, textures, lighting, or details.
+
+CROP TARGET: Zoom into the chest/upper torso area of the garment, showing collar to mid-chest. Capture neckline, any logo or print on the chest, and shoulder seams.
+
+Output a single cropped image, nothing else.`
+  },
+  {
+    id: 'neckline_collar',
+    name: 'Neckline & Collar Detail',
+    prompt: `You are an image cropping tool. You MUST output a region cropped directly from the provided source image.
+
+ABSOLUTE RULES:
+- Output pixels MUST come from the source image. Do NOT invent, generate, or hallucinate any pixels.
+- Do NOT change any colours, textures, lighting, or details.
+
+CROP TARGET: Tight crop of the neckline/collar area — show collar shape, stitching, any buttons or closures at the neck.
+
+Output a single cropped image, nothing else.`
+  },
+  {
+    id: 'left_side',
+    name: 'Left Side View',
+    prompt: `You are an image cropping tool. You MUST output a region cropped directly from the provided source image.
+
+ABSOLUTE RULES:
+- Output pixels MUST come from the source image. Do NOT invent, generate, or hallucinate any pixels.
+- Do NOT change any colours, textures, lighting, or details.
+
+CROP TARGET: Crop the left half/side of the garment, showing the left sleeve, side seam, and any left-side details like pockets or patches.
+
+Output a single cropped image, nothing else.`
+  },
+  {
+    id: 'right_side',
+    name: 'Right Side View',
+    prompt: `You are an image cropping tool. You MUST output a region cropped directly from the provided source image.
+
+ABSOLUTE RULES:
+- Output pixels MUST come from the source image. Do NOT invent, generate, or hallucinate any pixels.
+- Do NOT change any colours, textures, lighting, or details.
+
+CROP TARGET: Crop the right half/side of the garment, showing the right sleeve, side seam, and any right-side details like pockets or patches.
+
+Output a single cropped image, nothing else.`
+  },
+  {
+    id: 'angled_view',
+    name: 'Angled / Three-Quarter Crop',
+    prompt: `You are an image cropping tool. You MUST output a region cropped directly from the provided source image.
+
+ABSOLUTE RULES:
+- Output pixels MUST come from the source image. Do NOT invent, generate, or hallucinate any pixels.
+- Do NOT change any colours, textures, lighting, or details.
+
+CROP TARGET: Create an off-centre, slightly angled crop of the garment — shift the garment to one side of the frame to create a dynamic three-quarter composition. Show texture and drape.
+
+Output a single cropped image, nothing else.`
+  },
+  {
+    id: 'hem_cuff',
+    name: 'Hem / Cuff / Bottom Edge',
+    prompt: `You are an image cropping tool. You MUST output a region cropped directly from the provided source image.
+
+ABSOLUTE RULES:
+- Output pixels MUST come from the source image. Do NOT invent, generate, or hallucinate any pixels.
+- Do NOT change any colours, textures, lighting, or details.
+
+CROP TARGET: The bottom edge of the garment — hem, cuff, waistband, or lower pocket area. Show stitching and finish details.
+
+Output a single cropped image, nothing else.`
+  },
+  {
+    id: 'sleeve_detail',
+    name: 'Sleeve Detail',
+    prompt: `You are an image cropping tool. You MUST output a region cropped directly from the provided source image.
+
+ABSOLUTE RULES:
+- Output pixels MUST come from the source image. Do NOT invent, generate, or hallucinate any pixels.
+- Do NOT change any colours, textures, lighting, or details.
+
+CROP TARGET: Crop to show a sleeve in detail — cuff, seam, any branding on the sleeve, or rolled-up detail. Fill most of the frame with the sleeve.
+
+Output a single cropped image, nothing else.`
+  },
+  {
+    id: 'texture_fabric',
+    name: 'Fabric Texture Close-up',
+    prompt: `You are an image cropping tool. You MUST output a region cropped directly from the provided source image.
+
+ABSOLUTE RULES:
+- Output pixels MUST come from the source image. Do NOT invent, generate, or hallucinate any pixels.
+- Do NOT change any colours, textures, lighting, or details.
+
+CROP TARGET: Ultra-tight crop showing the fabric texture/weave/knit pattern. Pick the area with the clearest texture visibility. This should feel like a macro shot of the material.
+
+Output a single cropped image, nothing else.`
+  },
+  {
+    id: 'colour_detail',
+    name: 'Colour & Pattern Feature',
+    prompt: `You are an image cropping tool. You MUST output a region cropped directly from the provided source image.
+
+ABSOLUTE RULES:
+- Output pixels MUST come from the source image. Do NOT invent, generate, or hallucinate any pixels.
+- Do NOT change any colours, textures, lighting, or details.
+
+CROP TARGET: Focus on the most colourful or patterned area of the garment — stripes, colour-blocking, tie-dye transitions, or print patterns. Highlight the colour story.
+
+Output a single cropped image, nothing else.`
+  },
+  {
+    id: 'hardware_closure',
+    name: 'Hardware / Closure Detail',
+    prompt: `You are an image cropping tool. You MUST output a region cropped directly from the provided source image.
+
+ABSOLUTE RULES:
+- Output pixels MUST come from the source image. Do NOT invent, generate, or hallucinate any pixels.
+- Do NOT change any colours, textures, lighting, or details.
+
+CROP TARGET: Zoom into any hardware — buttons, zippers, snaps, rivets, buckles, or drawstrings. If none visible, crop the main closure area of the garment.
 
 Output a single cropped image, nothing else.`
   },
 ];
+
+// Helper to pick N random unique shots from the pool
+function pickRandomShots(pool: typeof PRODUCT_PHOTO_SHOT_POOL, count: number) {
+  const shuffled = [...pool].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count);
+}
 
 // AI MODEL EXPANSION - Additional angles of SAME model
 // NEVER generate a new model, NEVER change the person
@@ -302,9 +414,11 @@ serve(async (req) => {
     }
 
     // Select shot types based on mode, limited by remaining slots AND shotCount
-    const allShotTypes = mode === 'product_photos' ? PRODUCT_PHOTO_SHOTS : AI_MODEL_SHOTS;
-    const maxShots = shotCount != null ? Math.min(shotCount, remainingSlots) : remainingSlots;
-    const shotTypes = allShotTypes.slice(0, maxShots);
+    // Product photos: randomly pick from large pool for variety each run
+    const maxShots = shotCount != null ? Math.min(shotCount, remainingSlots) : Math.min(3, remainingSlots);
+    const shotTypes = mode === 'product_photos'
+      ? pickRandomShots(PRODUCT_PHOTO_SHOT_POOL, maxShots)
+      : AI_MODEL_SHOTS.slice(0, maxShots);
     const modeLabel = mode === 'product_photos' ? 'PRODUCT PHOTO' : 'AI MODEL';
     
     console.log(`Starting ${modeLabel} expansion for product ${productId}`);
