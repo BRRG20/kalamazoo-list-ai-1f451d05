@@ -210,7 +210,7 @@ CRITICAL: Long black straight hair. East Asian features. Elegant minimal vibe. S
     description: `MODEL: MEI - Modern East Asian Female
 EXACT IDENTITY (DO NOT CHANGE):
 - Age: 25-30 years old
-- Hair: Black, chin-length bob cut, straight and sleek, side-parted, modern clean cut
+- Hair: Black, long loose waves past shoulders, voluminous with soft curls, side-parted, natural flowing texture
 - Eyes: Dark brown, almond-shaped, soft confident gaze
 - Face: Oval face, delicate East Asian features, natural brows, subtle lip color, high cheekbones
 - Skin: Fair/light East Asian skin tone, smooth clear complexion, natural healthy glow
@@ -218,7 +218,7 @@ EXACT IDENTITY (DO NOT CHANGE):
 - Expression: Cool casual confidence, approachable, slight knowing look
 - Vibe: Korean street style, Tokyo casual, modern minimal chic
 
-CRITICAL: Black bob cut. East Asian features. Modern casual vibe. Same person every shot.`
+CRITICAL: Long wavy black hair. East Asian features. Modern casual vibe. Same person every shot.`
   },
 
   // NINA - Black bob, tan/olive skin, streetwear queen
@@ -230,7 +230,7 @@ CRITICAL: Black bob cut. East Asian features. Modern casual vibe. Same person ev
     description: `MODEL: NINA - Streetwear Urban Female
 EXACT IDENTITY (DO NOT CHANGE):
 - Age: 24-29 years old
-- Hair: Black, straight chin-length bob, blunt cut, sleek and shiny, center or side-parted
+- Hair: Black, high ponytail with loose face-framing pieces, sleek and polished, pulled back showing face
 - Eyes: Dark brown, intense confident gaze, subtle winged eyeliner
 - Face: Strong defined features, high cheekbones, full lips, bold brows, striking beauty
 - Skin: Medium tan/olive skin tone, smooth warm complexion, healthy glow
@@ -238,7 +238,7 @@ EXACT IDENTITY (DO NOT CHANGE):
 - Expression: Cool editorial confidence, slight intensity, urban edge
 - Vibe: Brooklyn streetwear, Supreme/Palace aesthetic, urban fashion forward
 
-CRITICAL: Black bob. Tan/olive skin. Streetwear edge. Same person every shot.`
+CRITICAL: Black ponytail. Tan/olive skin. Streetwear edge. Same person every shot.`
   },
 
   // ELENA - Slicked back bun, Mediterranean/Latina beauty, elegant
