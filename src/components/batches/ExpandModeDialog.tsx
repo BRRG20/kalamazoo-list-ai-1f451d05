@@ -13,9 +13,9 @@ export type ExpandMode = 'product_photos' | 'ai_model';
 export type ExpandQuality = 'fast' | 'standard' | 'high';
 
 export const QUALITY_SHOT_COUNT: Record<ExpandQuality, number> = {
-  fast: 1,
-  standard: 2,
-  high: 3,
+  fast: 2,
+  standard: 3,
+  high: 4,
 };
 
 interface ExpandModeDialogProps {
@@ -27,9 +27,9 @@ interface ExpandModeDialogProps {
 }
 
 const QUALITY_OPTIONS: { value: ExpandQuality; label: string; icon: React.ReactNode; desc: string }[] = [
-  { value: 'fast', label: 'Fast', icon: <Zap className="w-4 h-4" />, desc: '1 shot — quickest' },
-  { value: 'standard', label: 'Standard', icon: <Settings2 className="w-4 h-4" />, desc: '2 shots — balanced' },
-  { value: 'high', label: 'High', icon: <Sparkles className="w-4 h-4" />, desc: '3 shots — most detail' },
+  { value: 'fast', label: 'Fast', icon: <Zap className="w-4 h-4" />, desc: '2 shots — quickest' },
+  { value: 'standard', label: 'Standard', icon: <Settings2 className="w-4 h-4" />, desc: '3 shots — balanced' },
+  { value: 'high', label: 'High', icon: <Sparkles className="w-4 h-4" />, desc: '4 shots — most detail' },
 ];
 
 export function ExpandModeDialog({
