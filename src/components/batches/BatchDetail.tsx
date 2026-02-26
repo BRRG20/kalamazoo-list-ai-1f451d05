@@ -2070,7 +2070,7 @@ export function BatchDetail({
                           open={showExpandModeDialog}
                           onOpenChange={setShowExpandModeDialog}
                           onSelectMode={(mode, quality) => {
-                            const shotCountMap = { fast: 1, standard: 2, high: 3 };
+                            const shotCountMap = { fast: 2, standard: 3, high: 4 };
                             const productIds = Array.from(selectedProductIds);
                             if (productIds.length > 0) {
                               onExpandProductImages(productIds, mode, shotCountMap[quality]);
