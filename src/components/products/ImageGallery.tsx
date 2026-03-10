@@ -464,10 +464,8 @@ export function ImageGallery({
                     onClick={async () => {
                       setIsDownloadingAll(true);
                       try {
-                        for (let i = 0; i < images.length; i++) {
-                          await downloadImage(images[i].url, `image-${images[i].position}`);
-                        }
-                        toast.success(`Downloaded ${images.length} images`);
+                        await downloadAllAsZip(images.map(i => i.url), 'product-images');
+                        toast.success(`Downloaded ${images.length} images as zip`);
                       } catch {
                         toast.error('Failed to download');
                       } finally {
