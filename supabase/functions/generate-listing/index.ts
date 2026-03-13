@@ -1194,6 +1194,31 @@ IMPORTANT: Respond with ONLY valid JSON.`;
     generated.description_style_a = ensureAttributeBlock(generated.description_style_a, generated, sanitizedProduct);
     generated.description_style_b = ensureAttributeBlock(generated.description_style_b, generated, sanitizedProduct);
     
+    // ==========================================
+    // POST-PROCESS: Append standard store footer to all descriptions
+    // ==========================================
+    const STORE_FOOTER = `We specialize in sourcing original vintage, thrifted, and retro garments. The majority of our pieces are preloved and may show natural signs of age or wear. These characteristics are not considered defects, but part of each garment's authenticity and historical value.
+
+We are committed to transparency and accuracy, and provide detailed descriptions so you know exactly what to expect.
+
+Please refer to our grading scale below for clarity on how we evaluate condition:
+
+Excellent – The garment is in outstanding condition with no visible flaws, stains, holes, or repairs. Very rarely worn, if at all.
+Very Good – The item shows minimal to no signs of previous wear. There may be slight fading or a subtle imperfection, but nothing that detracts from the overall appearance or wearability.
+Good – Noticeable signs of wear, such as fading, light marks, or a minor flaw, may be present. All imperfections are disclosed in the product description. Still entirely wearable.
+Fair – The item displays visible wear and/or flaws, which may include staining, holes, or fabric thinning. These pieces are typically included due to their age, rarity, or stylistic value. Wearability remains intact.
+Unused – Authentic vintage garments that have never been worn, often with original tags.`;
+
+    const appendStoreFooter = (desc: string | null): string | null => {
+      if (!desc) return null;
+      // Don't double-append if footer already present
+      if (desc.includes('We specialize in sourcing original vintage')) return desc;
+      return desc.trimEnd() + '\n\n' + STORE_FOOTER;
+    };
+
+    generated.description_style_a = appendStoreFooter(generated.description_style_a);
+    generated.description_style_b = appendStoreFooter(generated.description_style_b);
+    
     // CRITICAL: If description_style_b is null, derive from style_a
     if (!generated.description_style_b && generated.description_style_a) {
       generated.description_style_b = generated.description_style_a;
