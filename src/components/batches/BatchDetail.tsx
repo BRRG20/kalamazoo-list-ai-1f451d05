@@ -412,7 +412,17 @@ export function BatchDetail({
       product.brand?.toLowerCase().includes(query) ||
       product.garment_type?.toLowerCase().includes(query) ||
       product.department?.toLowerCase().includes(query) ||
-      product.colour_main?.toLowerCase().includes(query)
+      product.colour_main?.toLowerCase().includes(query) ||
+      product.colour_secondary?.toLowerCase().includes(query) ||
+      product.description?.toLowerCase().includes(query) ||
+      product.material?.toLowerCase().includes(query) ||
+      product.pattern?.toLowerCase().includes(query) ||
+      product.style?.toLowerCase().includes(query) ||
+      product.era?.toLowerCase().includes(query) ||
+      product.notes?.toLowerCase().includes(query) ||
+      product.raw_input_text?.toLowerCase().includes(query) ||
+      product.shopify_tags?.toLowerCase().includes(query) ||
+      product.etsy_tags?.toLowerCase().includes(query)
     );
   });
 
