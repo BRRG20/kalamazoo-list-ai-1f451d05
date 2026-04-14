@@ -1297,8 +1297,8 @@ Unused – Authentic vintage garments that have never been worn, often with orig
   } catch (error) {
     console.error("Error in generate-listing:", error);
     const message = error instanceof Error ? error.message : "Generation failed";
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500,
+    return new Response(JSON.stringify({ error: message, fallback: true }), {
+      status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
