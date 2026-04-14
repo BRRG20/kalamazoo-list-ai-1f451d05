@@ -640,9 +640,20 @@ IMPORTANT: Respond with ONLY valid JSON.`;
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      if (response.status === 503 || response.status === 502 || response.status === 504) {
+        const errorText = await response.text();
+        console.error("AI gateway temporarily unavailable:", response.status, errorText);
+        return new Response(JSON.stringify({ error: "AI service is temporarily unavailable. Please try again in a few seconds.", fallback: true }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       const errorText = await response.text();
       console.error("AI gateway error:", response.status, errorText);
-      throw new Error("Listing generation failed");
+      return new Response(JSON.stringify({ error: "Listing generation failed. Please try again.", fallback: true }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Safely parse response - handle empty or malformed responses
@@ -1286,8 +1297,8 @@ Unused – Authentic vintage garments that have never been worn, often with orig
   } catch (error) {
     console.error("Error in generate-listing:", error);
     const message = error instanceof Error ? error.message : "Generation failed";
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500,
+    return new Response(JSON.stringify({ error: message, fallback: true }), {
+      status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
