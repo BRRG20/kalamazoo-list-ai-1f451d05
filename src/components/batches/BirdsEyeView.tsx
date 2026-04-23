@@ -4,7 +4,7 @@ import { X, ZoomIn, Check, Undo2, Trash2, Loader2, Search, Filter, AlertTriangle
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogHeader, DialogFooter } from '@/components/ui/dialog';
-import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
+import { VisuallyHidden } from '@/components/ui/visually-hidden';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
@@ -78,7 +78,8 @@ const ImageTile = memo(function ImageTile({
   onDeleteSingle: (e: React.MouseEvent, imageId: string) => void;
 }) {
   const [isHovered, setIsHovered] = useState(false);
-  
+  const [loadFailed, setLoadFailed] = useState(false);
+
   return (
     <div
       draggable={!isDeleting}
@@ -90,7 +91,8 @@ const ImageTile = memo(function ImageTile({
         "relative aspect-square rounded overflow-hidden cursor-grab active:cursor-grabbing transition-all duration-300",
         isSelected && "ring-2 ring-primary",
         justMoved && "ring-2 ring-green-500 scale-105 shadow-lg",
-        isDeleting && "opacity-50"
+        isDeleting && "opacity-50",
+        loadFailed && "bg-amber-50 dark:bg-amber-950/40 border border-amber-300"
       )}
       onClick={(e) => {
         e.stopPropagation();
@@ -99,15 +101,34 @@ const ImageTile = memo(function ImageTile({
         }
       }}
     >
-      <img
-        src={image.thumb_url || image.url}
-        alt={`Image ${imgIndex + 1}`}
-        loading="lazy"
-        className={cn(
-          "w-full h-full object-cover transition-all duration-300 pointer-events-none",
-          justMoved && "brightness-110"
-        )}
-      />
+      {loadFailed ? (
+        // Visible fallback + retry so users notice broken thumbnails instead
+        // of seeing the default broken-image icon silently.
+        <div className="w-full h-full flex flex-col items-center justify-center text-[10px] text-amber-700 dark:text-amber-300 gap-1 p-1 text-center">
+          <AlertTriangle className="w-4 h-4" />
+          <span>Image failed</span>
+          <button
+            className="underline"
+            onClick={(e) => {
+              e.stopPropagation();
+              setLoadFailed(false);
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      ) : (
+        <img
+          src={image.thumb_url || image.url}
+          alt={`Image ${imgIndex + 1}`}
+          loading="lazy"
+          onError={() => setLoadFailed(true)}
+          className={cn(
+            "w-full h-full object-cover transition-all duration-300 pointer-events-none",
+            justMoved && "brightness-110"
+          )}
+        />
+      )}
       
       {/* Selection overlay */}
       <div className={cn(

@@ -468,16 +468,22 @@ export function BatchDetail({
   }, [settings?.default_images_per_product]);
 
   // Fetch ALL images for the batch in a SINGLE query, then group by product_id
-  // This eliminates N+1 queries and dramatically improves performance
+  // This eliminates N+1 queries and dramatically improves performance.
+  //
+  // A `cancelled` flag prevents setState calls from a stale fetch after the
+  // user switches batches — otherwise an old fetch can complete and overwrite
+  // the freshly-loaded new batch's images with last batch's data.
   useEffect(() => {
+    let cancelled = false;
+
     // Use product IDs in cache key to detect reshuffles (not just length)
     const fetchKey = `${batch.id}:${products.map(p => p.id).join(',')}`;
-    
+
     // Skip if we already fetched for this batch with same product count
     if (lastFetchedRef.current === fetchKey) {
       return;
     }
-    
+
     // Handle empty products case
     if (products.length === 0) {
       setProductImages({});
@@ -485,13 +491,13 @@ export function BatchDetail({
       lastFetchedRef.current = fetchKey;
       return;
     }
-    
+
     // Mark the key immediately to prevent duplicate fetches
     lastFetchedRef.current = fetchKey;
-    
+
     const fetchAllImages = async () => {
       setImagesLoading(true);
-      
+
       try {
         // SINGLE query to fetch ALL images for the batch (exclude soft-deleted)
         const { data, error } = await supabase
@@ -500,22 +506,19 @@ export function BatchDetail({
           .eq('batch_id', batch.id)
           .is('deleted_at', null)
           .order('position', { ascending: true });
-        
+
+        if (cancelled) return;
+
         if (error) {
           console.error('Error fetching batch images:', error);
           lastFetchedRef.current = '';
           return;
         }
-        
-        // Group images by product_id client-side
+
         const imagesMap: Record<string, ProductImage[]> = {};
-        
-        // Initialize empty arrays for all products
         for (const product of products) {
           imagesMap[product.id] = [];
         }
-        
-        // Distribute images to their respective products
         for (const row of data || []) {
           if (row.product_id && imagesMap[row.product_id]) {
             imagesMap[row.product_id].push({
@@ -529,17 +532,25 @@ export function BatchDetail({
             });
           }
         }
-        
+
+        if (cancelled) return;
         setProductImages(imagesMap);
       } catch (error) {
+        if (cancelled) return;
         console.error('Error fetching images:', error);
         lastFetchedRef.current = '';
       } finally {
-        setImagesLoading(false);
+        if (!cancelled) {
+          setImagesLoading(false);
+        }
       }
     };
-    
+
     fetchAllImages();
+
+    return () => {
+      cancelled = true;
+    };
   }, [batch.id, products]);
 
   // Reset lastFetchedRef when batch changes to ensure fresh data
@@ -547,13 +558,16 @@ export function BatchDetail({
     lastFetchedRef.current = '';
   }, [batch.id]);
 
-  // Listen for external force refresh trigger via imageRefreshKey
+  // Listen for external force refresh trigger via imageRefreshKey.
+  // Same cancelled-flag guard as the main fetch effect so a stale refresh
+  // can't overwrite freshly-loaded data if the user switches batches mid-flight.
   useEffect(() => {
     if (imageRefreshKey && imageRefreshKey > 0) {
-      // Force refresh when key changes
+      let cancelled = false;
+
       lastFetchedRef.current = '';
-      // Trigger a refetch by updating state
       setImagesLoading(true);
+
       const fetchAllImages = async () => {
         try {
           const { data, error } = await supabase
@@ -562,17 +576,18 @@ export function BatchDetail({
             .eq('batch_id', batch.id)
             .is('deleted_at', null)
             .order('position', { ascending: true });
-          
+
+          if (cancelled) return;
+
           if (error) {
             console.error('Error refreshing batch images:', error);
             return;
           }
-          
+
           const imagesMap: Record<string, ProductImage[]> = {};
           for (const product of products) {
             imagesMap[product.id] = [];
           }
-          
           for (const row of data || []) {
             if (row.product_id && imagesMap[row.product_id]) {
               imagesMap[row.product_id].push({
@@ -586,49 +601,57 @@ export function BatchDetail({
               });
             }
           }
-          
+
+          if (cancelled) return;
           setProductImages(imagesMap);
           lastFetchedRef.current = `${batch.id}:${products.length}`;
         } finally {
-          setImagesLoading(false);
+          if (!cancelled) {
+            setImagesLoading(false);
+          }
         }
       };
       fetchAllImages();
+
+      return () => {
+        cancelled = true;
+      };
     }
   }, [imageRefreshKey, batch.id, products]);
 
-  // Manual refresh function to force reload images - uses same efficient single query
+  // Manual refresh function to force reload images - uses same efficient single query.
+  // Snapshot `batch.id` at the start so if the user switches batches while the
+  // query is in flight, the result is discarded instead of overwriting the new
+  // batch's data. Same invariant as the useEffect-based fetches above.
   const handleRefreshImages = async () => {
     if (products.length === 0) return;
-    
+
+    const requestedBatchId = batch.id;
     setImagesLoading(true);
     lastFetchedRef.current = ''; // Clear cache to force refetch
-    
+
     try {
-      console.log('Refreshing images for batch', batch.id);
-      
       // SINGLE query to fetch ALL images for the batch (exclude soft-deleted)
       const { data, error } = await supabase
         .from('images')
         .select('*')
-        .eq('batch_id', batch.id)
+        .eq('batch_id', requestedBatchId)
         .is('deleted_at', null)
         .order('position', { ascending: true });
-      
+
+      // Stale-batch guard: if the user switched batches while we were fetching,
+      // discard — the new batch's own effects will load its data.
+      if (requestedBatchId !== batch.id) return;
+
       if (error) {
         console.error('Error refreshing batch images:', error);
         return;
       }
-      
-      // Group images by product_id client-side
+
       const imagesMap: Record<string, ProductImage[]> = {};
-      
-      // Initialize empty arrays for all products
       for (const product of products) {
         imagesMap[product.id] = [];
       }
-      
-      // Distribute images to their respective products
       let totalImages = 0;
       for (const row of data || []) {
         if (row.product_id && imagesMap[row.product_id]) {
@@ -644,7 +667,11 @@ export function BatchDetail({
           totalImages++;
         }
       }
-      
+
+      // Second guard: re-check right before writing state (in case a switch
+      // happened during synchronous map-building).
+      if (requestedBatchId !== batch.id) return;
+
       console.log('Loaded', totalImages, 'images across', Object.keys(imagesMap).length, 'products');
       setProductImages(imagesMap);
       lastFetchedRef.current = `${batch.id}:${products.map(p => p.id).join(',')}`;

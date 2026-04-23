@@ -6,7 +6,7 @@ import {
   DialogContent,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
+import { VisuallyHidden } from '@/components/ui/visually-hidden';
 import { ImageEditCanvas } from '@/components/image-edit/ImageEditCanvas';
 import { downloadImage, downloadAllAsZip } from '@/lib/image-download';
 import { toast } from 'sonner';
