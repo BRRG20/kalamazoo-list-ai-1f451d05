@@ -50,6 +50,40 @@ import type { Product, ProductImage } from '@/types';
 const DEFAULT_MALE_MODEL_ID = '33333333-3333-3333-3333-333333333333'; // James - white male
 const DEFAULT_FEMALE_MODEL_ID = '55555555-5555-5555-5555-555555555555'; // Sophie - white female
 
+// Upload size thresholds (non-blocking warnings). Chosen conservatively so
+// raw camera JPEGs from modern phones (~3-6 MB) never trip them, while
+// obvious footguns (4K video frames, uncompressed TIFFs) do.
+const PER_FILE_WARN_BYTES = 10 * 1024 * 1024; // 10 MB per file
+const TOTAL_WARN_BYTES = 200 * 1024 * 1024;   // 200 MB aggregate
+
+const formatMB = (bytes: number): string => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+
+/**
+ * Scans the incoming file list and emits non-blocking size warnings. Never
+ * blocks the upload — user may still want to attempt it, and partial-failure
+ * handling in the upload pipeline will surface per-file outcomes.
+ */
+function warnAboutLargeFiles(files: File[]): void {
+  if (files.length === 0) return;
+  let total = 0;
+  const oversize: File[] = [];
+  for (const f of files) {
+    total += f.size;
+    if (f.size > PER_FILE_WARN_BYTES) oversize.push(f);
+  }
+  if (oversize.length > 0) {
+    const biggest = oversize.reduce((a, b) => (a.size > b.size ? a : b));
+    toast.warning(
+      `${oversize.length} file(s) are larger than 10 MB (biggest: ${formatMB(biggest.size)}). Upload may be slow.`
+    );
+  }
+  if (total > TOTAL_WARN_BYTES) {
+    toast.warning(
+      `Total upload size is ${formatMB(total)} — consider uploading in smaller groups for reliability.`
+    );
+  }
+}
+
 export default function BatchesPage() {
   const { batches, createBatch, updateBatch, deleteBatch, getProductCount } = useBatches();
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
@@ -313,6 +347,7 @@ const handleSelectBatch = useCallback((id: string) => {
     if (files.length > UPLOAD_LIMITS.WARNING_THRESHOLD) {
       toast.warning(`Large batches may slow down processing. For best results, upload in batches of ${UPLOAD_LIMITS.RECOMMENDED_IMAGES_PER_BATCH} images.`);
     }
+    warnAboutLargeFiles(files);
 
     toast.info(`Uploading ${files.length} image(s)...`);
 
@@ -367,6 +402,7 @@ const handleSelectBatch = useCallback((id: string) => {
   ) => {
     if (!selectedBatchId || files.length === 0) return;
 
+    warnAboutLargeFiles(files);
     toast.info(`Processing ${files.length} camera image(s)...`);
 
     const aligned = await uploadImagesAligned(files, selectedBatchId);
@@ -425,6 +461,7 @@ const handleSelectBatch = useCallback((id: string) => {
   ) => {
     if (!selectedBatchId || files.length === 0) return;
 
+    warnAboutLargeFiles(files);
     toast.info(`Processing ${files.length} quick product shot(s)...`);
 
     const aligned = await uploadImagesAligned(files, selectedBatchId);
