@@ -85,11 +85,22 @@ export default function BatchesPage() {
   // Major action undo hook for database-level undo
   const majorActionUndo = useMajorActionUndo(selectedBatchId);
   
-  // Initialize AI generated status when products load
+  // Initialize AI generated status when the *set* of products changes
+  // (batch switch, product create, product delete). Content-only updates
+  // (e.g. setProducts during single-item AI generation) must NOT re-trigger
+  // this, because initializeAIGeneratedStatus clears generatingProductIdsRef
+  // and failedProductsRef — doing that mid-flight would wipe the in-flight
+  // generation lock for the product currently being generated.
+  const aiInitKeyRef = useRef<string>('');
   useEffect(() => {
-    if (products.length > 0) {
-      aiGeneration.initializeAIGeneratedStatus(products);
+    if (products.length === 0) {
+      aiInitKeyRef.current = '';
+      return;
     }
+    const key = products.map(p => p.id).sort().join(',');
+    if (key === aiInitKeyRef.current) return;
+    aiInitKeyRef.current = key;
+    aiGeneration.initializeAIGeneratedStatus(products);
   }, [products]);
   
   // Deleted/hidden products/images panel state
