@@ -436,6 +436,32 @@ export function BirdsEyeView({
   const [lastMove, setLastMove] = useState<MoveHistory | null>(null);
   const [draggedImageData, setDraggedImageData] = useState<{ imageId: string; productId: string } | null>(null);
   const [deletingImages, setDeletingImages] = useState<Set<string>>(new Set());
+
+  // Refs mirror the hot-path state so drag/drop/click handlers can read the
+  // latest values without listing those states in useCallback deps. Handler
+  // identity then stays stable across selection changes, which is what lets
+  // the memoized ProductCard avoid re-rendering on every click.
+  const selectedImagesRef = useRef(selectedImages);
+  const draggedImageDataRef = useRef(draggedImageData);
+  const safeProductsRef = useRef(safeProducts);
+  const onMoveImagesRef = useRef(onMoveImages);
+  useEffect(() => { selectedImagesRef.current = selectedImages; }, [selectedImages]);
+  useEffect(() => { draggedImageDataRef.current = draggedImageData; }, [draggedImageData]);
+  useEffect(() => { safeProductsRef.current = safeProducts; }, [safeProducts]);
+  useEffect(() => { onMoveImagesRef.current = onMoveImages; }, [onMoveImages]);
+
+  // Tracks whether the user has made a product-selection action *inside*
+  // Bird's Eye View. Selection carried over from the home-page grid should
+  // NOT imply "merge intent", so the Merge button is gated on this flag.
+  const [hasInternalProductSelection, setHasInternalProductSelection] = useState(false);
+
+  // When selection drops to zero (e.g. via parent-side clear), forget the
+  // in-view intent flag so the next selection batch starts clean.
+  useEffect(() => {
+    if (safeSelectedProductIds.size === 0 && hasInternalProductSelection) {
+      setHasInternalProductSelection(false);
+    }
+  }, [safeSelectedProductIds, hasInternalProductSelection]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
   const [showCleanupDialog, setShowCleanupDialog] = useState(false);
@@ -741,19 +767,43 @@ export function BirdsEyeView({
     });
   }, []);
 
+  // Wrappers around the parent's product-selection callbacks so we can detect
+  // whether a selection was made *inside* Bird's Eye. Selection carried over
+  // from the home-page grid should not imply merge intent — the Merge button
+  // below is gated on this flag so opening Bird's Eye with pre-selected cards
+  // just shows them without offering a destructive merge by default.
+  const handleToggleProductSelection = useCallback((productId: string) => {
+    setHasInternalProductSelection(true);
+    onToggleProductSelection?.(productId);
+  }, [onToggleProductSelection]);
+
+  const handleBulkSelectProducts = useCallback((productIds: string[]) => {
+    setHasInternalProductSelection(true);
+    onBulkSelectProducts?.(productIds);
+  }, [onBulkSelectProducts]);
+
+  const handleDeselectAllProducts = useCallback(() => {
+    setHasInternalProductSelection(false);
+    onDeselectAllProducts?.();
+  }, [onDeselectAllProducts]);
+
+  // Empty-deps stable identity via refs (see selectedImagesRef comment above).
   const handleMoveToProduct = useCallback((targetProductId: string, isUndo = false) => {
-    // Guard against invalid targetProductId
     if (!targetProductId) {
       console.warn('handleMoveToProduct called with invalid targetProductId');
       return;
     }
-    
+
+    const sel = selectedImagesRef.current;
+    const products = safeProductsRef.current;
+    const moveImages = onMoveImagesRef.current;
+
     // Group selected images by source product
     const imagesByProduct = new Map<string, string[]>();
     const movedImageIds: string[] = [];
     let fromProductId = '';
-    
-    selectedImages.forEach(({ imageId, productId }) => {
+
+    sel.forEach(({ imageId, productId }) => {
       if (productId && productId !== targetProductId && imageId) {
         if (!imagesByProduct.has(productId)) {
           imagesByProduct.set(productId, []);
@@ -766,10 +816,9 @@ export function BirdsEyeView({
 
     if (movedImageIds.length === 0) return;
 
-    // Move images from each source product
     try {
       imagesByProduct.forEach((imageIds, sourceProductId) => {
-        onMoveImages(imageIds, sourceProductId, targetProductId);
+        moveImages(imageIds, sourceProductId, targetProductId);
         fromProductId = sourceProductId;
       });
     } catch (error) {
@@ -778,7 +827,6 @@ export function BirdsEyeView({
       return;
     }
 
-    // Save move history for undo (only if not already undoing)
     if (!isUndo) {
       setLastMove({
         imageIds: movedImageIds,
@@ -789,22 +837,19 @@ export function BirdsEyeView({
       setLastMove(null);
     }
 
-    // Show visual feedback
     setRecentlyMovedImages(new Set(movedImageIds));
     setRecentlyReceivedProduct(targetProductId);
-    
-    // Find target product name for toast (with null safety)
-    const targetProduct = safeProducts.find(p => p?.id === targetProductId);
-    const targetIndex = safeProducts.findIndex(p => p?.id === targetProductId);
+
+    const targetProduct = products.find(p => p?.id === targetProductId);
+    const targetIndex = products.findIndex(p => p?.id === targetProductId);
     const targetName = targetProduct?.title || `Product #${targetIndex >= 0 ? targetIndex + 1 : '?'}`;
-    
+
     toast.success(
-      isUndo 
+      isUndo
         ? `Undone: ${movedImageIds.length} image${movedImageIds.length > 1 ? 's' : ''} returned`
         : `Moved ${movedImageIds.length} image${movedImageIds.length > 1 ? 's' : ''} to ${targetName}`
     );
 
-    // Clear visual feedback after animation
     setTimeout(() => {
       setRecentlyMovedImages(new Set());
       setRecentlyReceivedProduct(null);
@@ -812,7 +857,7 @@ export function BirdsEyeView({
 
     setSelectedImages(new Map());
     setDropTargetProductId(null);
-  }, [selectedImages, onMoveImages, safeProducts]);
+  }, []);
 
   const handleUndo = useCallback(() => {
     if (!lastMove || !lastMove.imageIds || !lastMove.toProductId || !lastMove.fromProductId) {
@@ -896,15 +941,18 @@ export function BirdsEyeView({
     setSelectedImages(new Map());
   }, []);
 
-  // Drag and drop handlers for single image
+  // Drag and drop handlers — empty deps (read through refs) so identity stays
+  // stable across selection changes. Otherwise every image click would re-create
+  // them, break the ProductCard memo, and force a full grid re-render (which
+  // also disrupts in-flight drag hover state).
   const handleDragStart = useCallback((e: React.DragEvent, imageId: string, productId: string, imageUrl: string) => {
     setDraggedImageData({ imageId, productId });
     // If the dragged image is not selected, select only it
-    if (!selectedImages.has(imageId)) {
+    if (!selectedImagesRef.current.has(imageId)) {
       setSelectedImages(new Map([[imageId, { imageId, productId }]]));
     }
     e.dataTransfer.effectAllowed = 'move';
-    
+
     // Create custom drag image
     const dragImage = document.createElement('div');
     dragImage.style.cssText = 'position: absolute; top: -1000px; left: -1000px; width: 80px; height: 80px; border-radius: 8px; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.3); border: 2px solid hsl(var(--primary)); transform: rotate(3deg);';
@@ -914,12 +962,12 @@ export function BirdsEyeView({
     dragImage.appendChild(img);
     document.body.appendChild(dragImage);
     e.dataTransfer.setDragImage(dragImage, 40, 40);
-    
+
     // Clean up after drag starts
     setTimeout(() => {
       document.body.removeChild(dragImage);
     }, 0);
-  }, [selectedImages]);
+  }, []);
 
   const handleDragEnd = useCallback(() => {
     setDraggedImageData(null);
@@ -929,16 +977,19 @@ export function BirdsEyeView({
   const handleDragOver = useCallback((e: React.DragEvent, productId: string) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-    
-    // Check if any selected image is from a different product
-    const hasImageFromOtherProduct = Array.from(selectedImages.values()).some(
+
+    // Read current selection via ref so this callback doesn't need to change
+    // identity whenever selectedImages changes.
+    const sel = selectedImagesRef.current;
+    const drag = draggedImageDataRef.current;
+    const hasImageFromOtherProduct = Array.from(sel.values()).some(
       s => s.productId !== productId
     );
-    
-    if (hasImageFromOtherProduct || (draggedImageData && draggedImageData.productId !== productId)) {
+
+    if (hasImageFromOtherProduct || (drag && drag.productId !== productId)) {
       setDropTargetProductId(productId);
     }
-  }, [selectedImages, draggedImageData]);
+  }, []);
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     // Only clear if leaving the card entirely
@@ -948,9 +999,9 @@ export function BirdsEyeView({
     }
   }, []);
 
-  // Stable card-click handler bound by ProductCard (receives productId and
-  // whether this card is a valid move target). Keeps handler identity stable
-  // across grid re-renders so the custom memo on ProductCard actually sticks.
+  // Stable card-click handler. Empty deps because handleMoveToProduct is itself
+  // stable now (see refs block above), and "can move here?" is passed in by
+  // the card based on props the card already has access to.
   const handleCardClick = useCallback((productId: string, canMoveHere: boolean) => {
     if (canMoveHere) {
       handleMoveToProduct(productId);
@@ -960,13 +1011,14 @@ export function BirdsEyeView({
   const handleDrop = useCallback((e: React.DragEvent, productId: string) => {
     e.preventDefault();
 
-    if (selectedImages.size > 0) {
+    // Read size from ref so this callback doesn't churn on every click.
+    if (selectedImagesRef.current.size > 0) {
       handleMoveToProduct(productId);
     }
 
     setDropTargetProductId(null);
     setDraggedImageData(null);
-  }, [selectedImages.size, handleMoveToProduct]);
+  }, [handleMoveToProduct]);
 
   // Virtualized cell renderer - wrapped in try-catch to prevent crashes
   const Cell = useCallback(({ columnIndex, rowIndex, style }: { columnIndex: number; rowIndex: number; style: React.CSSProperties }) => {
@@ -1091,7 +1143,7 @@ export function BirdsEyeView({
             selectedImages={selectedImages}
             recentlyMovedImages={recentlyMovedImages}
             deletingImages={deletingImages}
-            onToggleProductSelection={onToggleProductSelection}
+            onToggleProductSelection={handleToggleProductSelection}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
@@ -1123,7 +1175,7 @@ export function BirdsEyeView({
     gridConfig,
     isCreateNewDropTarget,
     isMutating,
-    onToggleProductSelection,
+    handleToggleProductSelection,
     onDeleteImage,
     handleDragOver,
     handleDragLeave,
@@ -1177,15 +1229,18 @@ export function BirdsEyeView({
                 {safeSelectedProductIds.size} product{safeSelectedProductIds.size > 1 ? 's' : ''} selected
               </span>
               {onDeselectAllProducts && (
-                <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-green-700 dark:text-green-300 hover:bg-green-500/20" onClick={onDeselectAllProducts}>
+                <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-green-700 dark:text-green-300 hover:bg-green-500/20" onClick={handleDeselectAllProducts}>
                   Clear
                 </Button>
               )}
             </div>
           )}
-          
-          {/* Merge Products button */}
-          {safeSelectedProductIds.size >= 2 && onCreateNewProduct && (
+
+          {/* Merge Products button — only offered when the user has actively
+              selected products INSIDE Bird's Eye. Selection carried over from
+              the home-page grid is kept visible (so users can see which cards
+              they were already looking at) but does not imply merge intent. */}
+          {hasInternalProductSelection && safeSelectedProductIds.size >= 2 && onCreateNewProduct && (
             <Button
               variant="default"
               size="sm"
@@ -1220,7 +1275,7 @@ export function BirdsEyeView({
                     disabled={allFilteredProducts.length === 0}
                     onClick={() => {
                       const idsToSelect = allFilteredProducts.slice(0, count).map(p => p.id);
-                      onBulkSelectProducts(idsToSelect);
+                      handleBulkSelectProducts(idsToSelect);
                     }}
                   >
                     Select {count}
@@ -1229,7 +1284,7 @@ export function BirdsEyeView({
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   disabled={allFilteredProducts.length === 0}
-                  onClick={() => onBulkSelectProducts(allFilteredProducts.map(p => p.id))}
+                  onClick={() => handleBulkSelectProducts(allFilteredProducts.map(p => p.id))}
                 >
                   Select all ({allFilteredProducts.length})
                 </DropdownMenuItem>
