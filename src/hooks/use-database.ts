@@ -322,8 +322,10 @@ function mapImage(row: any): ProductImage {
     id: row.id,
     product_id: row.product_id || '',
     url: row.url,
+    thumb_url: row.thumb_url ?? null,
     position: row.position,
     include_in_shopify: row.include_in_shopify,
+    source: row.source as ProductImage['source'] | undefined,
   };
 }
 
@@ -1061,13 +1063,27 @@ export function useImages() {
       .eq('batch_id', batchId)
       .is('deleted_at', null)
       .order('position', { ascending: true });
-    
+
     if (error) {
       console.error('Error fetching batch images:', error);
       return [];
     }
-    
-    return (data || []).map(mapImage);
+
+    const images = (data || []).map(mapImage);
+
+    // Keep the per-product cache coherent with the batch-wide fetch. Without
+    // this, fetchImagesForProduct can return stale results after a bird's-eye
+    // move or Confirm Grouping if the cache was populated earlier.
+    const byProduct: Record<string, ProductImage[]> = {};
+    for (const img of images) {
+      if (img.product_id) {
+        if (!byProduct[img.product_id]) byProduct[img.product_id] = [];
+        byProduct[img.product_id].push(img);
+      }
+    }
+    setImageCache(prev => ({ ...prev, ...byProduct }));
+
+    return images;
   }, []);
 
   const addImage = async (productId: string, batchId: string, url: string, position: number) => {
@@ -1192,14 +1208,22 @@ export function useImages() {
       .from('images')
       .update({ deleted_at: new Date().toISOString() })
       .eq('id', id);
-    
+
     if (error) {
       console.error('Error soft-deleting image:', error);
       return false;
     }
-    
-    // Clear all caches since we don't know which product this was in
-    setImageCache({});
+
+    // Surgical cache eviction: drop this image from whichever product held it,
+    // instead of wiping every product's cache. Callers that need a full refresh
+    // should call clearCache() explicitly.
+    setImageCache(prev => {
+      const next: Record<string, ProductImage[]> = {};
+      for (const [productId, imgs] of Object.entries(prev)) {
+        next[productId] = imgs.filter(img => img.id !== id);
+      }
+      return next;
+    });
     return true;
   };
 
@@ -1512,7 +1536,12 @@ export function useImageUpload() {
     return urlData.publicUrl;
   };
 
-  const uploadImages = async (files: File[], batchId: string): Promise<string[]> => {
+  /**
+   * Upload multiple files. Returns an array aligned 1:1 with `files` — failed
+   * slots are `null`. Preserves index alignment so callers can correlate
+   * uploaded URLs back to their source files (e.g. for camera notes metadata).
+   */
+  const uploadImagesAligned = async (files: File[], batchId: string): Promise<(string | null)[]> => {
     setUploading(true);
     setProgress(0);
     setUploadStartTime(Date.now());
@@ -1520,20 +1549,22 @@ export function useImageUpload() {
     setUploadCompleted(0);
 
     const BATCH_SIZE = 10; // Upload 10 images in parallel for bulk uploads
-    const urls: string[] = [];
+    const urls: (string | null)[] = new Array(files.length).fill(null);
     let completed = 0;
-    
+
     for (let i = 0; i < files.length; i += BATCH_SIZE) {
-      const batch = files.slice(i, i + BATCH_SIZE);
+      const end = Math.min(i + BATCH_SIZE, files.length);
+      const batch = files.slice(i, end);
       const results = await Promise.all(
         batch.map(file => uploadImage(file, batchId))
       );
-      
-      results.forEach(url => {
-        if (url) urls.push(url);
-      });
-      
-      completed += batch.length;
+
+      // Preserve index alignment: slot i+j gets result[j] (null on failure)
+      for (let j = 0; j < results.length; j++) {
+        urls[i + j] = results[j];
+      }
+
+      completed = end;
       setUploadCompleted(completed);
       setProgress(Math.round((completed / files.length) * 100));
     }
@@ -1544,5 +1575,24 @@ export function useImageUpload() {
     return urls;
   };
 
-  return { uploadImage, uploadImages, uploading, progress, uploadStartTime, uploadTotal, uploadCompleted };
+  /**
+   * Backwards-compatible wrapper: returns only the successfully uploaded URLs
+   * (compact array). New code should prefer `uploadImagesAligned` when it
+   * needs to correlate uploads back to their source files.
+   */
+  const uploadImages = async (files: File[], batchId: string): Promise<string[]> => {
+    const aligned = await uploadImagesAligned(files, batchId);
+    return aligned.filter((u): u is string => !!u);
+  };
+
+  return {
+    uploadImage,
+    uploadImages,
+    uploadImagesAligned,
+    uploading,
+    progress,
+    uploadStartTime,
+    uploadTotal,
+    uploadCompleted,
+  };
 }

@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { toast } from 'sonner';
 
 interface CapturedImage {
   id: string;
@@ -208,14 +207,15 @@ export function MobileCaptureInterface({
     try {
       // CRITICAL: Await persistence before closing to prevent data loss
       await onComplete(files, notes);
-      
+
       // Cleanup object URLs only after successful persistence
       capturedImages.forEach(img => URL.revokeObjectURL(img.previewUrl));
-      
+
       onClose();
     } catch (error) {
+      // Parent handler already surfaced a detailed toast (e.g. "Saved X of Y").
+      // Keep the sheet open so the user can review/retry without losing captures.
       console.error('Camera capture persistence failed:', error);
-      toast.error('Upload failed. Please try again.');
       setIsSaving(false);
     }
   }, [capturedImages, onComplete, onClose, isSaving]);
