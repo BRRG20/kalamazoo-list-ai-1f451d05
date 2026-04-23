@@ -54,22 +54,25 @@ export default function BatchesPage() {
   const { batches, createBatch, updateBatch, deleteBatch, getProductCount } = useBatches();
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [showHiddenInline, setShowHiddenInline] = useState(false);
-  const { products, createProduct, createProductWithImages, updateProduct, deleteProduct, deleteEmptyProducts, hideProduct, isMutating, acquireLock, releaseLock, refetch: refetchProducts } = useProducts(selectedBatchId, showHiddenInline);
+  const { products, createProduct, createProductWithImages, updateProduct, updateProductDBOnly, deleteProduct, deleteEmptyProducts, hideProduct, isMutating, acquireLock, releaseLock, refetch: refetchProducts } = useProducts(selectedBatchId, showHiddenInline);
   const { deletedProducts, recoverProduct, permanentlyDelete: permanentlyDeleteProduct, emptyTrash, refetch: refetchDeletedProducts } = useDeletedProducts(selectedBatchId);
   const { deletedImages, recoverImage, permanentlyDelete: permanentlyDeleteImage, emptyImageTrash, recoverAllImages, refetch: refetchDeletedImages } = useDeletedImages(selectedBatchId);
   const { hiddenProducts, unhideProduct, refetch: refetchHiddenProducts } = useHiddenProducts(selectedBatchId);
   const { fetchImagesForProduct, fetchImagesForBatch, addImageToBatch, updateImage, excludeLastNImages, clearCache, deleteImage, updateImageProductIdByUrl } = useImages();
   const { settings } = useSettings();
-  const { uploadImages, uploading, progress, uploadStartTime, uploadTotal, uploadCompleted } = useImageUpload();
+  const { uploadImagesAligned, uploading, progress, uploadStartTime, uploadTotal, uploadCompleted } = useImageUpload();
   const { getMatchingTags } = useDefaultTags();
   
-  // AI Generation hook
+  // AI Generation hook. `updateProductDBOnly` + `refetchProducts` are used by
+  // bulk runs to avoid N re-renders across await boundaries.
   const aiGeneration = useAIGeneration({
     fetchImagesForProduct: async (productId: string) => {
       const images = await fetchImagesForProduct(productId);
       return images.map(img => ({ url: img.url }));
     },
     updateProduct,
+    updateProductDBOnly,
+    refetchProducts,
     getMatchingTags,
   });
   
@@ -199,10 +202,16 @@ const handleSelectBatch = useCallback((id: string) => {
     setUnassignedImages([]);
   }, []);
 
-  // Load all images (both assigned and unassigned) when batch is selected
-  // Use products.length as dependency to avoid infinite re-renders from array reference changes
-  const productIds = products.map(p => p.id).join(',');
-  
+  // Load all images (both assigned and unassigned) when the batch changes.
+  // Intentionally scoped to batch-switch only: subsequent product mutations
+  // (auto-group, create-from-unassigned, confirm grouping) already keep
+  // imageGroups/unassignedImages in sync via their own handlers, and a
+  // "View All Images" button exists for explicit re-sync. Re-running this
+  // effect on every products-array change caused a duplicate batch-wide image
+  // fetch (BatchDetail already fetches the same table) without benefit.
+  //
+  // `products` is intentionally read inside the effect rather than being a
+  // dependency; the latest render's products list is what we need.
   useEffect(() => {
     const loadBatchImages = async () => {
       if (!selectedBatchId) {
@@ -211,30 +220,24 @@ const handleSelectBatch = useCallback((id: string) => {
         setInitialImageAssignments(new Map());
         return;
       }
-      
-      // Fetch all images for the batch from database
-      // This is the SOURCE OF TRUTH for cross-device sync
-      console.log(`[SYNC] Loading images for batch: ${selectedBatchId}`);
+
+      // Fetch all images for the batch from the database (source of truth
+      // for cross-device sync of unassigned-pool visibility)
       const allBatchImages = await fetchImagesForBatch(selectedBatchId);
-      console.log(`[SYNC] Fetched ${allBatchImages.length} total images from DB`);
-      
+
       if (allBatchImages.length === 0) {
-        console.log(`[SYNC] No images found in batch, clearing state`);
         setUnassignedImages([]);
         setImageGroups([]);
         setInitialImageAssignments(new Map());
         return;
       }
-      
-      // Group images by product_id and track initial assignments
+
       const imagesByProduct: Record<string, string[]> = {};
       const unassigned: string[] = [];
       const initialAssignments = new Map<string, string | null>();
-      
+
       for (const img of allBatchImages) {
-        // Track initial assignment: image URL -> product_id (or null if unassigned)
         initialAssignments.set(img.url, img.product_id || null);
-        
         if (img.product_id && img.product_id !== '') {
           if (!imagesByProduct[img.product_id]) {
             imagesByProduct[img.product_id] = [];
@@ -244,12 +247,7 @@ const handleSelectBatch = useCallback((id: string) => {
           unassigned.push(img.url);
         }
       }
-      
-      // Log cross-device sync info
-      console.log(`[SYNC] Unassigned images count: ${unassigned.length}`);
-      console.log(`[SYNC] Assigned to products: ${Object.keys(imagesByProduct).length} products`);
-      
-      // Create groups from existing products that have images
+
       const groups: ImageGroup[] = products
         .filter(p => imagesByProduct[p.id] && imagesByProduct[p.id].length > 0)
         .map((product, index) => ({
@@ -259,20 +257,19 @@ const handleSelectBatch = useCallback((id: string) => {
           selectedImages: new Set<string>(),
           isGrouped: product.is_grouped || false,
         }));
-      
+
       setImageGroups(groups);
       setUnassignedImages(unassigned);
       setInitialImageAssignments(initialAssignments);
-      
-      // Show group manager if there are unassigned images
+
       if (unassigned.length > 0) {
         setShowGroupManager(true);
       }
     };
-    
+
     loadBatchImages();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedBatchId, fetchImagesForBatch, productIds]);
+  }, [selectedBatchId, fetchImagesForBatch]);
 
   const handleCreateBatch = useCallback(async (name: string, notes: string) => {
     const batch = await createBatch(name, notes);
@@ -301,152 +298,151 @@ const handleSelectBatch = useCallback((id: string) => {
 
   const handleUploadImages = useCallback(async (files: File[], addToUnassigned: boolean = false) => {
     if (!selectedBatchId) return;
-    
+
     // Show warning for large batches
     if (files.length > UPLOAD_LIMITS.WARNING_THRESHOLD) {
       toast.warning(`Large batches may slow down processing. For best results, upload in batches of ${UPLOAD_LIMITS.RECOMMENDED_IMAGES_PER_BATCH} images.`);
     }
-    
-    toast.info(`Uploading ${files.length} image(s)...`);
-    
-    const urls = await uploadImages(files, selectedBatchId);
-    
-    if (urls.length > 0) {
-      // CRITICAL: Save images to database AND verify each insert succeeds
-      // Only add to local state URLs that were successfully persisted to DB
-      const persistedUrls: string[] = [];
-      let failedCount = 0;
-      
-      for (let i = 0; i < urls.length; i++) {
-        const result = await addImageToBatch(selectedBatchId, urls[i], i);
-        if (result) {
-          persistedUrls.push(urls[i]);
-          console.log(`[UPLOAD] Image persisted to DB: id=${result.id}, url=${urls[i].substring(0, 50)}...`);
-        } else {
-          failedCount++;
-          console.error(`[UPLOAD] FAILED to persist image to DB: ${urls[i]}`);
-        }
-      }
-      
-      if (failedCount > 0) {
-        toast.error(`${failedCount} image(s) failed to save to database. Please retry.`);
-      }
-      
-      if (persistedUrls.length > 0) {
-        if (addToUnassigned) {
-          // Add directly to unassigned pool
-          setUnassignedImages(prev => [...prev, ...persistedUrls]);
-          setShowGroupManager(true);
-          toast.success(`${persistedUrls.length} image(s) added to unassigned pool.`);
-        } else {
-          // Add to pending for auto-grouping
-          setPendingImageUrls(prev => [...prev, ...persistedUrls]);
-          toast.success(`${persistedUrls.length} image(s) uploaded. Click "Auto-group" to create products.`);
-        }
-      }
-    } else {
-      toast.error('Failed to upload images');
-    }
-  }, [selectedBatchId, uploadImages, addImageToBatch]);
 
-  // Camera capture handler - routes camera images through the same upload pipeline
+    toast.info(`Uploading ${files.length} image(s)...`);
+
+    const aligned = await uploadImagesAligned(files, selectedBatchId);
+    const uploadFailed = aligned.filter(u => u === null).length;
+
+    const persistedUrls: string[] = [];
+    let dbFailed = 0;
+
+    for (let i = 0; i < files.length; i++) {
+      const url = aligned[i];
+      if (!url) continue;
+      const result = await addImageToBatch(selectedBatchId, url, persistedUrls.length);
+      if (result) {
+        persistedUrls.push(url);
+      } else {
+        dbFailed++;
+        console.error(`[UPLOAD] FAILED to persist image to DB: ${url}`);
+      }
+    }
+
+    if (persistedUrls.length > 0) {
+      if (addToUnassigned) {
+        setUnassignedImages(prev => [...prev, ...persistedUrls]);
+        setShowGroupManager(true);
+      } else {
+        setPendingImageUrls(prev => [...prev, ...persistedUrls]);
+      }
+    }
+
+    const lost = uploadFailed + dbFailed;
+    if (lost > 0 && persistedUrls.length > 0) {
+      toast.warning(`Uploaded ${persistedUrls.length} of ${files.length}. ${lost} failed — please retry the missing ones.`);
+    } else if (lost > 0) {
+      toast.error(`Failed to upload any of the ${files.length} image(s). Please retry.`);
+    } else if (addToUnassigned) {
+      toast.success(`${persistedUrls.length} image(s) added to unassigned pool.`);
+    } else {
+      toast.success(`${persistedUrls.length} image(s) uploaded. Click "Auto-group" to create products.`);
+    }
+  }, [selectedBatchId, uploadImagesAligned, addImageToBatch]);
+
+  // Camera capture handler - routes camera images through the same upload pipeline.
+  // Uses aligned upload so file→url correspondence survives partial upload failures,
+  // which is what lets note metadata stay attached to the right image.
   const handleCameraCapture = useCallback(async (
-    files: File[], 
+    files: File[],
     notes: Map<string, { note?: string; hasStain?: boolean; type?: string }>
   ) => {
     if (!selectedBatchId || files.length === 0) return;
-    
+
     toast.info(`Processing ${files.length} camera image(s)...`);
-    
-    // Upload using same pipeline as manual uploads (preserves quality)
-    const urls = await uploadImages(files, selectedBatchId);
-    
-    if (urls.length > 0) {
-      // CRITICAL: Save images to database AND verify each insert succeeds
-      const persistedUrls: string[] = [];
-      let failedCount = 0;
-      
-      for (let i = 0; i < urls.length; i++) {
-        const file = files[i];
-        const noteData = notes.get(file.name);
-        
-        // Add image to batch - MUST succeed before adding to local state
-        const result = await addImageToBatch(selectedBatchId, urls[i], i);
-        
-        if (result) {
-          persistedUrls.push(urls[i]);
-          console.log(`[CAMERA] Image persisted to DB: id=${result.id}, url=${urls[i].substring(0, 50)}...`);
-          
-          // If there are notes, log them (notes metadata handled separately)
-          if (noteData && (noteData.note || noteData.hasStain)) {
-            console.log(`[CAMERA] Image ${file.name} has note:`, noteData);
-          }
-        } else {
-          failedCount++;
-          console.error(`[CAMERA] FAILED to persist image to DB: ${urls[i]}`);
+
+    const aligned = await uploadImagesAligned(files, selectedBatchId);
+    const uploadFailed = aligned.filter(u => u === null).length;
+
+    const persistedUrls: string[] = [];
+    let dbFailed = 0;
+
+    // Walk the original files list so indices stay aligned regardless of failures
+    for (let i = 0; i < files.length; i++) {
+      const url = aligned[i];
+      if (!url) continue; // skip failed upload slots
+
+      const file = files[i];
+      const noteData = notes.get(file.name);
+
+      const result = await addImageToBatch(selectedBatchId, url, persistedUrls.length);
+      if (result) {
+        persistedUrls.push(url);
+        if (noteData && (noteData.note || noteData.hasStain)) {
+          console.log(`[CAMERA] ${file.name} note:`, noteData);
         }
+      } else {
+        dbFailed++;
+        console.error(`[CAMERA] FAILED to persist image to DB: ${url}`);
       }
-      
-      if (failedCount > 0) {
-        toast.error(`${failedCount} image(s) failed to save to database. Please retry.`);
-      }
-      
-      if (persistedUrls.length > 0) {
-        // Add only successfully persisted URLs to pending for auto-grouping
-        setPendingImageUrls(prev => [...prev, ...persistedUrls]);
-        toast.success(`${persistedUrls.length} camera image(s) uploaded. Click "Auto-group" to create products.`);
-      }
-    } else {
-      toast.error('Failed to upload camera images');
     }
-  }, [selectedBatchId, uploadImages, addImageToBatch]);
+
+    if (persistedUrls.length > 0) {
+      setPendingImageUrls(prev => [...prev, ...persistedUrls]);
+    }
+
+    const lost = uploadFailed + dbFailed;
+    if (lost > 0 && persistedUrls.length > 0) {
+      toast.warning(`Saved ${persistedUrls.length} of ${files.length} images. ${lost} failed — please retry the missing ones.`);
+      // Throw so MobileCaptureInterface keeps the sheet open with remaining captures
+      throw new Error(`${lost} camera image(s) failed`);
+    } else if (lost > 0) {
+      toast.error(`All ${files.length} camera image(s) failed to save. Please retry.`);
+      throw new Error('All camera uploads failed');
+    } else {
+      toast.success(`${persistedUrls.length} camera image(s) uploaded. Click "Auto-group" to create products.`);
+    }
+  }, [selectedBatchId, uploadImagesAligned, addImageToBatch]);
 
   // Quick Product Shots handler - for 4-shot mode with AI expansion
   const handleQuickProductCapture = useCallback(async (
-    files: File[], 
+    files: File[],
     notes: Map<string, { note?: string; hasStain?: boolean; type?: string }>
   ) => {
     if (!selectedBatchId || files.length === 0) return;
-    
+
     toast.info(`Processing ${files.length} quick product shot(s)...`);
-    
-    // Upload using same pipeline
-    const urls = await uploadImages(files, selectedBatchId);
-    
-    if (urls.length > 0) {
-      // CRITICAL: Save images to database AND verify each insert succeeds
-      const persistedUrls: string[] = [];
-      let failedCount = 0;
-      
-      for (let i = 0; i < urls.length; i++) {
-        const result = await addImageToBatch(selectedBatchId, urls[i], i);
-        if (result) {
-          persistedUrls.push(urls[i]);
-          console.log(`[QUICK] Image persisted to DB: id=${result.id}, url=${urls[i].substring(0, 50)}...`);
-        } else {
-          failedCount++;
-          console.error(`[QUICK] FAILED to persist image to DB: ${urls[i]}`);
-        }
+
+    const aligned = await uploadImagesAligned(files, selectedBatchId);
+    const uploadFailed = aligned.filter(u => u === null).length;
+
+    const persistedUrls: string[] = [];
+    let dbFailed = 0;
+
+    for (let i = 0; i < files.length; i++) {
+      const url = aligned[i];
+      if (!url) continue;
+
+      const result = await addImageToBatch(selectedBatchId, url, persistedUrls.length);
+      if (result) {
+        persistedUrls.push(url);
+      } else {
+        dbFailed++;
+        console.error(`[QUICK] FAILED to persist image to DB: ${url}`);
       }
-      
-      if (failedCount > 0) {
-        toast.error(`${failedCount} image(s) failed to save to database. Please retry.`);
-      }
-      
-      if (persistedUrls.length > 0) {
-        // For quick product shots, add to pending and show group manager
-        setPendingImageUrls(prev => [...prev, ...persistedUrls]);
-        setShowGroupManager(true);
-        
-        toast.success(
-          `${persistedUrls.length} quick shot(s) uploaded. ` +
-          `Group them and use "Expand Images" to generate additional listing photos.`
-        );
-      }
-    } else {
-      toast.error('Failed to upload quick product shots');
     }
-  }, [selectedBatchId, uploadImages, addImageToBatch]);
+
+    if (persistedUrls.length > 0) {
+      setPendingImageUrls(prev => [...prev, ...persistedUrls]);
+      setShowGroupManager(true);
+    }
+
+    const lost = uploadFailed + dbFailed;
+    if (lost > 0 && persistedUrls.length > 0) {
+      toast.warning(`Saved ${persistedUrls.length} of ${files.length} shots. ${lost} failed — please retry the missing ones.`);
+      throw new Error(`${lost} quick shot(s) failed`);
+    } else if (lost > 0) {
+      toast.error(`All ${files.length} quick shot(s) failed to save. Please retry.`);
+      throw new Error('All quick shots failed');
+    } else {
+      toast.success(`${persistedUrls.length} quick shot(s) uploaded. Group them and use "Expand Images" to generate additional listing photos.`);
+    }
+  }, [selectedBatchId, uploadImagesAligned, addImageToBatch]);
 
   // AI Image Expansion handler - queue-based batch expand up to 50 items
   const handleExpandProductImages = useCallback(async (productIds: string | string[], mode: 'product_photos' | 'ai_model', shotCount?: number) => {

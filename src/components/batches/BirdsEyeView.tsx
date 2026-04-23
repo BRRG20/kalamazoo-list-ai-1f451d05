@@ -156,7 +156,74 @@ const ImageTile = memo(function ImageTile({
   );
 });
 
-// Memoized product card component
+// Props for the memoized product card. Handlers receive the productId so the
+// parent can keep a single stable callback per handler type (no per-cell inline
+// arrows), which is critical to prevent the whole virtualized grid from
+// re-rendering on every hover/selection change.
+interface ProductCardProps {
+  product: Product;
+  productIndex: number;
+  images: ProductImage[];
+  isProductSelected: boolean;
+  hasSelectedImages: boolean;
+  isDropTarget: boolean;
+  canReceive: boolean;
+  justReceived: boolean;
+  selectedImages: Map<string, { imageId: string; productId: string }>;
+  recentlyMovedImages: Set<string>;
+  deletingImages: Set<string>;
+  onToggleProductSelection?: (productId: string) => void;
+  onDragOver: (e: React.DragEvent, productId: string) => void;
+  onDragLeave: (e: React.DragEvent) => void;
+  onDrop: (e: React.DragEvent, productId: string) => void;
+  onCardClick: (productId: string, canReceive: boolean) => void;
+  onToggleImageSelection: (imageId: string, productId: string) => void;
+  onDragStart: (e: React.DragEvent, imageId: string, productId: string, imageUrl: string) => void;
+  onDragEnd: () => void;
+  onPreview: (url: string) => void;
+  onDeleteImage?: (imageId: string) => Promise<void>;
+  onDeleteSingle: (e: React.MouseEvent, imageId: string) => void;
+}
+
+// Custom compare: a ProductCard only needs to re-render when something about
+// THIS card changed. Selection/move/delete Sets change reference on every
+// toggle, but we only care if an image in *this* product was affected.
+function areProductCardPropsEqual(prev: ProductCardProps, next: ProductCardProps): boolean {
+  if (prev.product !== next.product) return false;
+  if (prev.images !== next.images) return false;
+  if (prev.productIndex !== next.productIndex) return false;
+  if (prev.isProductSelected !== next.isProductSelected) return false;
+  if (prev.hasSelectedImages !== next.hasSelectedImages) return false;
+  if (prev.isDropTarget !== next.isDropTarget) return false;
+  if (prev.canReceive !== next.canReceive) return false;
+  if (prev.justReceived !== next.justReceived) return false;
+
+  // Check per-image state only for images belonging to this card
+  const imgs = next.images ?? [];
+  for (const img of imgs) {
+    if (!img || !img.id) continue;
+    if (prev.selectedImages.has(img.id) !== next.selectedImages.has(img.id)) return false;
+    if (prev.recentlyMovedImages.has(img.id) !== next.recentlyMovedImages.has(img.id)) return false;
+    if (prev.deletingImages.has(img.id) !== next.deletingImages.has(img.id)) return false;
+  }
+
+  // Handlers are expected to be stable (wrapped in useCallback upstream); if
+  // they change it's a real functional change and we should re-render.
+  if (prev.onToggleProductSelection !== next.onToggleProductSelection) return false;
+  if (prev.onDragOver !== next.onDragOver) return false;
+  if (prev.onDragLeave !== next.onDragLeave) return false;
+  if (prev.onDrop !== next.onDrop) return false;
+  if (prev.onCardClick !== next.onCardClick) return false;
+  if (prev.onToggleImageSelection !== next.onToggleImageSelection) return false;
+  if (prev.onDragStart !== next.onDragStart) return false;
+  if (prev.onDragEnd !== next.onDragEnd) return false;
+  if (prev.onPreview !== next.onPreview) return false;
+  if (prev.onDeleteImage !== next.onDeleteImage) return false;
+  if (prev.onDeleteSingle !== next.onDeleteSingle) return false;
+
+  return true;
+}
+
 const ProductCard = memo(function ProductCard({
   product,
   productIndex,
@@ -173,37 +240,14 @@ const ProductCard = memo(function ProductCard({
   onDragOver,
   onDragLeave,
   onDrop,
-  onClick,
+  onCardClick,
   onToggleImageSelection,
   onDragStart,
   onDragEnd,
   onPreview,
   onDeleteImage,
   onDeleteSingle,
-}: {
-  product: Product;
-  productIndex: number;
-  images: ProductImage[];
-  isProductSelected: boolean;
-  hasSelectedImages: boolean;
-  isDropTarget: boolean;
-  canReceive: boolean;
-  justReceived: boolean;
-  selectedImages: Map<string, { imageId: string; productId: string }>;
-  recentlyMovedImages: Set<string>;
-  deletingImages: Set<string>;
-  onToggleProductSelection?: (productId: string) => void;
-  onDragOver: (e: React.DragEvent) => void;
-  onDragLeave: (e: React.DragEvent) => void;
-  onDrop: (e: React.DragEvent) => void;
-  onClick: () => void;
-  onToggleImageSelection: (imageId: string, productId: string) => void;
-  onDragStart: (e: React.DragEvent, imageId: string, productId: string, imageUrl: string) => void;
-  onDragEnd: () => void;
-  onPreview: (url: string) => void;
-  onDeleteImage?: (imageId: string) => Promise<void>;
-  onDeleteSingle: (e: React.MouseEvent, imageId: string) => void;
-}) {
+}: ProductCardProps) {
   // Guard against undefined product
   if (!product || !product.id) {
     return null;
@@ -224,10 +268,10 @@ const ProductCard = memo(function ProductCard({
         // IMPROVED: Bold green selection for product cards
         isProductSelected && "ring-4 ring-green-500 border-green-500 bg-green-500/10 shadow-lg"
       )}
-      onDragOver={onDragOver}
+      onDragOver={(e) => onDragOver(e, product.id)}
       onDragLeave={onDragLeave}
-      onDrop={onDrop}
-      onClick={onClick}
+      onDrop={(e) => onDrop(e, product.id)}
+      onClick={() => onCardClick(product.id, canReceive && !hasSelectedImages)}
     >
       {/* Selection overlay for selected products */}
       {isProductSelected && (
@@ -329,7 +373,7 @@ const ProductCard = memo(function ProductCard({
       </div>
     </div>
   );
-});
+}, areProductCardPropsEqual);
 
 export function BirdsEyeView({
   products = [],
@@ -883,13 +927,22 @@ export function BirdsEyeView({
     }
   }, []);
 
+  // Stable card-click handler bound by ProductCard (receives productId and
+  // whether this card is a valid move target). Keeps handler identity stable
+  // across grid re-renders so the custom memo on ProductCard actually sticks.
+  const handleCardClick = useCallback((productId: string, canMoveHere: boolean) => {
+    if (canMoveHere) {
+      handleMoveToProduct(productId);
+    }
+  }, [handleMoveToProduct]);
+
   const handleDrop = useCallback((e: React.DragEvent, productId: string) => {
     e.preventDefault();
-    
+
     if (selectedImages.size > 0) {
       handleMoveToProduct(productId);
     }
-    
+
     setDropTargetProductId(null);
     setDraggedImageData(null);
   }, [selectedImages.size, handleMoveToProduct]);
@@ -1018,14 +1071,10 @@ export function BirdsEyeView({
             recentlyMovedImages={recentlyMovedImages}
             deletingImages={deletingImages}
             onToggleProductSelection={onToggleProductSelection}
-            onDragOver={(e) => handleDragOver(e, product.id)}
+            onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
-            onDrop={(e) => handleDrop(e, product.id)}
-            onClick={() => {
-              if (selectedImages.size > 0 && !hasSelectedImages) {
-                handleMoveToProduct(product.id);
-              }
-            }}
+            onDrop={handleDrop}
+            onCardClick={handleCardClick}
             onToggleImageSelection={toggleImageSelection}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
@@ -1058,7 +1107,7 @@ export function BirdsEyeView({
     handleDragOver,
     handleDragLeave,
     handleDrop,
-    handleMoveToProduct,
+    handleCardClick,
     toggleImageSelection,
     handleDragStart,
     handleDragEnd,

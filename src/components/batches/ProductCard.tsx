@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { Edit2, ImageIcon, Trash2, Eye, Sparkles, Undo2, Loader2, EyeOff, User, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -38,7 +38,7 @@ interface ProductCardProps {
   displayIndex?: number;
 }
 
-export function ProductCard({
+function ProductCardImpl({
   product,
   images,
   isSelected,
@@ -468,3 +468,44 @@ export function ProductCard({
     </>
   );
 }
+
+// Structural equality for the image list: ignores reference changes when the
+// actual image identity/position/url hasn't changed. This is what lets
+// ProductCard avoid re-rendering when BatchDetail rebuilds its images map for
+// unrelated reasons (another card's images, generation progress, etc).
+function imagesEqual(a: ProductImage[] | undefined, b: ProductImage[] | undefined): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i];
+    const y = b[i];
+    if (x.id !== y.id) return false;
+    if (x.url !== y.url) return false;
+    if (x.position !== y.position) return false;
+    if (x.include_in_shopify !== y.include_in_shopify) return false;
+    if (x.source !== y.source) return false;
+  }
+  return true;
+}
+
+function areProductCardPropsEqual(prev: ProductCardProps, next: ProductCardProps): boolean {
+  // Product identity + relevant scalar flags
+  if (prev.product !== next.product) return false;
+  if (prev.isSelected !== next.isSelected) return false;
+  if (prev.isDraggingImage !== next.isDraggingImage) return false;
+  if (prev.isGenerating !== next.isGenerating) return false;
+  if (prev.isRegeneratingModel !== next.isRegeneratingModel) return false;
+  if (prev.hasUndoState !== next.hasUndoState) return false;
+  if (prev.displayIndex !== next.displayIndex) return false;
+
+  // Images: structural compare so array-identity churn doesn't re-render
+  if (!imagesEqual(prev.images, next.images)) return false;
+
+  // Handlers from BatchDetail are inline arrows; we accept that they change
+  // identity, but since the card only reads them on user action, re-binding
+  // them doesn't require a re-render. Treat them as stable for memo purposes.
+  return true;
+}
+
+export const ProductCard = memo(ProductCardImpl, areProductCardPropsEqual);
