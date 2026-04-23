@@ -1346,48 +1346,57 @@ export function BatchDetail({
               </TooltipContent>
             </Tooltip>
 
-            {/* Re-group All - available when there are existing groups */}
-            {(imageGroups.length > 0 || unassignedImages.length > 0) && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      saveToHistory('Before re-group all');
-                      onReAutoGroupAll(imagesPerProduct);
-                    }}
-                    className="text-xs md:text-sm text-amber-600 hover:text-amber-700 border-amber-300 hover:border-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950"
-                  >
-                    <RefreshCw className="w-4 h-4 mr-1 md:mr-2" />
-                    <span className="hidden sm:inline">Re-</span>group All
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Re-distribute all images into new product groups</p>
-                </TooltipContent>
-              </Tooltip>
-            )}
+            {/* Re-group All - always visible for feature parity across batches.
+                Disabled when there's nothing to re-group. */}
+            {(() => {
+              const hasGroupable = imageGroups.length > 0 || unassignedImages.length > 0;
+              return (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        saveToHistory('Before re-group all');
+                        onReAutoGroupAll(imagesPerProduct);
+                      }}
+                      disabled={!hasGroupable}
+                      className="text-xs md:text-sm text-amber-600 hover:text-amber-700 border-amber-300 hover:border-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950 disabled:opacity-50"
+                    >
+                      <RefreshCw className="w-4 h-4 mr-1 md:mr-2" />
+                      <span className="hidden sm:inline">Re-</span>group All
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{hasGroupable ? 'Re-distribute all images into new product groups' : 'No images to re-group yet'}</p>
+                  </TooltipContent>
+                </Tooltip>
+              );
+            })()}
 
-            {/* Toggle Group Manager */}
-            {(imageGroups.length > 0 || unassignedImages.length > 0) && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant={showGroupManager ? "default" : "outline"}
-                    size="sm"
-                    onClick={onToggleGroupManager}
-                    className="text-xs md:text-sm"
-                  >
-                    <Settings2 className="w-4 h-4 mr-1 md:mr-2" />
-                    <span className="hidden sm:inline">Manage</span> Groups
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Manually adjust image groupings before confirming</p>
-                </TooltipContent>
-              </Tooltip>
-            )}
+            {/* Toggle Group Manager - always visible, disabled when nothing to manage */}
+            {(() => {
+              const hasGroupable = imageGroups.length > 0 || unassignedImages.length > 0;
+              return (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant={showGroupManager ? "default" : "outline"}
+                      size="sm"
+                      onClick={onToggleGroupManager}
+                      disabled={!hasGroupable}
+                      className="text-xs md:text-sm disabled:opacity-50"
+                    >
+                      <Settings2 className="w-4 h-4 mr-1 md:mr-2" />
+                      <span className="hidden sm:inline">Manage</span> Groups
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{hasGroupable ? 'Manually adjust image groupings before confirming' : 'Upload and auto-group images first'}</p>
+                  </TooltipContent>
+                </Tooltip>
+              );
+            })()}
 
             {/* Undo button - visible when there's any undo history (local or global) */}
             {(history.length > 0 || undoStackLength > 0) && (
@@ -1453,22 +1462,24 @@ export function BatchDetail({
               </Tooltip>
             )}
 
-            {/* View All Images button - always visible when products exist */}
-            {products.length > 0 && onLoadAllImagesIntoGroups && (
+            {/* View All Images button - always visible for feature parity.
+                Disabled when no products or handler is absent. */}
+            {onLoadAllImagesIntoGroups && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={onLoadAllImagesIntoGroups}
-                    className="text-xs md:text-sm"
+                    disabled={products.length === 0}
+                    className="text-xs md:text-sm disabled:opacity-50"
                   >
                     <ImageIcon className="w-4 h-4 mr-1 md:mr-2" />
                     <span className="hidden sm:inline">View All</span> Images
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>View and manage all images in this batch</p>
+                  <p>{products.length > 0 ? 'View and manage all images in this batch' : 'Create products first'}</p>
                 </TooltipContent>
               </Tooltip>
             )}
