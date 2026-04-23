@@ -642,6 +642,81 @@ export function useProducts(batchId: string | null, includeHidden: boolean = fal
     return newProduct;
   };
 
+  /**
+   * Translate a Partial<Product> to a DB-column dict (filtering undefineds and
+   * applying the era/department/condition null-coalescing). Shared between the
+   * normal and batched update paths so they stay in lock-step.
+   */
+  const buildDbUpdates = (updates: Partial<Product>): Record<string, any> => {
+    const dbUpdates: Record<string, any> = {};
+
+    if (updates.sku !== undefined) dbUpdates.sku = updates.sku;
+    if (updates.status !== undefined) dbUpdates.status = updates.status;
+    if (updates.raw_input_text !== undefined) dbUpdates.raw_input_text = updates.raw_input_text;
+    if (updates.title !== undefined) dbUpdates.title = updates.title;
+    if (updates.description !== undefined) dbUpdates.description = updates.description;
+    if (updates.description_style_a !== undefined) dbUpdates.description_style_a = updates.description_style_a;
+    if (updates.description_style_b !== undefined) dbUpdates.description_style_b = updates.description_style_b;
+    if (updates.price !== undefined) dbUpdates.price = updates.price;
+    if (updates.currency !== undefined) dbUpdates.currency = updates.currency;
+    if (updates.era !== undefined) dbUpdates.era = updates.era || null;
+    if (updates.garment_type !== undefined) dbUpdates.garment_type = updates.garment_type;
+    if (updates.department !== undefined) dbUpdates.department = updates.department || null;
+    if (updates.brand !== undefined) dbUpdates.brand = updates.brand;
+    if (updates.colour_main !== undefined) dbUpdates.colour_main = updates.colour_main;
+    if (updates.colour_secondary !== undefined) dbUpdates.colour_secondary = updates.colour_secondary;
+    if (updates.pattern !== undefined) dbUpdates.pattern = updates.pattern;
+    if (updates.size_label !== undefined) dbUpdates.size_label = updates.size_label;
+    if (updates.size_recommended !== undefined) dbUpdates.size_recommended = updates.size_recommended;
+    if (updates.fit !== undefined) dbUpdates.fit = updates.fit;
+    if (updates.material !== undefined) dbUpdates.material = updates.material;
+    if (updates.condition !== undefined) dbUpdates.condition = updates.condition || null;
+    if (updates.flaws !== undefined) dbUpdates.flaws = updates.flaws;
+    if (updates.made_in !== undefined) dbUpdates.made_in = updates.made_in;
+    if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
+    if (updates.shopify_tags !== undefined) dbUpdates.shopify_tags = updates.shopify_tags;
+    if (updates.etsy_tags !== undefined) dbUpdates.etsy_tags = updates.etsy_tags;
+    if (updates.collections_tags !== undefined) dbUpdates.collections_tags = updates.collections_tags;
+    if (updates.shopify_product_id !== undefined) dbUpdates.shopify_product_id = updates.shopify_product_id;
+    if (updates.shopify_handle !== undefined) dbUpdates.shopify_handle = updates.shopify_handle;
+    if (updates.listing_block !== undefined) dbUpdates.listing_block = updates.listing_block;
+    if (updates.pit_to_pit !== undefined) dbUpdates.pit_to_pit = updates.pit_to_pit;
+    if (updates.etsy_listing_id !== undefined) dbUpdates.etsy_listing_id = updates.etsy_listing_id;
+    if (updates.etsy_listing_state !== undefined) dbUpdates.etsy_listing_state = updates.etsy_listing_state;
+    if (updates.ebay_listing_id !== undefined) dbUpdates.ebay_listing_id = updates.ebay_listing_id;
+    if (updates.ebay_listing_state !== undefined) dbUpdates.ebay_listing_state = updates.ebay_listing_state;
+    if (updates.sleeve_length !== undefined) dbUpdates.sleeve_length = updates.sleeve_length;
+    if (updates.style !== undefined) dbUpdates.style = updates.style;
+    if (updates.size_type !== undefined) dbUpdates.size_type = updates.size_type;
+    if (updates.who_made !== undefined) dbUpdates.who_made = updates.who_made;
+    if (updates.when_made !== undefined) dbUpdates.when_made = updates.when_made;
+    if (updates.category_path !== undefined) dbUpdates.category_path = updates.category_path;
+    if (updates.uploaded_at !== undefined) dbUpdates.uploaded_at = updates.uploaded_at;
+    if (updates.upload_error !== undefined) dbUpdates.upload_error = updates.upload_error;
+    if (updates.is_grouped !== undefined) dbUpdates.is_grouped = updates.is_grouped;
+
+    return dbUpdates;
+  };
+
+  /**
+   * DB-only product update: writes to Supabase without touching React state.
+   * Used by bulk AI generation to avoid 20 separate setProducts calls across
+   * await boundaries (which React 18 can't auto-batch). Caller is expected
+   * to call refetch() once when the bulk operation finishes.
+   */
+  const updateProductDBOnly = async (id: string, updates: Partial<Product>): Promise<boolean> => {
+    const dbUpdates = buildDbUpdates(updates);
+    const { error } = await supabase
+      .from('products')
+      .update(dbUpdates)
+      .eq('id', id);
+    if (error) {
+      console.error('Error updating product (DB-only):', error);
+      return false;
+    }
+    return true;
+  };
+
   const updateProduct = async (id: string, updates: Partial<Product>) => {
     // Filter out undefined values and map to DB column names
     const dbUpdates: Record<string, any> = {};
@@ -853,21 +928,22 @@ export function useProducts(batchId: string | null, includeHidden: boolean = fal
     return true;
   };
 
-  return { 
-    products, 
+  return {
+    products,
     loading,
     isMutating,
     acquireLock,
     releaseLock,
-    createProduct, 
+    createProduct,
     createProductWithImages,
-    updateProduct, 
-    deleteProduct, 
-    permanentlyDeleteProduct, 
+    updateProduct,
+    updateProductDBOnly,
+    deleteProduct,
+    permanentlyDeleteProduct,
     deleteEmptyProducts,
     hideProduct,
     unhideProduct,
-    refetch: fetchProducts 
+    refetch: fetchProducts,
   };
 }
 

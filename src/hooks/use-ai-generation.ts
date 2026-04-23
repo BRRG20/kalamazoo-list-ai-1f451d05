@@ -28,6 +28,13 @@ export interface FailedProduct {
 interface UseAIGenerationOptions {
   fetchImagesForProduct: (productId: string) => Promise<{ url: string }[]>;
   updateProduct: (id: string, updates: Partial<Product>) => Promise<boolean>;
+  /**
+   * Optional DB-only updater used during bulk generation to avoid 20+ React
+   * re-renders across await boundaries. If provided, bulk runs use it and
+   * then call `refetchProducts` once at the end.
+   */
+  updateProductDBOnly?: (id: string, updates: Partial<Product>) => Promise<boolean>;
+  refetchProducts?: () => Promise<void> | void;
   getMatchingTags: (params: {
     garmentType: string;
     department: string;
@@ -40,6 +47,8 @@ interface UseAIGenerationOptions {
 export function useAIGeneration({
   fetchImagesForProduct,
   updateProduct,
+  updateProductDBOnly,
+  refetchProducts,
   getMatchingTags,
 }: UseAIGenerationOptions) {
   const [isGenerating, setIsGenerating] = useState(false);
@@ -84,12 +93,16 @@ export function useAIGeneration({
     return aiGeneratedProductsRef.current.has(productId);
   }, []);
 
-  // Internal function to process a single product without state updates
+  // Internal function to process a single product without state updates.
+  // `bulkMode` switches the product writer to the DB-only variant so bulk
+  // runs don't trigger N re-renders across await boundaries.
   const processProduct = useCallback(async (
-    product: Product
+    product: Product,
+    bulkMode: boolean = false
   ): Promise<GenerationResult> => {
     const productId = product.id;
     const sku = product.sku || 'no-sku';
+    const writeProduct = bulkMode && updateProductDBOnly ? updateProductDBOnly : updateProduct;
     
     // Prevent duplicate requests using ref (no re-render)
     if (generatingProductIdsRef.current.has(productId)) {
@@ -167,7 +180,7 @@ export function useAIGeneration({
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
         console.error(`[AI] Generation failed for ${sku}:`, errorData);
-        await updateProduct(productId, { status: 'error' });
+        await writeProduct(productId, { status: 'error' });
         return { productId, success: false, error: errorData.error || 'Generation failed' };
       }
       
@@ -359,16 +372,16 @@ export function useAIGeneration({
       }
       
       
-      const saveResult = await updateProduct(productId, updates);
-      
+      const saveResult = await writeProduct(productId, updates);
+
       // Mark as AI generated in ref only (no state update)
       aiGeneratedProductsRef.current.add(productId);
-      
+
       return { productId, success: true };
-      
+
     } catch (error) {
       console.error(`[AI] Exception processing ${sku}:`, error);
-      await updateProduct(productId, { status: 'error' });
+      await writeProduct(productId, { status: 'error' });
       return { 
         productId, 
         success: false, 
@@ -378,7 +391,7 @@ export function useAIGeneration({
       // Remove from generating ref (no state update)
       generatingProductIdsRef.current.delete(productId);
     }
-  }, [fetchImagesForProduct, updateProduct, getMatchingTags]);
+  }, [fetchImagesForProduct, updateProduct, updateProductDBOnly, getMatchingTags]);
 
   // Generate AI for a single product (with state updates for UI)
   const generateSingleProduct = useCallback(async (
@@ -522,13 +535,15 @@ export function useAIGeneration({
       // Update batch progress
       setBatchProgress({ current: batchIndex + 1, total: batchesToRun });
 
-      // Process in chunks of CONCURRENT_REQUESTS with breathing room
+      // Process in chunks of CONCURRENT_REQUESTS with breathing room.
+      // Pass bulkMode=true so processProduct uses the DB-only writer and we
+      // avoid a setProducts re-render per completed item.
       for (let i = 0; i < batch.length; i += CONCURRENT_REQUESTS) {
         const chunk = batch.slice(i, i + CONCURRENT_REQUESTS);
-        
+
         // Process chunk in parallel
         const results = await Promise.allSettled(
-          chunk.map(product => processProduct(product))
+          chunk.map(product => processProduct(product, true))
         );
         
         // Collect results without triggering state updates
@@ -596,13 +611,24 @@ export function useAIGeneration({
       }
     }
 
+    // Refetch products ONCE now that all DB writes are done. This collapses
+    // what would otherwise be 20+ setProducts calls (across awaits, so React
+    // can't auto-batch) into a single state transition.
+    if (updateProductDBOnly && refetchProducts) {
+      try {
+        await refetchProducts();
+      } catch (err) {
+        console.error('[AI] Post-bulk refetch failed:', err);
+      }
+    }
+
     // Batch sync refs to state (single update at end)
     setAiGeneratedProducts(new Set(aiGeneratedProductsRef.current));
     setGeneratingProductIds(new Set());
     setIsGenerating(false);
     setGenerationProgress({ current: 0, total: 0 });
     setBatchProgress({ current: 0, total: 0 });
-    
+
     // Update failed products list for retry functionality
     setFailedProductsList(Array.from(failedProductsRef.current.values()));
 
@@ -639,7 +665,7 @@ export function useAIGeneration({
     }
 
     return { successCount, errorCount, processedIds };
-  }, [isGenerating, batchSize, saveBulkState, processProduct]);
+  }, [isGenerating, batchSize, saveBulkState, processProduct, updateProductDBOnly, refetchProducts]);
 
   // Undo AI generation for a single product
   const undoSingleProduct = useCallback(async (productId: string): Promise<boolean> => {
@@ -796,12 +822,12 @@ export function useAIGeneration({
     const processedIds: string[] = [];
     const newFailedProducts: FailedProduct[] = [];
 
-    // Process in chunks
+    // Process in chunks (bulkMode=true → DB-only writer, single refetch at end)
     for (let i = 0; i < productsToRetry.length; i += CONCURRENT_REQUESTS) {
       const chunk = productsToRetry.slice(i, i + CONCURRENT_REQUESTS);
-      
+
       const results = await Promise.allSettled(
-        chunk.map(product => processProduct(product))
+        chunk.map(product => processProduct(product, true))
       );
       
       for (let j = 0; j < results.length; j++) {
@@ -848,6 +874,15 @@ export function useAIGeneration({
       }
     }
 
+    // Single refetch to reflect all DB-only writes from this retry pass
+    if (updateProductDBOnly && refetchProducts) {
+      try {
+        await refetchProducts();
+      } catch (err) {
+        console.error('[AI] Post-retry refetch failed:', err);
+      }
+    }
+
     setAiGeneratedProducts(new Set(aiGeneratedProductsRef.current));
     setGeneratingProductIds(new Set());
     setIsGenerating(false);
@@ -865,7 +900,7 @@ export function useAIGeneration({
     }
 
     return { successCount, errorCount, processedIds };
-  }, [isGenerating, processProduct]);
+  }, [isGenerating, processProduct, updateProductDBOnly, refetchProducts]);
 
   // Clear failed products list
   const clearFailedProducts = useCallback(() => {

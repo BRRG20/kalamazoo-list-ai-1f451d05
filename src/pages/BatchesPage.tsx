@@ -54,7 +54,7 @@ export default function BatchesPage() {
   const { batches, createBatch, updateBatch, deleteBatch, getProductCount } = useBatches();
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [showHiddenInline, setShowHiddenInline] = useState(false);
-  const { products, createProduct, createProductWithImages, updateProduct, deleteProduct, deleteEmptyProducts, hideProduct, isMutating, acquireLock, releaseLock, refetch: refetchProducts } = useProducts(selectedBatchId, showHiddenInline);
+  const { products, createProduct, createProductWithImages, updateProduct, updateProductDBOnly, deleteProduct, deleteEmptyProducts, hideProduct, isMutating, acquireLock, releaseLock, refetch: refetchProducts } = useProducts(selectedBatchId, showHiddenInline);
   const { deletedProducts, recoverProduct, permanentlyDelete: permanentlyDeleteProduct, emptyTrash, refetch: refetchDeletedProducts } = useDeletedProducts(selectedBatchId);
   const { deletedImages, recoverImage, permanentlyDelete: permanentlyDeleteImage, emptyImageTrash, recoverAllImages, refetch: refetchDeletedImages } = useDeletedImages(selectedBatchId);
   const { hiddenProducts, unhideProduct, refetch: refetchHiddenProducts } = useHiddenProducts(selectedBatchId);
@@ -63,13 +63,16 @@ export default function BatchesPage() {
   const { uploadImagesAligned, uploading, progress, uploadStartTime, uploadTotal, uploadCompleted } = useImageUpload();
   const { getMatchingTags } = useDefaultTags();
   
-  // AI Generation hook
+  // AI Generation hook. `updateProductDBOnly` + `refetchProducts` are used by
+  // bulk runs to avoid N re-renders across await boundaries.
   const aiGeneration = useAIGeneration({
     fetchImagesForProduct: async (productId: string) => {
       const images = await fetchImagesForProduct(productId);
       return images.map(img => ({ url: img.url }));
     },
     updateProduct,
+    updateProductDBOnly,
+    refetchProducts,
     getMatchingTags,
   });
   
@@ -199,10 +202,16 @@ const handleSelectBatch = useCallback((id: string) => {
     setUnassignedImages([]);
   }, []);
 
-  // Load all images (both assigned and unassigned) when batch is selected
-  // Use products.length as dependency to avoid infinite re-renders from array reference changes
-  const productIds = products.map(p => p.id).join(',');
-  
+  // Load all images (both assigned and unassigned) when the batch changes.
+  // Intentionally scoped to batch-switch only: subsequent product mutations
+  // (auto-group, create-from-unassigned, confirm grouping) already keep
+  // imageGroups/unassignedImages in sync via their own handlers, and a
+  // "View All Images" button exists for explicit re-sync. Re-running this
+  // effect on every products-array change caused a duplicate batch-wide image
+  // fetch (BatchDetail already fetches the same table) without benefit.
+  //
+  // `products` is intentionally read inside the effect rather than being a
+  // dependency; the latest render's products list is what we need.
   useEffect(() => {
     const loadBatchImages = async () => {
       if (!selectedBatchId) {
@@ -211,30 +220,24 @@ const handleSelectBatch = useCallback((id: string) => {
         setInitialImageAssignments(new Map());
         return;
       }
-      
-      // Fetch all images for the batch from database
-      // This is the SOURCE OF TRUTH for cross-device sync
-      console.log(`[SYNC] Loading images for batch: ${selectedBatchId}`);
+
+      // Fetch all images for the batch from the database (source of truth
+      // for cross-device sync of unassigned-pool visibility)
       const allBatchImages = await fetchImagesForBatch(selectedBatchId);
-      console.log(`[SYNC] Fetched ${allBatchImages.length} total images from DB`);
-      
+
       if (allBatchImages.length === 0) {
-        console.log(`[SYNC] No images found in batch, clearing state`);
         setUnassignedImages([]);
         setImageGroups([]);
         setInitialImageAssignments(new Map());
         return;
       }
-      
-      // Group images by product_id and track initial assignments
+
       const imagesByProduct: Record<string, string[]> = {};
       const unassigned: string[] = [];
       const initialAssignments = new Map<string, string | null>();
-      
+
       for (const img of allBatchImages) {
-        // Track initial assignment: image URL -> product_id (or null if unassigned)
         initialAssignments.set(img.url, img.product_id || null);
-        
         if (img.product_id && img.product_id !== '') {
           if (!imagesByProduct[img.product_id]) {
             imagesByProduct[img.product_id] = [];
@@ -244,12 +247,7 @@ const handleSelectBatch = useCallback((id: string) => {
           unassigned.push(img.url);
         }
       }
-      
-      // Log cross-device sync info
-      console.log(`[SYNC] Unassigned images count: ${unassigned.length}`);
-      console.log(`[SYNC] Assigned to products: ${Object.keys(imagesByProduct).length} products`);
-      
-      // Create groups from existing products that have images
+
       const groups: ImageGroup[] = products
         .filter(p => imagesByProduct[p.id] && imagesByProduct[p.id].length > 0)
         .map((product, index) => ({
@@ -259,20 +257,19 @@ const handleSelectBatch = useCallback((id: string) => {
           selectedImages: new Set<string>(),
           isGrouped: product.is_grouped || false,
         }));
-      
+
       setImageGroups(groups);
       setUnassignedImages(unassigned);
       setInitialImageAssignments(initialAssignments);
-      
-      // Show group manager if there are unassigned images
+
       if (unassigned.length > 0) {
         setShowGroupManager(true);
       }
     };
-    
+
     loadBatchImages();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedBatchId, fetchImagesForBatch, productIds]);
+  }, [selectedBatchId, fetchImagesForBatch]);
 
   const handleCreateBatch = useCallback(async (name: string, notes: string) => {
     const batch = await createBatch(name, notes);
