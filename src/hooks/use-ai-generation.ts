@@ -141,50 +141,79 @@ export function useAIGeneration({
         return { productId, success: false, error: 'Not authenticated' };
       }
       
-      // Call the edge function with user's access token and apikey
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-listing`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-          'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-        },
-        body: JSON.stringify({
-          product: {
-            id: product.id,
-            sku: product.sku,
-            title: product.title,
-            description: product.description,
-            garment_type: product.garment_type,
-            department: product.department,
-            brand: product.brand,
-            colour_main: product.colour_main,
-            colour_secondary: product.colour_secondary,
-            pattern: product.pattern,
-            size_label: product.size_label,
-            size_recommended: product.size_recommended,
-            fit: product.fit,
-            material: product.material,
-            condition: product.condition,
-            flaws: product.flaws,
-            made_in: product.made_in,
-            era: product.era,
-            notes: product.notes,
-            price: product.price,
-            currency: product.currency,
+      // Single-retry-with-backoff wrapper for transient gateway errors.
+      // The edge function itself returns 200 { fallback: true } for 502/503/504,
+      // so we check both the HTTP status and the body fallback flag.
+      const callGenerateListing = async (): Promise<{ response: Response; body: any; transient: boolean }> => {
+        const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-listing`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
           },
-          imageUrls,
-        }),
-      });
-      
+          body: JSON.stringify({
+            product: {
+              id: product.id,
+              sku: product.sku,
+              title: product.title,
+              description: product.description,
+              garment_type: product.garment_type,
+              department: product.department,
+              brand: product.brand,
+              colour_main: product.colour_main,
+              colour_secondary: product.colour_secondary,
+              pattern: product.pattern,
+              size_label: product.size_label,
+              size_recommended: product.size_recommended,
+              fit: product.fit,
+              material: product.material,
+              condition: product.condition,
+              flaws: product.flaws,
+              made_in: product.made_in,
+              era: product.era,
+              notes: product.notes,
+              price: product.price,
+              currency: product.currency,
+            },
+            imageUrls,
+          }),
+        });
+
+        // 429 / 402 / 400 are user-actionable; don't retry. 5xx and body
+        // fallback:true are the only transient signals we honour.
+        const isServerErrorStatus = resp.status >= 500 && resp.status < 600;
+        const body: any = await resp.json().catch(() => null);
+        const transient = isServerErrorStatus || body?.fallback === true;
+        return { response: resp, body, transient };
+      };
+
+      let attempt = await callGenerateListing();
+      if (attempt.transient) {
+        console.warn(`[AI] Transient error for ${sku}, retrying once after 1.2s backoff`);
+        await new Promise(r => setTimeout(r, 1200));
+        attempt = await callGenerateListing();
+      }
+
+      const response = attempt.response;
+
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        const errorData = attempt.body || { error: `HTTP ${response.status}` };
         console.error(`[AI] Generation failed for ${sku}:`, errorData);
         await writeProduct(productId, { status: 'error' });
         return { productId, success: false, error: errorData.error || 'Generation failed' };
       }
-      
-      const data = await response.json();
+
+      // 200 with fallback:true after retry → AI gateway still unavailable
+      if (attempt.body?.fallback === true) {
+        console.error(`[AI] Fallback response after retry for ${sku}`);
+        await writeProduct(productId, { status: 'error' });
+        return { productId, success: false, error: attempt.body.error || 'AI gateway unavailable' };
+      }
+
+      // Body was parsed inside callGenerateListing; fall back to parsing here if
+      // it's somehow not populated (e.g. the success path skipped parsing).
+      const data = attempt.body ?? await response.json();
       const generated = data.generated;
       
       // Check if AI returned valid data

@@ -215,7 +215,28 @@ export function MobileCaptureInterface({
     } catch (error) {
       // Parent handler already surfaced a detailed toast (e.g. "Saved X of Y").
       // Keep the sheet open so the user can review/retry without losing captures.
+      // If the parent reported which file names made it to DB, drop them from
+      // the sheet so a retry only uploads the missing ones (no duplicates).
       console.error('Camera capture persistence failed:', error);
+
+      const persistedFileNames: string[] | undefined =
+        (error as Error & { persistedFileNames?: string[] })?.persistedFileNames;
+
+      if (persistedFileNames && persistedFileNames.length > 0) {
+        const persistedSet = new Set(persistedFileNames);
+        setCapturedImages(prev => {
+          const kept: typeof prev = [];
+          for (const img of prev) {
+            if (persistedSet.has(img.file.name)) {
+              URL.revokeObjectURL(img.previewUrl);
+            } else {
+              kept.push(img);
+            }
+          }
+          return kept;
+        });
+      }
+
       setIsSaving(false);
     }
   }, [capturedImages, onComplete, onClose, isSaving]);

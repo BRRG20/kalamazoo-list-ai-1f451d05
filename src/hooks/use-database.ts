@@ -1202,28 +1202,81 @@ export function useImages() {
       return null;
     }
 
-    console.log(`[DB] addImageToBatch: Inserting image to batch=${batchId}, position=${position}`);
-    
     const { data, error } = await supabase
       .from('images')
-      .insert({ 
-        product_id: null, 
+      .insert({
+        product_id: null,
         batch_id: batchId,
-        url, 
+        url,
         position,
         include_in_shopify: true,
         user_id: userId,
       })
       .select()
       .single();
-    
+
     if (error) {
       console.error('[DB] addImageToBatch: FAILED to insert image:', error.message, error.details);
       return null;
     }
-    
-    console.log(`[DB] addImageToBatch: SUCCESS - id=${data.id}, product_id=null (unassigned)`);
+
     return mapImage(data);
+  };
+
+  /**
+   * Bulk variant of addImageToBatch. Inserts multiple unassigned-pool images
+   * in a single round-trip and preserves caller-supplied ordering via position.
+   * Returns the inserted rows aligned 1:1 with the input `urls` — slots where
+   * the insert failed are `null` (shouldn't happen for a successful bulk call;
+   * if the whole insert fails, we fall back to per-row inserts so a single bad
+   * row doesn't lose the rest).
+   */
+  const addImagesToBatch = async (
+    batchId: string,
+    urls: string[],
+    startPosition: number = 0,
+  ): Promise<(ProductImage | null)[]> => {
+    if (urls.length === 0) return [];
+
+    const userId = await getCurrentUserId();
+    if (!userId) {
+      console.error('[DB] addImagesToBatch: No user ID for image upload');
+      return urls.map(() => null);
+    }
+
+    const rows = urls.map((url, i) => ({
+      product_id: null,
+      batch_id: batchId,
+      url,
+      position: startPosition + i,
+      include_in_shopify: true,
+      user_id: userId,
+    }));
+
+    const { data, error } = await supabase
+      .from('images')
+      .insert(rows)
+      .select();
+
+    // Success path: align results to input URL order via url field (Supabase
+    // returns rows in insertion order, but we match by url to be defensive).
+    if (!error && data) {
+      const byUrl = new Map<string, ProductImage>();
+      for (const row of data) {
+        byUrl.set(row.url, mapImage(row));
+      }
+      return urls.map(u => byUrl.get(u) ?? null);
+    }
+
+    // Fallback: one bad row in a bulk insert fails the whole statement in
+    // Supabase. Retry per-row so the rest still land.
+    console.warn('[DB] addImagesToBatch: bulk insert failed, falling back to per-row', error?.message);
+    const results: (ProductImage | null)[] = [];
+    for (let i = 0; i < urls.length; i++) {
+      const single = await addImageToBatch(batchId, urls[i], startPosition + i);
+      results.push(single);
+    }
+    return results;
   };
 
   const updateImage = async (id: string, productId: string, updates: Partial<ProductImage>) => {
@@ -1355,20 +1408,21 @@ export function useImages() {
     }
   };
 
-  return { 
-    fetchImagesForProduct, 
+  return {
+    fetchImagesForProduct,
     fetchImagesForBatch,
-    addImage, 
+    addImage,
     addImageToBatch,
-    updateImage, 
+    addImagesToBatch,
+    updateImage,
     updateImageProductId,
     updateImageProductIdByUrl,
     deleteImage,
     permanentlyDeleteImage,
     recoverImage,
-    excludeLastNImages, 
-    clearCache, 
-    imageCache 
+    excludeLastNImages,
+    clearCache,
+    imageCache,
   };
 }
 
