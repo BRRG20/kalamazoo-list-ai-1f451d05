@@ -1,5 +1,9 @@
 project_id = "bembvdjhyrlgkdiqkfqr"
 
+[functions.admin-set-password]
+verify_jwt = false
+
+
 [functions.analyze-images]
 verify_jwt = true
 
